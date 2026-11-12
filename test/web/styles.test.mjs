@@ -33,7 +33,7 @@ function rules(text) {
           skip();
         } else {
           var end = text.indexOf("}", i);
-          found.push({ selectors: head.split(",").map(function (one) { return one.trim(); }), body: text.slice(i, end) });
+          found.push({ selectors: list(head), body: text.slice(i, end) });
           i = end + 1;
         }
         start = i;
@@ -51,6 +51,40 @@ function rules(text) {
   }
   block();
   return found;
+}
+
+// The selectors of a list: split on the commas outside parentheses, so `:is(.a, .b) .c` stays one.
+function list(head) {
+  var parts = [];
+  var depth = 0;
+  var start = 0;
+  for (var i = 0; i < head.length; i++) {
+    depth += head[i] === "(" ? 1 : head[i] === ")" ? -1 : 0;
+    if (head[i] === "," && depth === 0) {
+      parts.push(head.slice(start, i).trim());
+      start = i + 1;
+    }
+  }
+  parts.push(head.slice(start).trim());
+  return parts;
+}
+
+// `selector` with what is inside parentheses left out, so a space or a combinator there splits no compound.
+function bare(selector) {
+  var out = "";
+  var depth = 0;
+  for (var i = 0; i < selector.length; i++) {
+    if (selector[i] === ")") {
+      depth -= 1;
+    }
+    if (depth === 0) {
+      out += selector[i];
+    }
+    if (selector[i] === "(") {
+      depth += 1;
+    }
+  }
+  return out;
 }
 
 function compounds(selector) {
@@ -73,10 +107,11 @@ function specificity(selector) {
 // Whether `selector` can select `element`: its last compound names only what the element has (its tag, classes and
 // any `aria-pressed`, with no state such as :hover), and every class before it is on one of the element's ancestors.
 function reaches(selector, element) {
-  var parts = compounds(selector);
+  var parts = compounds(bare(selector));
   var last = parts[parts.length - 1];
   var tag = (/^[a-z][\w-]*|^\*/i.exec(last) || [""])[0];
-  // A rule for another element (`main:not(.board)`) is out whatever its pseudo-classes say.
+  // A rule for another element (`main:not(.board)`) is out whatever its pseudo-classes say. The tag comes from the
+  // selector without its parentheses, so `.pick:not(.x span)` ends in `.pick:not()`, not in `span`.
   if (tag !== "" && tag !== "*" && tag !== element.tag) {
     return false;
   }
@@ -146,6 +181,9 @@ test("the check catches a rule that takes the white off later, from a media quer
 });
 
 test("a selector the check cannot read stops it instead of passing unseen", function () {
-  var css = built + compileString(".card .pick:not(.on) { color: inherit; }").css;
-  assert.throws(function () { winner(rules(css), CLAIMER, "color"); }, /does not read/);
+  [".card .pick:not(.on) { color: inherit; }", ".card .pick:not(.x span) { color: inherit; }",
+    ":is(.card, .other) .pick { color: inherit; }"].forEach(function (extra) {
+    var css = built + compileString(extra).css;
+    assert.throws(function () { winner(rules(css), CLAIMER, "color"); }, /does not read/, extra);
+  });
 });
