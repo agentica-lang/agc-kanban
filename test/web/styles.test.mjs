@@ -61,7 +61,8 @@ function classes(compound) {
   return (compound.match(/\.[\w-]+/g) || []).map(function (one) { return one.slice(1); });
 }
 
-// [ids, classes + attributes + pseudo-classes, tags] of a selector (no :is/:not/:where in this stylesheet).
+// [ids, classes + attributes + pseudo-classes, tags] of a selector. `reaches` has thrown on :not/:is/:where/:has
+// before a selector gets here, so their arguments never need counting.
 function specificity(selector) {
   var ids = (selector.match(/#[\w-]+/g) || []).length;
   var weight = (selector.match(/\.[\w-]+|\[[^\]]*\]|:(?!:)[\w-]+/g) || []).length;
@@ -75,8 +76,17 @@ function reaches(selector, element) {
   var parts = compounds(selector);
   var last = parts[parts.length - 1];
   var tag = (/^[a-z][\w-]*|^\*/i.exec(last) || [""])[0];
+  // A rule for another element (`main:not(.board)`) is out whatever its pseudo-classes say.
+  if (tag !== "" && tag !== "*" && tag !== element.tag) {
+    return false;
+  }
+  // These take selectors as arguments, which this check does not read: a rule with one that might reach the element
+  // must not pass unseen.
+  if (/:(not|is|where|has)\(/.test(selector)) {
+    throw new Error("the cascade check does not read " + selector);
+  }
   var rest = last.slice(tag.length).replace(/\.[\w-]+/g, "").replace(/\[aria-pressed(="(true|false)")?\]/g, "");
-  if (rest !== "" || (tag !== "" && tag !== "*" && tag !== element.tag)) {
+  if (rest !== "") {
     return false;
   }
   if (!classes(last).every(function (one) { return element.classes.indexOf(one) !== -1; })) {
@@ -113,7 +123,7 @@ function winner(list, element, property) {
 var CLAIMER = {
   tag: "button",
   classes: ["claimer", "pick"],
-  ancestors: ["meta", "card", "priority-0", "priority-1", "priority-2", "priority-3", "changed", "open", "cards", "column",
+  ancestors: ["meta", "card", "card-done", "priority-0", "priority-1", "priority-2", "priority-3", "changed", "open", "cards", "column",
     "column-done", "board", "board-body", "board-page"],
 };
 
@@ -121,12 +131,21 @@ test("the agent chip on a card keeps its white text", function () {
   assert.equal(winner(rules(built), CLAIMER, "color").value, "#fff");
 });
 
-test("the check catches a rule that takes the white off from a media query or with more weight", function () {
-  ["@media (max-width: 700px) { .card .pick { color: inherit; } }", ".card .meta .pick { color: inherit; }",
-    ".card .pick { color: inherit; }"].forEach(function (extra) {
-    var css = built + compileString(extra).css;
-    assert.equal(winner(rules(css), CLAIMER, "color").value, "inherit", extra);
+test("the check catches a rule that takes the white off later, from a media query, or with more weight", function () {
+  // As heavy as the white: it wins by coming later, in or out of a media query.
+  ["@media (max-width: 700px) { .card .pick { color: inherit; } }", ".card .pick { color: inherit; }"].forEach(function (extra) {
+    assert.equal(winner(rules(built + compileString(extra).css), CLAIMER, "color").value, "inherit", extra);
   });
-  var lighter = built + compileString(".pick { color: inherit; }").css;
-  assert.equal(winner(rules(lighter), CLAIMER, "color").value, "#fff");
+  // Heavier: it wins from before the white, so only its weight can make it win.
+  [".card .meta .pick { color: inherit; }", "@media (max-width: 700px) { .card .meta .claimer { color: inherit; } }",
+    ".card button.claimer { color: inherit; }"].forEach(function (extra) {
+    assert.equal(winner(rules(compileString(extra).css + built), CLAIMER, "color").value, "inherit", extra);
+  });
+  // Lighter, even later: the white stays.
+  assert.equal(winner(rules(built + compileString(".pick { color: inherit; }").css), CLAIMER, "color").value, "#fff");
+});
+
+test("a selector the check cannot read stops it instead of passing unseen", function () {
+  var css = built + compileString(".card .pick:not(.on) { color: inherit; }").css;
+  assert.throws(function () { winner(rules(css), CLAIMER, "color"); }, /does not read/);
 });
