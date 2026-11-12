@@ -17,6 +17,8 @@ def main() -> Void
     BDD.step("I get card {int}", &get_card),
     BDD.step("agent {string} claims card {int}", &claim_card),
     BDD.step("agent {string} marks card {int} done", &done_card),
+    BDD.step("agent {string} releases card {int}", &release_card),
+    BDD.step("I move card {int} to {string}", &move_card),
     BDD.step("eight agents race to claim card {int}", &race_claims),
     BDD.step("I add eight cards", &add_eight_cards),
     BDD.step("eight agents race to claim the next card", &race_next),
@@ -391,4 +393,27 @@ def done_card(ctx: BDD.Context, args: List[String]) -> BDD.Context
   HTTP.close_client(client)
   stored = BDD.set(ctx, "status", JSON.from(response.status))
   BDD.set(stored, "body", JSON.from(HTTP.text(response.body, response.headers).unwrap!))
+end
+
+def release_card(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  port = JSON.int(BDD.get(ctx, "port").unwrap!).unwrap!
+  client = HTTP.client().unwrap!
+  response = HTTP.request(
+    client,
+    "POST",
+    "http://127.0.0.1:#{port}/api/cards/#{args[1]}/release",
+    "{}".bytes,
+    [
+      Header(name: "apikey", value: "01234567890123456789012345678901"),
+      Header(name: "X-Kanban-Agent", value: args[0]),
+    ],
+  ).unwrap!
+
+  HTTP.close_client(client)
+  stored = BDD.set(ctx, "status", JSON.from(response.status))
+  BDD.set(stored, "body", JSON.from(HTTP.text(response.body, response.headers).unwrap!))
+end
+
+def move_card(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  api_request(ctx, "POST", "/api/cards/#{args[0]}/move", JSON.encode(JSON.from({"column": args[1]})))
 end

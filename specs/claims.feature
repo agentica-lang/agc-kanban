@@ -67,3 +67,21 @@ Feature: Card claims
     When agent "agent-2" claims card 1
     Then the response status is 409
     And the response contains "DONE"
+
+  Scenario: Release and move a card
+    Given the database server is running
+    When I post a board named "Project" with slug "project" as "agent-1"
+    Then the response status is 201
+    When I add a card titled "Implement API"
+    Then the response status is 201
+    When agent "agent-1" claims card 1
+    Then the response status is 200
+    When agent "agent-2" releases card 1
+    Then the response status is 409
+    And the response contains "NOT_CLAIMER"
+    When agent "agent-1" releases card 1
+    Then the response status is 200
+    And the response contains "\"claimed_by\":null"
+    When I move card 1 to "Review"
+    Then the response status is 200
+    And the response contains "\"column\":\"Review\""

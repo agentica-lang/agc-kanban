@@ -68,7 +68,7 @@ def state(pool: Database.Pool) -> Result[List[Db.Row]]
   Database.with_connection(pool) do |conn|
     Db.query(
       conn,
-      "select id, claimed_by, version, (select count(*) from events) as event_count from cards order by id",
+      "select id, column_id, position, claimed_by, version, (select count(*) from events) as event_count from cards order by id",
       [],
     )
   end
@@ -111,6 +111,72 @@ def test_finish_validates_and_preserves_cards_on_error() -> Result[Void]
   try Test.eq(done.done, true)
   try Test.eq(done.claimed_by, none)
   try Test.assert(done.done_at.some?, "done time missing")
+  Database.close(pool)
+  try Path.remove("#{dir}/kanban.sqlite3")
+  Path.remove(dir)
+end
+
+def test_move_and_release_validate_without_changes() -> Result[Void]
+  home = try System.env("HOME")
+  try Dir.mkdir("#{home}/.cache")
+  dir = "#{home}/.cache/kanban-move-test-#{System.pid()}"
+  pool = try Database.open(dir)
+  _ = try Boards.create(pool, "Project", "project", "agent", ["Todo", "Doing", "Done"])
+  create = Cards.Create(
+    board: "project",
+    title: "First",
+    body: "",
+    column: none,
+    labels: [],
+    priority: 2,
+    depends_on: [],
+    actor: "agent",
+  )
+
+  first = try Cards.create(pool, create)
+  second = try Cards.create(pool, create.with(title: "Second"))
+  _ = try Claims.claim(pool, first.id, "agent", 1)
+  move = Transitions.Move(
+    id: first.id,
+    actor: "agent",
+    force: false,
+    column: "Todo",
+    position: some(0),
+    lease_minutes: 1,
+  )
+
+  release = Transitions.Release(id: first.id, actor: "agent", force: false, column: none)
+  before = try state(pool)
+  try Test.eq(Transitions.move(pool, move.with(id: 0)), error("INVALID:id"))
+  try Test.eq(Transitions.move(pool, move.with(id: 999)), error("NOT_FOUND:card"))
+  try Test.eq(Transitions.move(pool, move.with(actor: "bad agent")), error("INVALID:agent"))
+  try Test.eq(Transitions.move(pool, move.with(actor: "other")), error("CLAIMED:agent"))
+  try Test.eq(Transitions.move(pool, move.with(column: "")), error("INVALID:column"))
+  try Test.eq(Transitions.move(pool, move.with(column: "missing")), error("NOT_FOUND:column"))
+  try Test.eq(Transitions.move(pool, move.with(position: some(-1))), error("INVALID:position"))
+  try Test.eq(Transitions.move(pool, move.with(position: some(99))), error("INVALID:position"))
+  try Test.eq(Transitions.move(pool, move.with(lease_minutes: -1)), error("INVALID:lease"))
+  try Test.eq(Transitions.release(pool, release.with(id: 0)), error("INVALID:id"))
+  try Test.eq(Transitions.release(pool, release.with(id: 999)), error("NOT_FOUND:card"))
+  try Test.eq(Transitions.release(pool, release.with(actor: "bad agent")), error("INVALID:agent"))
+  try Test.eq(Transitions.release(pool, release.with(actor: "other")), error("NOT_CLAIMER:card"))
+  try Test.eq(Transitions.release(pool, release.with(column: some(""))), error("INVALID:column"))
+  try Test.eq(Transitions.release(pool, release.with(column: some("missing"))), error("NOT_FOUND:column"))
+  try Test.eq(try state(pool), before)
+  moved = try Transitions.move(pool, move)
+  try Test.eq(moved.position, 0)
+  try Test.eq(moved.claimed_by, some("agent"))
+  try Test.assert(moved.lease_until.some?, "claim lease was lost")
+  shifted = try Cards.show(pool, second.id)
+  try Test.eq(shifted.card.position, 1)
+  released = try Transitions.release(pool, release)
+  try Test.eq(released.claimed_by, none)
+  moved_done = try Transitions.move(pool, move.with(column: "Done", position: none))
+  try Test.eq(moved_done.done, true)
+  try Test.assert(moved_done.done_at.some?, "done time missing")
+  reopened = try Transitions.move(pool, move.with(column: "Todo", position: none))
+  try Test.eq(reopened.done, false)
+  try Test.eq(reopened.done_at, none)
   Database.close(pool)
   try Path.remove("#{dir}/kanban.sqlite3")
   Path.remove(dir)

@@ -19,6 +19,17 @@ struct CardsAnswer
   cards: List[Cards.Card]
 end
 
+struct MoveInput
+  column: String
+  position: Optional[Int]
+  force: Optional[Bool]
+end
+
+struct ReleaseInput
+  column: Optional[String]
+  force: Optional[Bool]
+end
+
 struct ForceInput
   force: Optional[Bool]
 end
@@ -102,6 +113,8 @@ export def build(key: String, pool: Optional[Database.Pool] = none, lease_minute
     |> Bond.post("/api/boards/:board/claim-next") do |conn| claim_next(conn, pool, lease_minutes) end
     |> Bond.get("/api/boards/:board/cards") do |conn| list_cards(conn, pool) end
     |> Bond.post("/api/boards/:board/cards") do |conn| create_card(conn, pool) end
+    |> Bond.post("/api/cards/:id/release") do |conn| release_card(conn, pool) end
+    |> Bond.post("/api/cards/:id/move") do |conn| move_card(conn, pool, lease_minutes) end
     |> Bond.post("/api/cards/:id/done") do |conn| done_card(conn, pool) end
     |> Bond.post("/api/cards/:id/claim") do |conn| claim_card(conn, pool, lease_minutes) end
     |> Bond.get("/api/cards/:id") do |conn| show_card(conn, pool) end
@@ -429,6 +442,58 @@ def done_card(conn: Bond.Conn, pool: Optional[Database.Pool]) -> Result[Bond.Con
   )
 
   result = Transitions.finish(pool.unwrap!, input)
+  return ok(failure(conn, result.message)) if not result.ok?
+
+  ok(Bond.json_as(conn, 200, CardAnswer.codec, CardAnswer(card: result.unwrap!)))
+end
+
+def release_card(conn: Bond.Conn, pool: Optional[Database.Pool]) -> Result[Bond.Conn]
+  return ok(reject(conn, 503, "BUSY", "database unavailable")) if not pool.some?
+
+  id = Bond.param_int(conn, "id")
+  return ok(reject(conn, 400, "INVALID", "invalid id", some("id"))) if not id.ok?
+
+  body = Bond.body_text(conn)
+  return ok(reject(conn, 400, "INVALID", "invalid body", some("body"))) if not body.ok?
+
+  data = JSON.decode(body.unwrap!, ReleaseInput)
+  return ok(reject(conn, 400, "INVALID", "invalid body", some("body"))) if not data.ok?
+
+  input = Transitions.Release(
+    id: id.unwrap!,
+    actor: Bond.request_header(conn, "X-Kanban-Agent").unwrap_or(""),
+    force: data.unwrap!.force.unwrap_or(false),
+    column: data.unwrap!.column,
+  )
+
+  result = Transitions.release(pool.unwrap!, input)
+  return ok(failure(conn, result.message)) if not result.ok?
+
+  ok(Bond.json_as(conn, 200, CardAnswer.codec, CardAnswer(card: result.unwrap!)))
+end
+
+def move_card(conn: Bond.Conn, pool: Optional[Database.Pool], lease_minutes: Int) -> Result[Bond.Conn]
+  return ok(reject(conn, 503, "BUSY", "database unavailable")) if not pool.some?
+
+  id = Bond.param_int(conn, "id")
+  return ok(reject(conn, 400, "INVALID", "invalid id", some("id"))) if not id.ok?
+
+  body = Bond.body_text(conn)
+  return ok(reject(conn, 400, "INVALID", "invalid body", some("body"))) if not body.ok?
+
+  data = JSON.decode(body.unwrap!, MoveInput)
+  return ok(reject(conn, 400, "INVALID", "invalid body", some("body"))) if not data.ok?
+
+  input = Transitions.Move(
+    id: id.unwrap!,
+    actor: Bond.request_header(conn, "X-Kanban-Agent").unwrap_or(""),
+    force: data.unwrap!.force.unwrap_or(false),
+    column: data.unwrap!.column,
+    position: data.unwrap!.position,
+    lease_minutes: lease_minutes,
+  )
+
+  result = Transitions.move(pool.unwrap!, input)
   return ok(failure(conn, result.message)) if not result.ok?
 
   ok(Bond.json_as(conn, 200, CardAnswer.codec, CardAnswer(card: result.unwrap!)))
