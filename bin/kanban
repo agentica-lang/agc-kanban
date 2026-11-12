@@ -10,4 +10,19 @@ while [ -L "$self" ]; do
   esac
 done
 root=$(CDPATH= cd -- "$(dirname -- "$self")/.." && pwd)
-exec agentica run -- "$root/dist/kanban.agcb" "$@"
+program=${KANBAN_PROGRAM:-$root/dist/kanban.agcb}
+
+# Agentica has no way to see a closed standard output: the write ends the
+# program with RUNTIME-INTERNAL "cannot write to standard output" (exit 1).
+# Exit quietly with 141, as a Unix tool killed by SIGPIPE, so
+# `kanban board show | head -1` prints nothing more.
+# See https://github.com/agentica-lang/agentica/issues/1455.
+errors=$(mktemp)
+trap 'rm -f "$errors"' EXIT
+status=0
+agentica run -- "$program" "$@" 2>"$errors" || status=$?
+if [ "$status" -ne 0 ] && grep -qF 'cannot write to standard output' "$errors"; then
+  exit 141
+fi
+cat "$errors" >&2
+exit "$status"

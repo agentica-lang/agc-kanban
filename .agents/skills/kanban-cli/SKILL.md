@@ -119,6 +119,8 @@ $ kanban card list
 | 3 | no server, `UNAUTHORIZED`, `BUSY` after the retries, or any other failure |
 | 4 | lost the race: `CLAIMED`, `BLOCKED`, `DONE` |
 
+`bin/kanban` exits 141, silently, when its standard output is closed (`kanban board show | head -1`), as a Unix tool killed by SIGPIPE does.
+
 A refusal is one line on stderr, with the card when that is what failed:
 
 ```

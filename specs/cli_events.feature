@@ -45,3 +45,4 @@ Feature: CLI events and prime
     Then kanban exits with code 0
     And kanban output contains "card next"
     And kanban output contains "4 somebody else won"
+    And kanban output contains "Never mark it done"

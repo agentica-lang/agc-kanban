@@ -55,6 +55,7 @@ def main() -> Void
       BDD.step("a server with an invalid authentication response is running", &start_invalid_auth),
       BDD.step("a server is busy {string}", &start_busy),
       BDD.step("I run kanban {string}", &run_kanban),
+      BDD.step("I run the kanban wrapper with its standard output closed {string}", &run_wrapper_closed),
       BDD.step("kanban exits with code {int}", &kanban_status),
       BDD.step("kanban output contains {string}", &kanban_output),
       BDD.step("kanban output does not contain {string}", &kanban_output_lacks),
@@ -583,6 +584,25 @@ def run_kanban_with(ctx: BDD.Context, words: List[String], env: Map[String, Stri
   end
 
   code = Process.wait(process, 30000).unwrap!
+  output = Process.output(process, 30000).unwrap!
+  Process.close(process)
+  stored = BDD.set(ctx, "kanban_exit", JSON.from(code))
+  with_out = BDD.set(stored, "kanban_output", JSON.from("#{output.stdout}#{output.stderr}"))
+  with_err = BDD.set(with_out, "kanban_stdout", JSON.from(output.stdout))
+  BDD.set(with_err, "kanban_stderr", JSON.from(output.stderr))
+end
+
+# The wrapper needs a compiled program; one per run keeps parallel jobs apart.
+# `>&-` closes standard output for the wrapper only, which is what a reader
+# that exits early (`| head -1`) leaves behind.
+def run_wrapper_closed(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  program = "#{System.env("HOME").unwrap!}/.cache/kanban-wrapper-#{System.pid()}-#{Random.int(0, 999_999)}.agcb"
+  script = (
+    "agentica compile cli.agc -o \"$1\" && { KANBAN_PROGRAM=\"$1\" bin/kanban #{args[0]} >&-; code=$?; rm -f \"$1\"; exit $code; }"
+  )
+
+  process = Process.spawn_captured("sh", ["-c", script, "sh", program], Process.Options(env: kanban_env(ctx))).unwrap!
+  code = Process.wait(process, 60000).unwrap!
   output = Process.output(process, 30000).unwrap!
   Process.close(process)
   stored = BDD.set(ctx, "kanban_exit", JSON.from(code))
