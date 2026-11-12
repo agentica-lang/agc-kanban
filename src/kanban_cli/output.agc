@@ -23,6 +23,17 @@ struct ClaimedOutput
   error: ClaimedFailure
 end
 
+# A blocked card names the cards it waits on.
+struct BlockedFailure
+  code: String
+  message: String
+  blocked_by: List[Int]
+end
+
+struct BlockedOutput
+  error: BlockedFailure
+end
+
 struct BoardLine
   id: Int
   slug: String
@@ -315,8 +326,17 @@ def human_message(code: String, response: HttpResponse) -> String
     end
   end
 
+  blocked = JSON.decode(body(response), BlockedOutput)
+  if blocked.ok?
+    failure = blocked.unwrap!.error
+    return "card is blocked by #{ids_text(failure.blocked_by)}" if not failure.blocked_by.empty?
+  end
+
   detail(code, message_of(response))
 end
+
+# `#3` or `#3, #5`, so the caller can go and look.
+def ids_text(ids: List[Int]) -> String = ids.map do |id| "##{id}" end.join(", ")
 
 # The server answers `CODE:field`; print the field, not the code twice.
 def detail(code: String, message: String) -> String

@@ -123,6 +123,8 @@ A refusal is one line on stderr, with the card when that is what failed:
 ```
 $ kanban card claim 12
 kanban: CLAIMED: card 12 is claimed by claude-1
+$ kanban card claim 14
+kanban: BLOCKED: card is blocked by #10, #11
 ```
 
 The client retries a `503` after 200, 400 and 800 ms and then exits 3, so a

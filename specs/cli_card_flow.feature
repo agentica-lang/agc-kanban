@@ -73,7 +73,7 @@ Feature: CLI card lifecycle
     Then kanban exits with code 0
     When I run kanban "card claim 2 --board project"
     Then kanban exits with code 4
-    And kanban stderr is "kanban: BLOCKED: card is blocked"
+    And kanban stderr is "kanban: BLOCKED: card is blocked by #1"
     When I run kanban "card dep remove 2 1 --board project"
     Then kanban exits with code 0
     When I run kanban "card claim 2 --board project"
