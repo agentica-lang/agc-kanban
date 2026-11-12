@@ -45,7 +45,7 @@ def layout(title: String, view: String, slug: String, content: String) -> String
       <form class="logout" method="post" action="/logout"><button type="submit">Sign out</button></form>
     <% end %>
     <%== content %>
-      <div id="app"></div>
+      <div id="app"><p class="empty">Loading...</p></div>
     </body>
     </html>
   EAG

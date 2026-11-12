@@ -1,12 +1,14 @@
-import { startBoard } from "./board.js";
-import { startBoards } from "./boards.js";
+import { createApp } from "vue";
+import "../stylesheets/application.scss";
+import BoardPage from "./components/BoardPage.vue";
+import BoardsPage from "./components/BoardsPage.vue";
 
-// One script for every page: the view says which part runs. The login page needs none.
+// One script for every page: the view says which part runs. The login page needs none. Vue replaces the "Loading"
+// text that the server put in #app.
 var view = document.body.dataset.view;
-var root = document.getElementById("app");
 
 if (view === "board") {
-  startBoard(root, document.body.dataset.slug);
+  createApp(BoardPage, { slug: document.body.dataset.slug }).mount("#app");
 } else if (view === "boards") {
-  startBoards(root);
+  createApp(BoardsPage).mount("#app");
 }

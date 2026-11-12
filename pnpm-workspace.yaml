@@ -1,4 +1,6 @@
-# Only esbuild runs its install script (it picks the platform binary).
+# Only esbuild runs its install script (Vite uses it; it picks the platform binary).
 allowBuilds:
   esbuild: true
   "@parcel/watcher": false
+minimumReleaseAgeExclude:
+  - "@vitejs/plugin-vue@6.0.11"
