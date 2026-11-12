@@ -283,8 +283,10 @@ CLI) or the session cookie (the web, read-only in v1). Writes need the
 `[A-Za-z0-9._@/-]`. The name is not a proof of identity: anyone with the key
 can use any name. It keeps honest agents apart, which is the goal.
 
-Bodies are JSON (`Content-Type: application/json`). A `:board` in a path is
-the slug or the id. Answers are JSON objects.
+Bodies are JSON. A `:board` in a path is the slug or the id. Answers are JSON
+objects. The server does not check `Content-Type`, and a body that does not
+decode reports `field: "body"`; field-level messages come from the domain once
+the body decodes.
 
 ### Shapes
 
@@ -316,7 +318,7 @@ the slug or the id. Answers are JSON objects.
 | 409 | `CLAIMED` | The card is claimed by another agent. `claimed_by` names it. |
 | 409 | `BLOCKED` | A dependency is not done. `blocked_by` lists the card ids. |
 | 409 | `NOT_CLAIMER` | Release or done by an agent that does not hold the claim (without `force`). |
-| 409 | `DONE` | Claim of a card that is already done. |
+| 409 | `DONE` | Claim or `done` of a card that is already done. |
 | 409 | `CYCLE` | The dependency would make a cycle. |
 | 409 | `CONFLICT` | A name or slug that exists, a column that still has cards. |
 | 503 | `BUSY` | The database is busy (pool or lock timeout). Safe to retry. |
@@ -328,6 +330,7 @@ Tests assert the `code` and the status, never the message.
 | Method and path | Request | Answer |
 |---|---|---|
 | `GET /api/health` (no auth) | | `{"ok": true, "version": "0.1.0"}` |
+| `GET /api/auth-check` | | `{"ok": true}`; 401 without a good key, the CLI's probe |
 | `GET /api/boards` | | `{"boards": [board]}` (without columns) |
 | `POST /api/boards` | `{"name", "slug"?, "columns"?: ["Todo", ...]}` | 201 `{"board"}` |
 | `GET /api/boards/:board` | | `{"board", "cards": [card], "last_event_id"}`: the snapshot the web draws |
@@ -344,9 +347,15 @@ Tests assert the `code` and the status, never the message.
 | `POST /api/cards/:id/move` | `{"column", "position"?}` | `{"card"}`; `CLAIMED` if another agent holds it |
 | `POST /api/cards/:id/done` | `{"force"?: false}` | `{"card"}`: moved to the done column, claim cleared |
 | `POST /api/cards/:id/comments` | `{"body"}` | 201 `{"comment": {"id", "card_id", "author", "body", "created_at"}}` |
-| `POST /api/cards/:id/deps` | `{"depends_on": id}` | 201 `{"card"}`; `CYCLE` |
+| `POST /api/cards/:id/deps` | `{"depends_on": id}` | 201 `{"card"}`; `CYCLE`, or `BLOCKED` when the card you hold gains an unfinished blocker |
 | `DELETE /api/cards/:id/deps/:other` | | `{"card"}` |
 | `GET /api/boards/:board/events` | query: `after`, `card`, `limit` (100, at most 1000) | `{"events": [event], "last_event_id"}` |
+
+Event `data` holds the changed object: the `board`, `column`, `card` or
+`comment` shape above, as `card.*` kinds do, with `forced` beside the card for
+`card.moved`, `card.released` and `card.done`. A column that changes the done
+flag of its cards emits one `card.updated` per affected card in the same
+transaction.
 
 Who may change a card: anyone when it is free; only the claimer when it is
 claimed. `force: true` overrides, for the orchestrator and the owner; the
