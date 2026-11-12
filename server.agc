@@ -16,6 +16,12 @@ def main() -> Void
     System.exit(1)
   end
 
+  lease = System.env("KANBAN_LEASE_MINUTES").unwrap_or("0").to_i()
+  if not lease.ok? or lease.unwrap! < 0 or lease.unwrap! > 1000000000
+    IO.warn("invalid KANBAN_LEASE_MINUTES")
+    System.exit(1)
+  end
+
   data_dir = System.env("KANBAN_DATA_DIR").unwrap_or("./data")
   pool = Database.open(data_dir)
   if not pool.ok?
@@ -23,7 +29,7 @@ def main() -> Void
     System.exit(1)
   end
 
-  result = Bond.run(App.build(key, some(pool.unwrap!)), host, port.unwrap!)
+  result = Bond.run(App.build(key, some(pool.unwrap!), lease.unwrap!), host, port.unwrap!)
   Database.close(pool.unwrap!)
   if not result.ok?
     IO.warn(result.message)

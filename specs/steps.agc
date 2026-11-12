@@ -1,6 +1,11 @@
 import BDD from "std/bdd"
 import HTTP from "std/http"
 
+struct RaceReply
+  status: Int
+  body: String
+end
+
 def main() -> Void
   BDD.run([
     BDD.step("the test server is running", &start_server),
@@ -10,6 +15,9 @@ def main() -> Void
     BDD.step("I get the project snapshot", &project_snapshot),
     BDD.step("I add a card titled {string}", &add_card),
     BDD.step("I get card {int}", &get_card),
+    BDD.step("agent {string} claims card {int}", &claim_card),
+    BDD.step("eight agents race to claim card {int}", &race_claims),
+    BDD.step("one agent wins and seven receive CLAIMED", &assert_race),
     BDD.step("I list project cards", &list_cards),
     BDD.step("I add the column {string} at position {int}", &add_column),
     BDD.step("I get board events for {string} after {int}", &board_events),
@@ -262,4 +270,59 @@ end
 
 def project_snapshot(ctx: BDD.Context, _args: List[String]) -> BDD.Context
   api_request(ctx, "GET", "/api/boards/project", "")
+end
+
+def claim_card(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  port = JSON.int(BDD.get(ctx, "port").unwrap!).unwrap!
+  client = HTTP.client().unwrap!
+  response = HTTP.request(
+    client,
+    "POST",
+    "http://127.0.0.1:#{port}/api/cards/#{args[1]}/claim",
+    "{}".bytes,
+    [
+      Header(name: "apikey", value: "01234567890123456789012345678901"),
+      Header(name: "X-Kanban-Agent", value: args[0]),
+      Header(name: "Content-Type", value: "application/json"),
+    ],
+  ).unwrap!
+
+  HTTP.close_client(client)
+  stored = BDD.set(ctx, "status", JSON.from(response.status))
+  BDD.set(stored, "body", JSON.from(HTTP.text(response.body, response.headers).unwrap!))
+end
+
+def race_claims(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  port = JSON.int(BDD.get(ctx, "port").unwrap!).unwrap!
+  url = "http://127.0.0.1:#{port}/api/cards/#{args[0]}/claim"
+  agents = ["agent-1", "agent-2", "agent-3", "agent-4", "agent-5", "agent-6", "agent-7", "agent-8"]
+  replies = Task.map(agents, 8, 30000) do |agent| race_claim(url, agent) end
+  answers: List[RaceReply] = []
+  for reply in replies
+    answers = answers.push(reply.unwrap!)
+  end
+
+  BDD.set(ctx, "race", JSON.from(answers))
+end
+
+def race_claim(url: String, agent: String) -> Result[RaceReply]
+  client = try HTTP.client()
+  response = HTTP.request(
+    client,
+    "POST",
+    url,
+    "{}".bytes,
+    [Header(name: "apikey", value: "01234567890123456789012345678901"), Header(name: "X-Kanban-Agent", value: agent)],
+  )
+
+  HTTP.close_client(client)
+  reply = try response
+  ok(RaceReply(status: reply.status, body: try HTTP.text(reply.body, reply.headers)))
+end
+
+def assert_race(ctx: BDD.Context, _args: List[String]) -> BDD.Context
+  answers = JSON.decode(BDD.get(ctx, "race").unwrap!, List[RaceReply]).unwrap!
+  wins = answers.select do |reply| reply.status == 200 end
+  losses = answers.select do |reply| reply.status == 409 and reply.body.include?("CLAIMED") end
+  BDD.assert(ctx, wins.size == 1 and losses.size == 7, "unexpected race results: #{JSON.encode(JSON.from(answers))}")
 end

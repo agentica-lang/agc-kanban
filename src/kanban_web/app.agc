@@ -2,6 +2,7 @@ import Bond from "pkg/bond/bond"
 import Regex from "std/regex"
 import Boards from "../kanban/boards"
 import Cards from "../kanban/cards"
+import Claims from "../kanban/claims"
 import Columns from "../kanban/columns"
 import Events from "../kanban/events"
 import Snapshots from "../kanban/snapshots"
@@ -55,11 +56,31 @@ struct ApiError
   field: Optional[String]
 end
 
+struct ClaimedError
+  code: String
+  message: String
+  claimed_by: String
+end
+
+struct ClaimedAnswer
+  error: ClaimedError
+end
+
+struct BlockedError
+  code: String
+  message: String
+  blocked_by: List[Int]
+end
+
+struct BlockedAnswer
+  error: BlockedError
+end
+
 struct ErrorAnswer
   error: ApiError
 end
 
-export def build(key: String, pool: Optional[Database.Pool] = none) -> Bond.App
+export def build(key: String, pool: Optional[Database.Pool] = none, lease_minutes: Int = 0) -> Bond.App
   (
     Bond.app()
     |> Bond.before() do |conn| authorize(conn, key) end
@@ -70,6 +91,7 @@ export def build(key: String, pool: Optional[Database.Pool] = none) -> Bond.App
     |> Bond.get("/api/boards/:board") do |conn| show_board(conn, pool) end
     |> Bond.get("/api/boards/:board/cards") do |conn| list_cards(conn, pool) end
     |> Bond.post("/api/boards/:board/cards") do |conn| create_card(conn, pool) end
+    |> Bond.post("/api/cards/:id/claim") do |conn| claim_card(conn, pool, lease_minutes) end
     |> Bond.get("/api/cards/:id") do |conn| show_card(conn, pool) end
     |> Bond.post("/api/boards/:board/columns") do |conn| add_column(conn, pool) end
     |> Bond.get("/api/boards/:board/events") do |conn| board_events(conn, pool) end
@@ -143,6 +165,19 @@ def failure(conn: Bond.Conn, message: String) -> Bond.Conn
     return reject(conn, 400, "INVALID", message, some(message.slice(8, message.length - 8)))
   end
 
+  if message.start_with?("CLAIMED:")
+    holder = message.slice(8, message.length - 8)
+    answer = ClaimedAnswer(error: ClaimedError(code: "CLAIMED", message: "card is claimed", claimed_by: holder))
+    return Bond.json_as(conn, 409, ClaimedAnswer.codec, answer).with(halted: true)
+  end
+
+  if message.start_with?("BLOCKED:")
+    ids = message.slice(8, message.length - 8).split(",").map do |value| value.to_i! end
+    answer = BlockedAnswer(error: BlockedError(code: "BLOCKED", message: "card is blocked", blocked_by: ids))
+    return Bond.json_as(conn, 409, BlockedAnswer.codec, answer).with(halted: true)
+  end
+
+  return reject(conn, 409, "DONE", "card is done") if message.start_with?("DONE:")
   return reject(conn, 409, "CONFLICT", message) if message.start_with?("CONFLICT:")
   return reject(conn, 404, "NOT_FOUND", message) if message.start_with?("NOT_FOUND:")
   return reject(conn, 503, "BUSY", "database busy") if Database.busy?(message)
@@ -314,4 +349,25 @@ def show_board(conn: Bond.Conn, pool: Optional[Database.Pool]) -> Result[Bond.Co
   return ok(failure(conn, result.message)) if not result.ok?
 
   ok(Bond.json_as(conn, 200, Snapshots.Snapshot.codec, result.unwrap!))
+end
+
+def claim_card(conn: Bond.Conn, pool: Optional[Database.Pool], lease_minutes: Int) -> Result[Bond.Conn]
+  return ok(reject(conn, 503, "BUSY", "database unavailable")) if not pool.some?
+
+  id = Bond.param_int(conn, "id")
+  return ok(reject(conn, 400, "INVALID", "invalid id", some("id"))) if not id.ok?
+
+  body = Bond.body_text(conn)
+  return ok(reject(conn, 400, "INVALID", "invalid body", some("body"))) if not body.ok?
+
+  data = JSON.parse(body.unwrap!)
+  if not data.ok? or JSON.kind(data.unwrap!) != "object"
+    return ok(reject(conn, 400, "INVALID", "invalid body", some("body")))
+  end
+
+  actor = Bond.request_header(conn, "X-Kanban-Agent").unwrap_or("")
+  result = Claims.claim(pool.unwrap!, id.unwrap!, actor, lease_minutes)
+  return ok(failure(conn, result.message)) if not result.ok?
+
+  ok(Bond.json_as(conn, 200, CardAnswer.codec, CardAnswer(card: result.unwrap!)))
 end

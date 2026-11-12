@@ -153,6 +153,58 @@ export def list_open(conn: Db.Connection, board: String, filters: Filters) -> Re
   ok(cards)
 end
 
+export def load_at(conn: Db.Connection, id: Int, now: Int) -> Result[Card]
+  rows = try Db.query(
+    conn,
+    "select c.*, b.slug as board_slug, col.name as column_name, col.done as column_done, case when c.archived_at is null and col.done = 0 and (c.claimed_by is null or c.lease_until <= ?) and not exists (select 1 from card_deps d join cards dep on dep.id = d.depends_on_id join columns dc on dc.id = dep.column_id where d.card_id = c.id and dc.done = 0) then 1 else 0 end as ready from cards c join boards b on b.id = c.board_id join columns col on col.id = c.column_id where c.id = ? and c.archived_at is null",
+    [Db.Value.Int(Time.now_ms()), Db.Value.Int(id)],
+  )
+
+  return error("NOT_FOUND:card") if rows.empty?
+
+  row = rows[0]
+  labels = try JSON.decode(text(row, "labels"), List[String])
+  deps = try Db.query(
+    conn,
+    "select depends_on_id as id from card_deps where card_id = ? order by depends_on_id",
+    [Db.Value.Int(id)],
+  )
+
+  blocks = try Db.query(
+    conn,
+    "select card_id as id from card_deps where depends_on_id = ? order by card_id",
+    [Db.Value.Int(id)],
+  )
+
+  ok(
+    Card(
+      id: id,
+      board: text(row, "board_slug"),
+      column: text(row, "column_name"),
+      column_id: number(row, "column_id"),
+      position: number(row, "position"),
+      title: text(row, "title"),
+      body: text(row, "body"),
+      labels: labels,
+      priority: number(row, "priority"),
+      claimed_by: optional_text(row, "claimed_by"),
+      claimed_at: optional_number(row, "claimed_at"),
+      lease_until: optional_number(row, "lease_until"),
+      branch: optional_text(row, "branch"),
+      worktree: optional_text(row, "worktree"),
+      depends_on: deps.map do |item| number(item, "id") end,
+      blocks: blocks.map do |item| number(item, "id") end,
+      ready: number(row, "ready") == 1,
+      done: number(row, "column_done") == 1,
+      created_by: text(row, "created_by"),
+      created_at: number(row, "created_at"),
+      updated_at: number(row, "updated_at"),
+      done_at: optional_number(row, "done_at"),
+      version: number(row, "version"),
+    ),
+  )
+end
+
 def optional_value(value: Optional[String]) -> Db.Value
   case value
     none -> Db.Value.Null
@@ -264,58 +316,6 @@ def find_column(conn: Db.Connection, board_id: Int, requested: Optional[String])
 end
 
 def load(conn: Db.Connection, id: Int) -> Result[Card] = load_at(conn, id, Time.now_ms())
-
-def load_at(conn: Db.Connection, id: Int, now: Int) -> Result[Card]
-  rows = try Db.query(
-    conn,
-    "select c.*, b.slug as board_slug, col.name as column_name, col.done as column_done, case when c.archived_at is null and col.done = 0 and (c.claimed_by is null or c.lease_until <= ?) and not exists (select 1 from card_deps d join cards dep on dep.id = d.depends_on_id join columns dc on dc.id = dep.column_id where d.card_id = c.id and dc.done = 0) then 1 else 0 end as ready from cards c join boards b on b.id = c.board_id join columns col on col.id = c.column_id where c.id = ? and c.archived_at is null",
-    [Db.Value.Int(Time.now_ms()), Db.Value.Int(id)],
-  )
-
-  return error("NOT_FOUND:card") if rows.empty?
-
-  row = rows[0]
-  labels = try JSON.decode(text(row, "labels"), List[String])
-  deps = try Db.query(
-    conn,
-    "select depends_on_id as id from card_deps where card_id = ? order by depends_on_id",
-    [Db.Value.Int(id)],
-  )
-
-  blocks = try Db.query(
-    conn,
-    "select card_id as id from card_deps where depends_on_id = ? order by card_id",
-    [Db.Value.Int(id)],
-  )
-
-  ok(
-    Card(
-      id: id,
-      board: text(row, "board_slug"),
-      column: text(row, "column_name"),
-      column_id: number(row, "column_id"),
-      position: number(row, "position"),
-      title: text(row, "title"),
-      body: text(row, "body"),
-      labels: labels,
-      priority: number(row, "priority"),
-      claimed_by: optional_text(row, "claimed_by"),
-      claimed_at: optional_number(row, "claimed_at"),
-      lease_until: optional_number(row, "lease_until"),
-      branch: optional_text(row, "branch"),
-      worktree: optional_text(row, "worktree"),
-      depends_on: deps.map do |item| number(item, "id") end,
-      blocks: blocks.map do |item| number(item, "id") end,
-      ready: number(row, "ready") == 1,
-      done: number(row, "column_done") == 1,
-      created_by: text(row, "created_by"),
-      created_at: number(row, "created_at"),
-      updated_at: number(row, "updated_at"),
-      done_at: optional_number(row, "done_at"),
-      version: number(row, "version"),
-    ),
-  )
-end
 
 def number(row: Db.Row, key: String) -> Int
   case row.get(key, Db.Value.Null)
