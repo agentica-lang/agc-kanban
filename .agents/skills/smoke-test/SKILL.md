@@ -35,8 +35,8 @@ offer, the check is wrong, not the service.
 
 ## Write it
 
-Copy `scripts/smoke.sh` from this skill next to the test (for example
-`tools/smoke.sh` keeps it at hand) and source it. It is the curl wrapper: one
+Copy `scripts/smoke.sh` from this skill next to the test, or source it in place
+when the skill lives in the repository, and source it. It is the curl wrapper: one
 request helper that keeps the body, assertions for status, body fragments and
 `jq` fields, a readiness poll, and a summary whose exit code is the test's. Read
 it before extending it; it is about 40 lines and the only bundled file.

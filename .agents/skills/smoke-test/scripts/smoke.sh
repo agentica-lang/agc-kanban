@@ -33,12 +33,13 @@ smoke_request() { # method path [body] [agent] [key] -> status
 
 # Polls a path until it answers 2xx. Returns 1 after [seconds] (default 30).
 smoke_wait() { # path [seconds]
-  local path="$1" limit="${2-30}" elapsed=0
-  until curl -sf "$SMOKE_URL$path" >/dev/null 2>&1; do
-    if [ "$elapsed" -ge "$limit" ]; then return 1; fi
+  local path="$1" limit="${2-30}"
+  for _ in $(seq 1 $((limit * 4))); do
+    if curl -sf "$SMOKE_URL$path" >/dev/null 2>&1; then return 0; fi
     sleep 0.25
-    elapsed=$((elapsed + 1))
   done
+
+  return 1
 }
 
 smoke_free_port() { # -> a port that was free a moment ago

@@ -46,6 +46,13 @@ if [ -n "${SMOKE_URL:-}" ]; then
     echo "FAIL $SMOKE_URL/api/health is not ready"
     exit 1
   fi
+
+  # The flow hardcodes the ids it creates, so a target with data fails in ways
+  # that hide the real state. `make smoke-docker` recreates its volume first.
+  if [ "$(smoke_request GET /api/boards)" = "200" ] && ! grep -qF '"boards":[]' "$SMOKE_BODY"; then
+    echo "SKIP $SMOKE_URL already has boards; point the test at a fresh target"
+    exit 1
+  fi
 else
   start_local
 fi
