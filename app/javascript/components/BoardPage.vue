@@ -26,6 +26,11 @@ var card = useCard();
 var state = useBoard(props.slug, card.changed);
 
 watch(drawer.card, card.show, { immediate: true });
+watch(function () { return card.gone; }, function (gone) {
+  if (gone) {
+    drawer.dismiss(card.id);
+  }
+});
 // A card on the board opens its detail; the open one is marked.
 provide("openCard", drawer.showCard);
 provide("openCardId", drawer.card);

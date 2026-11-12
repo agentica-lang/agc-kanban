@@ -83,7 +83,7 @@ function when(ms) {
         <dd><CardTimes :times="state.detail.times" :received-at="state.receivedAt" /></dd>
       </template>
     </dl>
-    <Markdown v-if="state.detail.card.body" :text="state.detail.card.body" />
+    <Markdown v-if="state.detail.card.body" :text="state.detail.card.body" :board="slug" />
     <template v-if="links.length">
       <h4 class="section-title">Links ({{ links.length }})</h4>
       <ul class="links">
@@ -97,7 +97,7 @@ function when(ms) {
     <ol class="comments">
       <li v-for="comment in comments" :key="comment.id">
         <div class="by"><b>{{ comment.author }}</b> <time :datetime="new Date(comment.created_at).toISOString()">{{ when(comment.created_at) }}</time></div>
-        <Markdown :text="comment.body" />
+        <Markdown :text="comment.body" :board="slug" />
       </li>
     </ol>
   </div>

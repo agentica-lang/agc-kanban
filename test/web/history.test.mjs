@@ -3,9 +3,11 @@
 // model (entries, a position, `popstate` on Back and Forward) behind the globals that the page code reads.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { effectScope } from "vue";
+import { createApp, effectScope, reactive } from "vue";
 import { plainClick, useDrawer } from "../../app/javascript/drawer.js";
+import { useCard } from "../../app/javascript/card_store.js";
 import { useFilters } from "../../app/javascript/filter_store.js";
+import { Markdown } from "../../app/javascript/markdown.js";
 
 function browser(start) {
   var entries = [start];
@@ -122,4 +124,76 @@ test("a plain left click on a link is the page's; a modifier or the middle butto
   ["metaKey", "ctrlKey", "shiftKey", "altKey"].forEach(function (key) {
     assert.equal(plainClick(Object.assign({ button: 0, metaKey: false, ctrlKey: false, shiftKey: false, altKey: false }, { [key]: true })), false);
   });
+});
+
+test("a ?card= that does not exist closes the panel quietly: no new entry, and Back skips it", function () {
+  var one = page("/boards/p?label=api");
+  one.drawer.showCard(1);
+  one.drawer.showCard(99);
+  var length = one.tab.length();
+  one.drawer.dismiss(98); // an answer for a card that is no longer the open one changes nothing
+  assert.equal(one.drawer.card.value, 99);
+  one.drawer.dismiss(99);
+  assert.equal(one.drawer.card.value, null);
+  assert.equal(one.drawer.panel.value, "");
+  assert.equal(one.tab.length(), length);
+  assert.equal(one.tab.url().has("card"), false);
+  assert.equal(one.tab.url().get("label"), "api");
+  one.tab.back();
+  assert.equal(one.drawer.card.value, 1);
+  one.stop();
+  var direct = page("/boards/p?card=404&label=api");
+  direct.drawer.dismiss(404);
+  assert.equal(direct.drawer.panel.value, "");
+  assert.equal(direct.tab.length(), 1);
+  assert.equal(direct.tab.url().get("label"), "api");
+  direct.stop();
+});
+
+test("the card store says a 404 is a card that is gone, and any other failure is not", async function () {
+  var scope = effectScope();
+  var store = scope.run(useCard);
+  var status = 404;
+  globalThis.fetch = function () { return Promise.resolve({ ok: false, status: status, json: function () { return {}; } }); };
+  store.show(404);
+  await new Promise(function (resolve) { setTimeout(resolve, 10); });
+  assert.equal(store.gone, true);
+  status = 500;
+  store.show(5);
+  assert.equal(store.gone, false);
+  await new Promise(function (resolve) { setTimeout(resolve, 10); });
+  assert.equal(store.gone, false);
+  assert.match(store.error, /500/);
+  scope.stop();
+});
+
+// The click handler that a Markdown text puts on its root, with `openCard` provided as the board page does.
+function markdownClick(board, opened) {
+  var render = null;
+  createApp({}).provide("openCard", function (id) { opened.push(id); }).runWithContext(function () {
+    render = Markdown.setup(reactive({ text: "x", board: board }));
+  });
+  var handler = render().props.onClick;
+  return function (href, init) {
+    var event = Object.assign({ button: 0, metaKey: false, ctrlKey: false, shiftKey: false, altKey: false, prevented: false,
+      preventDefault: function () { this.prevented = true; } }, init);
+    event.target = Object.assign(new Element(), { closest: function () { return { href: href }; } });
+    handler(event);
+    return event;
+  };
+}
+
+test("a plain click on a Markdown link to a card of this board opens it in the panel; a modified click or another link does not", function () {
+  globalThis.Element = class {};
+  globalThis.location = { origin: "http://kanban.test" };
+  var opened = [];
+  var click = markdownClick("p", opened);
+  assert.equal(click("http://kanban.test/boards/p?card=12").prevented, true);
+  assert.deepEqual(opened, [12]);
+  [{ ctrlKey: true }, { metaKey: true }, { shiftKey: true }, { button: 1 }].forEach(function (init) {
+    assert.equal(click("http://kanban.test/boards/p?card=13", init).prevented, false);
+  });
+  assert.equal(click("http://kanban.test/boards/other?card=14").prevented, false);
+  assert.equal(click("https://example.com/boards/p?card=15").prevented, false);
+  assert.deepEqual(opened, [12]);
 });

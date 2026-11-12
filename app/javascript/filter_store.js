@@ -16,6 +16,10 @@ export function useFilters() {
   // Back and Forward land on an entry whose URL may be older than the filters (they are written to the entry that was
   // current when they changed): the filters stay as they are, and the URL takes them back.
   function onPopState() {
+    var inUrl = parse(location.search);
+    if (JSON.stringify(inUrl) === JSON.stringify(filters.value)) {
+      return;
+    }
     var url = new URL(location.href);
     url.search = search(location.search, filters.value);
     history.replaceState(history.state, "", url);

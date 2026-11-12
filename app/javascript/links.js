@@ -6,6 +6,25 @@ import { cut } from "./feed.js";
 var LABEL_MAX = 60;
 var GITHUB = /^\/[^/]+\/[^/]+\/(pull|issues)\/(\d+)(\/|$)/;
 
+// The id of the card that `href` names when it is a link to a card of the board `slug` of this site (`/boards/slug?card=12`,
+// as an absolute URL, which is what Markdown links are); null for any other link. The page opens such a link in its
+// panel, as a click on a card does.
+export function boardCardId(href, origin, slug) {
+  var parsed = null;
+  try {
+    parsed = new URL(href);
+  } catch (_error) {
+    return null;
+  }
+  var path = "/boards/" + encodeURIComponent(slug);
+  if (parsed.origin !== origin || (parsed.pathname !== path && parsed.pathname !== path + "/")) {
+    return null;
+  }
+  var raw = parsed.searchParams.get("card");
+  var id = Number(raw);
+  return /^\d+$/.test(raw || "") && id > 0 && Number.isSafeInteger(id) ? id : null;
+}
+
 export function cardLink(url) {
   var text = typeof url === "string" ? url : "";
   var parsed = null;

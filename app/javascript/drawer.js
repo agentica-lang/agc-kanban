@@ -68,6 +68,18 @@ export function useDrawer() {
     history.pushState(null, "", url);
   }
 
+  // A `?card=` of a card that does not exist closes the panel without a trace: the entry takes the URL without it, so
+  // Back does not stop on a card that is not there.
+  function dismiss(id) {
+    if (id !== card.value) {
+      return;
+    }
+    card.value = null;
+    var url = new URL(location.href);
+    url.searchParams.delete("card");
+    history.replaceState(history.state, "", url);
+  }
+
   // Back and Forward change the URL without a click: the panel follows its `?card=`. The filters are view state that
   // the page keeps in memory, so they do not come from the entry (an entry made before a filter was set has none).
   function onPopState() {
@@ -90,6 +102,7 @@ export function useDrawer() {
     panel: panel,
     card: card,
     showCard: showCard,
+    dismiss: dismiss,
     toggleActivity: function () {
       if (panel.value === "activity") {
         showActivity(false);
