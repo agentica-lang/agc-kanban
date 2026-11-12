@@ -130,6 +130,9 @@ Feature: Card links
     And I add a card titled "Linked" with 51 links
     Then the response status is 400
     And the response contains "\"field\":\"links\""
+    When I add a card titled "Linked" with 51 copies of the link "https://github.com/o/r/pull/7"
+    Then the response status is 400
+    And the response contains "\"field\":\"links\""
     When I add a card titled "Linked"
     And agent "agent-1" links card 1 to 50 URLs
     And agent "agent-1" unlinks "https://github.com/o/r/pull/1" and links "https://github.com/o/r/issues/1" on card 1

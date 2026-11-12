@@ -28,6 +28,7 @@ def main() -> Void
       BDD.step("agent {string} unlinks {int} URLs from card {int}", &unlink_many),
       BDD.step("a server older than links is running", &start_before_links),
       BDD.step("I add a card titled {string} with {int} links", &add_card_many_links),
+      BDD.step("I add a card titled {string} with {int} copies of the link {string}", &add_card_copies),
       BDD.step("agent {string} unlinks {string} and links {string} on card {int}", &swap_link),
       BDD.step("agent {string} retitles card {int} to {string} and links {string}", &retitle_and_link),
       BDD.step("agent {string} replaces the {int} links of card {int} with {int} others", &replace_links),
@@ -206,20 +207,21 @@ def fixture_home(ctx: BDD.Context, args: List[String]) -> BDD.Context
   BDD.given_env(ctx, "HOME", home)
 end
 
-def start_database_server(ctx: BDD.Context, _args: List[String]) -> BDD.Context
+# The lease is always set here, never read from the shell that runs the specs.
+def start_database_server(ctx: BDD.Context, _args: List[String]) -> BDD.Context = start_database(ctx, "0")
+
+def start_leased_database_server(ctx: BDD.Context, args: List[String]) -> BDD.Context = start_database(ctx, args[0])
+
+def start_database(ctx: BDD.Context, lease: String) -> BDD.Context
   home = System.env("HOME").unwrap!
   Dir.mkdir("#{home}/.cache").unwrap!
   dir = "#{home}/.cache/kanban-bdd-#{System.pid()}-#{Random.int(0, 999_999)}"
-  configured = BDD.given_env(ctx, "KANBAN_DATA_DIR", dir)
+  configured = BDD.given_env(BDD.given_env(ctx, "KANBAN_DATA_DIR", dir), "KANBAN_LEASE_MINUTES", lease)
   started = BDD.given_program(configured, "fixtures/database_server.agc")
   hooked = BDD.after(started) do |last| cleanup_database(last, dir) end
   port = BDD.read_line(hooked, 30000).unwrap!.to_i!
   stored = BDD.set(hooked, "data_dir", JSON.from(dir))
   BDD.set(stored, "port", JSON.from(port))
-end
-
-def start_leased_database_server(ctx: BDD.Context, args: List[String]) -> BDD.Context
-  start_database_server(BDD.given_env(ctx, "KANBAN_LEASE_MINUTES", args[0]), [])
 end
 
 def start_busy_database_server(ctx: BDD.Context, _args: List[String]) -> BDD.Context
@@ -362,6 +364,12 @@ end
 
 def add_card_many_links(ctx: BDD.Context, args: List[String]) -> BDD.Context
   body = JSON.encode(JSON.object({"title": JSON.from(args[0]), "links": JSON.from(numbered_urls(args[1].to_i!))}))
+  api_request(ctx, "POST", "/api/boards/project/cards", body)
+end
+
+def add_card_copies(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  copies = (1..args[1].to_i!).map do |_n| args[2] end
+  body = JSON.encode(JSON.object({"title": JSON.from(args[0]), "links": JSON.from(copies)}))
   api_request(ctx, "POST", "/api/boards/project/cards", body)
 end
 
