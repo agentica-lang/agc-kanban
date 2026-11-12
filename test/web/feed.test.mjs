@@ -1,7 +1,7 @@
 // `make test` runs this with `node --test`: the sentences of the activity feed, from the event data the server writes.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { byDay, entry, relative } from "../../app/javascript/feed.js";
+import { byDay, cut, entry, relative } from "../../app/javascript/feed.js";
 
 var HOUR = 3600000;
 
@@ -75,6 +75,13 @@ test("a title with emoji is kept whole, and a cut never leaves half of a family 
   assert.equal(entry(moved(), { 12: "Ship it \u{1F680} \u{1F389}" }).title, "Ship it \u{1F680} \u{1F389}");
   var cutTitle = entry(moved(), { 12: "x".repeat(58) + family + "yy" }).title;
   assert.equal(cutTitle, "x".repeat(58) + family + "…");
+});
+
+test("a very long text is cut fast and whole, and a text of long clusters is still cut by cluster", function () {
+  var family = "\u{1F468}\u200D\u{1F469}\u200D\u{1F467}\u200D\u{1F466}";
+  assert.equal(cut("x".repeat(100000), 60), "x".repeat(59) + "…");
+  assert.equal(cut(family.repeat(100), 60), family.repeat(59) + "…");
+  assert.equal(cut(family.repeat(5), 60), family.repeat(5));
 });
 
 test("the board's title wins, the event's is the fallback for a card gone since, and a long one is cut", function () {

@@ -723,7 +723,7 @@ same card, and the owner watched it live.
 - [ ] Claim leases if the trial showed stale claims (see the open
       questions): `KANBAN_LEASE_MINUTES`, renew on any write by the
       claimer, a "stale" mark in the web.
-- [ ] Filters in the web: label, claimer, ready only.
+- [x] Filters in the web: label, claimer, ready only (`?label=`, `?claimer=`, `?ready=1`).
 - [ ] Markdown in card bodies and comments, escaped (`std/html`).
 - [ ] `kanban card list --format tsv` if agents need a compact form.
 - [ ] A README: run the server, install the CLI, install the skill, back

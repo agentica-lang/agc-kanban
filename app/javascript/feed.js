@@ -49,7 +49,16 @@ function characters(text) {
 // `text` on one line, cut to `max` characters (whole ones: no half of a surrogate pair, no ZWJ fragment) with an ellipsis.
 export function cut(text, max) {
   var flat = String(text).replace(/\s+/g, " ").trim();
-  var chars = characters(flat);
+  // A text of `max` units or fewer has at most `max` characters, so it needs no segmenting. A longer one (a comment or a
+  // column name can have thousands of characters) is segmented only up to eight units a character, and in full when
+  // that prefix has too few characters to tell (a text of long ZWJ sequences).
+  if (flat.length <= max) {
+    return flat;
+  }
+  var chars = characters(flat.length > max * 8 ? flat.slice(0, max * 8) : flat);
+  if (chars.length <= max && flat.length > max * 8) {
+    chars = characters(flat);
+  }
   return chars.length > max ? chars.slice(0, max - 1).join("").trimEnd() + "…" : flat;
 }
 
