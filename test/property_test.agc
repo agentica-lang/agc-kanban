@@ -37,8 +37,10 @@ def run_sequence(pool: Database.Pool, steps: List[Int]) -> Result[Void]
 
   try Prop.eq(try violations(pool), [])
   for index in 0...steps.size
+    closed_before = try done_ids(pool)
     try apply(pool, index, steps[index])
     try Prop.eq(try violations(pool), [])
+    try Prop.eq(try closed_while_blocked(pool, closed_before), [])
   end
 
   ok()
@@ -50,8 +52,8 @@ def apply(pool: Database.Pool, index: Int, code: Int) -> Result[Void]
   target = ids[index % ids.size]
   column = ["Todo", "Doing", "Review", "Done"][index % 4]
   case code
-    0 -> discard(Cards.create(pool, card_input("C#{index}", [], agent)))
-    1 -> discard(Cards.create(pool, card_input("D#{index}", [target], agent)))
+    0 -> discard(Cards.create(pool, card_input("C#{index}", [], agent, some(column))))
+    1 -> discard(Cards.create(pool, card_input("D#{index}", [target], agent, some(column))))
     2 -> discard(Claims.claim(pool, target, agent, 30))
     3 -> discard(Transitions.release(pool, Transitions.Release(id: target, actor: agent, force: false, column: none)))
     4 ->
@@ -78,12 +80,12 @@ def apply(pool: Database.Pool, index: Int, code: Int) -> Result[Void]
   end
 end
 
-def card_input(title: String, depends_on: List[Int], actor: String) -> Cards.Create
+def card_input(title: String, depends_on: List[Int], actor: String, column: Optional[String] = none) -> Cards.Create
   Cards.Create(
     board: "project",
     title: title,
     body: "",
-    column: none,
+    column: column,
     labels: [],
     priority: 2,
     depends_on: depends_on,
@@ -103,6 +105,27 @@ def discard[T](value: Result[T]) -> Result[Void]
   return ok() if value.ok?
 
   ok()
+end
+
+def done_ids(pool: Database.Pool) -> Result[List[Int]]
+  Database.with_connection(pool) do |conn|
+    ids(conn, "select c.id from cards c join columns col on col.id = c.column_id where col.done = 1 order by c.id")
+  end
+end
+
+# The transition rule: a card that one command put in the done column has no open dependency (no command here is
+# forced). A dependency added to a card that is already done is not a transition into done, so it is not checked.
+def closed_while_blocked(pool: Database.Pool, before: List[Int]) -> Result[List[String]]
+  Database.with_connection(pool) do |conn|
+    found: List[String] = []
+    for id in try ids(conn, "select c.id from cards c join columns col on col.id = c.column_id where col.done = 1")
+      if not before.include?(id) and not (try Cards.open_blockers(conn, id)).empty?
+        found = found.push("card #{id} was closed with an open dependency")
+      end
+    end
+
+    ok(found)
+  end
 end
 
 def reset(pool: Database.Pool) -> Result[Void]

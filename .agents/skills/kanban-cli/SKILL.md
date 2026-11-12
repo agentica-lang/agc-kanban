@@ -85,8 +85,9 @@ kanban card done 12 [--force]
 kanban card comment 12 "ran the migration"   # or --file notes.md
 kanban card dep add 12 10 [--force]    # 12 needs 10 first; allowed on a card you hold (it stays in its column, shown blocked)
                                        # while 10 is open, `done 12` and `move 12 Done` are refused (BLOCKED, exit 4)
-                                       # --force: one switch for CLAIMED, NOT_CLAIMER and that BLOCKED (never CYCLE)
-kanban card dep remove 12 10
+                                       # --force: on done and move it skips CLAIMED, NOT_CLAIMER and that BLOCKED; on dep add or
+                                       # remove it skips CLAIMED only (never CYCLE)
+kanban card dep remove 12 10 [--force]   # --force skips CLAIMED only
 
 kanban events [--after 42 | --before 42] [--card 12] [--limit 50]   # --before: newest first
 ```
@@ -134,7 +135,7 @@ $ kanban card list
 | 1 | the server refused: `NOT_FOUND`, `INVALID`, `CONFLICT`, `CYCLE`, `NOT_CLAIMER` (another agent holds it), `NO_READY_CARD` |
 | 2 | usage: unknown command, missing argument, missing agent or board; the code printed is `USAGE` |
 | 3 | no server, `UNAUTHORIZED`, `BUSY` after the retries, `UNSUPPORTED` (a server too old for the request), or any other failure |
-| 4 | lost the race: `CLAIMED`, `BLOCKED`, `DONE` |
+| 4 | lost the race: `CLAIMED`, `BLOCKED`, `DONE` (but `BLOCKED` on `done` or `move` of a card you hold is not a lost race: wait or comment, and keep the card) |
 
 `bin/kanban` exits 141, silently, when its standard output is closed (`kanban board show | head -1`), as a Unix tool killed by SIGPIPE does.
 

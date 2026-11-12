@@ -12,6 +12,7 @@ struct CreateColumn
 end
 
 struct UpdateColumn
+  force: Optional[Bool]
   name: Optional[String]
   position: Optional[Int]
   done: Optional[Bool]
@@ -67,6 +68,7 @@ export def update(conn: Bond.Conn, pool: Optional[Database.Pool]) -> Result[Bond
     done: data.done,
     wip_limit: data.wip_limit,
     actor: Bond.request_header(conn, "X-Kanban-Agent").unwrap_or(""),
+    force: data.force.unwrap_or(false),
   )
 
   result = Columns.update(pool.unwrap!, input)

@@ -104,6 +104,11 @@ Feature: CLI card lifecycle
     And kanban stderr contains "CLAIMED"
     When I run kanban as agent "agent-2" "card dep add 3 1 --board project --force"
     Then kanban exits with code 0
+    When I run kanban as agent "agent-2" "card dep remove 3 1 --board project"
+    Then kanban exits with code 4
+    And kanban stderr contains "CLAIMED"
+    When I run kanban as agent "agent-2" "card dep remove 3 1 --board project --force"
+    Then kanban exits with code 0
 
   Scenario: Releasing a card nobody holds is a no-op
     Given the database server is running

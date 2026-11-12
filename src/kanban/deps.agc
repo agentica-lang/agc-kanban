@@ -11,6 +11,12 @@ export struct Change
   force: Bool = false
 end
 
+# The data of the dep.added and dep.removed events: the card after the change and whether `force` was given.
+struct EventData
+  card: Cards.Card
+  forced: Bool
+end
+
 export def add(pool: Database.Pool, input: Change) -> Result[Cards.Card]
   try validate(input)
   Database.with_connection(pool) do |conn| Db.transaction(conn) do |tx| change(tx, input, true) end end
@@ -113,7 +119,7 @@ def change(conn: Db.Connection, input: Change, adding: Bool) -> Result[Cards.Car
       Db.Value.Int(input.card_id),
       Db.Value.Text(kind),
       Db.Value.Text(input.actor),
-      Db.Value.Text(JSON.encode(JSON.from(updated))),
+      Db.Value.Text(JSON.encode(JSON.from(EventData(card: updated, forced: input.force)))),
       Db.Value.Int(now),
     ],
   )

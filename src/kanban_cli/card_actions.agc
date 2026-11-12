@@ -261,14 +261,22 @@ def dep_remove(words: List[String]) -> Result[Void]
     "kanban card dep remove",
     "Remove a dependency",
     [Arg(name: "id", kind: Kind.Int), Arg(name: "depends-on", kind: Kind.Int)],
-    Settings.common_opts(),
+    [Opt(name: "force", kind: Kind.Flag)] + Settings.common_opts(),
   )
 
   parsed = try OP.parse(parser, words)
   config = try Settings.load(Settings.read_flags(parsed))
   Support.require_agent(config)
+  query = ""
+  if OP.flag(parsed, "force")
+    query = "?force=1"
+  end
+
   response = Output.expect(
-    Client.delete(Client.from(config), "/api/cards/#{OP.int(parsed, "id")}/deps/#{OP.int(parsed, "depends-on")}"),
+    Client.delete(
+      Client.from(config),
+      "/api/cards/#{OP.int(parsed, "id")}/deps/#{OP.int(parsed, "depends-on")}#{query}",
+    ),
     config.json,
   )
 

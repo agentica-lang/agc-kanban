@@ -3,6 +3,7 @@ import Bond from "pkg/bond/bond"
 import Database from "../../kanban/repo/database"
 import Deps from "../../kanban/deps"
 import Failure from "../failure"
+import Params from "../params"
 
 struct DependencyInput
   depends_on: Int
@@ -42,12 +43,18 @@ export def remove(conn: Bond.Conn, pool: Optional[Database.Pool], lease_minutes:
   other = Bond.param_int(conn, "other")
   return ok(Failure.reject(conn, 400, "INVALID", "invalid id", some("id"))) if not id.ok? or not other.ok?
 
+  params = Bond.query_params(conn)
+  return ok(Failure.reject(conn, 400, "INVALID", "invalid query", some("query"))) if not params.ok?
+
+  force = Params.flag(params.unwrap!, "force")
+  return ok(Failure.reject(conn, 400, "INVALID", "invalid query", some("query"))) if not force.ok?
+
   input = Deps.Change(
     card_id: id.unwrap!,
     depends_on: other.unwrap!,
     actor: Bond.request_header(conn, "X-Kanban-Agent").unwrap_or(""),
     lease_minutes: lease_minutes,
-    force: false,
+    force: force.unwrap!.unwrap_or(false),
   )
 
   result = Deps.remove(pool.unwrap!, input)

@@ -78,7 +78,7 @@ def acquire(conn: Db.Connection, id: Int, actor: String, lease_minutes: Int) -> 
 
   changed = try Db.execute(
     conn,
-    "update cards set claimed_by = ?, claimed_at = ?, lease_until = ?, updated_at = ?, version = version + 1, column_id = ?, position = ? where id = ? and archived_at is null and column_id not in (select id from columns where done = 1) and (claimed_by is null or claimed_by = ? or lease_until <= ?) and not exists (select 1 from card_deps d join cards dep on dep.id = d.depends_on_id join columns col on col.id = dep.column_id where d.card_id = cards.id and col.done = 0)",
+    "update cards set claimed_by = ?, claimed_at = ?, lease_until = ?, updated_at = ?, version = version + 1, column_id = ?, position = ? where id = ? and archived_at is null and column_id not in (select id from columns where done = 1) and (claimed_by is null or claimed_by = ? or lease_until <= ?) and (not exists (select 1 from card_deps d join cards dep on dep.id = d.depends_on_id join columns col on col.id = dep.column_id where d.card_id = cards.id and col.done = 0) or (claimed_by = ? and (lease_until is null or lease_until > ?)))",
     [
       Db.Value.Text(actor),
       Db.Value.Int(now),
@@ -87,6 +87,8 @@ def acquire(conn: Db.Connection, id: Int, actor: String, lease_minutes: Int) -> 
       Db.Value.Int(target.column_id),
       Db.Value.Int(target.position),
       Db.Value.Int(id),
+      Db.Value.Text(actor),
+      Db.Value.Int(now),
       Db.Value.Text(actor),
       Db.Value.Int(now),
     ],
