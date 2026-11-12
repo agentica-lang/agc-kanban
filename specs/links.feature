@@ -108,3 +108,41 @@ Feature: Card links
     And kanban stderr contains "UNSUPPORTED"
     When I run kanban "card update 1 --title Renamed"
     Then kanban exits with code 0
+
+  Scenario Outline: Plain URLs with a port, an IPv6 host, escapes and an @ after the host are kept
+    Given the database server is running
+    When I post a board named "Project" with slug "project" as "agent-1"
+    And I add a card titled "Linked"
+    And agent "agent-1" links card 1 to "<url>"
+    Then the response status is 200
+    And the response contains "<url>"
+
+    Examples:
+      | url                             |
+      | https://[::1]:8080/a%20b?x=@y#f |
+      | http://x.io:8080/               |
+      | https://x.io/a%20b              |
+      | https://x.io/?q=@y              |
+
+  Scenario: The cap of 50 counts the result, and a request names at most 50 links
+    Given the database server is running
+    When I post a board named "Project" with slug "project" as "agent-1"
+    And I add a card titled "Linked" with 51 links
+    Then the response status is 400
+    And the response contains "\"field\":\"links\""
+    When I add a card titled "Linked"
+    And agent "agent-1" links card 1 to 50 URLs
+    And agent "agent-1" unlinks "https://github.com/o/r/pull/1" and links "https://github.com/o/r/issues/1" on card 1
+    Then the response status is 200
+    When agent "agent-1" links card 1 to 51 URLs
+    Then the response status is 400
+    And the response contains "\"field\":\"links\""
+
+  Scenario: A link that changes nothing still goes with a changed field
+    Given the database server is running
+    When I post a board named "Project" with slug "project" as "agent-1"
+    And I add a card titled "Linked" with the link "https://github.com/o/r/pull/7"
+    And agent "agent-1" retitles card 1 to "Renamed" and links "https://github.com/o/r/pull/7"
+    Then the response status is 200
+    And the response contains "\"version\":2"
+    And the response contains "Renamed"
