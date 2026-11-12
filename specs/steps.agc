@@ -58,6 +58,7 @@ def main() -> Void
       BDD.step("I run kanban {string}", &run_kanban),
       BDD.step("I run the kanban wrapper whose reader has left {string}", &run_wrapper_closed),
       BDD.step("I run the kanban wrapper {string} reading the body {string}", &run_wrapper_stdin),
+      BDD.step("I send QUIT to the kanban wrapper while it waits", &quit_wrapper),
       BDD.step("kanban exits with code {int}", &kanban_status),
       BDD.step("kanban output contains {string}", &kanban_output),
       BDD.step("kanban output does not contain {string}", &kanban_output_lacks),
@@ -648,6 +649,44 @@ def run_wrapper_stdin(ctx: BDD.Context, args: List[String]) -> BDD.Context
 
   Process.send(process, args[1], 30000).unwrap!
   Process.close_stdin(process, 30000).unwrap!
+  code = Process.wait(process, 60000).unwrap!
+  output = Process.output(process, 30000).unwrap!
+  Process.close(process)
+  stored = BDD.set(ctx, "kanban_exit", JSON.from(code))
+  with_out = BDD.set(stored, "kanban_output", JSON.from("#{output.stdout}#{output.stderr}"))
+  with_err = BDD.set(with_out, "kanban_stdout", JSON.from(output.stdout))
+  BDD.set(with_err, "kanban_stderr", JSON.from(output.stderr))
+end
+
+# Ctrl-\ under /bin/sh: the wrapper waits on `card comment 1 -`, whose standard
+# input is a FIFO that this script holds open and never writes. QUIT is sent
+# once the child exists and the wrapper sleeps in `wait`, so `pid` is set. The
+# wrapper is itself a background job here, which starts with SIGQUIT ignored,
+# so `env` gives it back the default, as a terminal's foreground job has it.
+# The script prints whether the child and the temp file are gone; a child
+# left behind is killed here so the run stays clean.
+def quit_wrapper(ctx: BDD.Context, _args: List[String]) -> BDD.Context
+  script = (
+    "dir=$(mktemp -d) && agentica compile cli.agc -o \"$dir/k.agcb\" && mkdir \"$dir/tmp\" && mkfifo \"$dir/in\" || exit 90\n" +
+    "exec 4<>\"$dir/in\"\n" +
+    "env --default-signal=QUIT TMPDIR=\"$dir/tmp\" KANBAN_TEST_PROGRAM=\"$dir/k.agcb\" bin/kanban card comment 1 - <\"$dir/in\" &\n" +
+    "w=$! child= i=0\n" +
+    "until [ -n \"$child\" ] && [ \"$(cut -d' ' -f3 /proc/$w/stat)\" = S ]; do\n" +
+    "  i=$((i + 1)); [ $i -le 1000 ] || exit 91; sleep 0.01; child=$(pgrep -P \"$w\" -x agentica)\n" +
+    "done\n" +
+    "kill -QUIT \"$w\"; code=0; wait \"$w\" || code=$?\n" +
+    "i=0; while kill -0 \"$child\" 2>/dev/null && [ $i -lt 1000 ]; do i=$((i + 1)); sleep 0.01; done\n" +
+    "if kill -0 \"$child\" 2>/dev/null; then kill \"$child\"; echo child left; else echo child gone; fi\n" +
+    "[ -z \"$(ls -A \"$dir/tmp\")\" ] && echo temp gone || echo temp left\n" +
+    "rm -rf \"$dir\"; exit $code"
+  )
+
+  process = Process.spawn_captured(
+    "/bin/sh",
+    ["-c", script],
+    Process.Options(env: {"KANBAN_API_KEY": "01234567890123456789012345678901", "KANBAN_AGENT": "agent-1"}),
+  ).unwrap!
+
   code = Process.wait(process, 60000).unwrap!
   output = Process.output(process, 30000).unwrap!
   Process.close(process)

@@ -31,9 +31,10 @@ pid=
 cleanup() { rm -f "$errors"; }
 trap cleanup EXIT
 trap '[ -z "$pid" ] || kill "$pid" 2>/dev/null; exit 143' TERM HUP
-# A background job of a non-interactive shell starts with SIGINT ignored, so
-# Ctrl-C cannot reach it: stop it with TERM here.
+# A background job of a non-interactive shell starts with SIGINT and SIGQUIT
+# ignored, so Ctrl-C and Ctrl-\ cannot reach it: stop it with TERM here.
 trap '[ -z "$pid" ] || kill "$pid" 2>/dev/null; exit 130' INT
+trap '[ -z "$pid" ] || kill "$pid" 2>/dev/null; exit 131' QUIT
 
 # A background job of a non-interactive shell reads /dev/null instead of
 # standard input (dash even with `<&0`), and `card comment ID -` reads it. So
