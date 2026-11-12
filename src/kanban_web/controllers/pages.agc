@@ -21,7 +21,8 @@ export def login(conn: Bond.Conn, key: String) -> Result[Bond.Conn]
 end
 
 ## Ends the session. It only clears the cookie: the cookie is a signed value, not a row, so a copy of it stays valid
-## until it expires (14 days) or the API key changes. Without a session, the filter has already sent the client to the login.
+## until it expires (14 days) or the API key changes. Without a session, the filter already sent the client to the
+## login.
 export def logout(conn: Bond.Conn) -> Result[Bond.Conn] = ok(Bond.redirect(Bond.clear_session(conn), "/login", 303))
 
 export def boards(conn: Bond.Conn) -> Result[Bond.Conn] = ok(Bond.html(conn, 200, Views.boards()))
