@@ -17,6 +17,9 @@ export def login(conn: Bond.Conn, key: String) -> Result[Bond.Conn]
   ok(Bond.redirect(Auth.sign_in(conn), "/boards", 303))
 end
 
+## Ends the session. Without one, the filter has already sent the client to the login.
+export def logout(conn: Bond.Conn) -> Result[Bond.Conn] = ok(Bond.redirect(Bond.clear_session(conn), "/login", 303))
+
 export def boards(conn: Bond.Conn) -> Result[Bond.Conn] = ok(Bond.html(conn, 200, Views.boards()))
 
 export def board(conn: Bond.Conn) -> Result[Bond.Conn]

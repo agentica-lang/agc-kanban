@@ -16,6 +16,8 @@ services:
       KANBAN_PORT: "4580"
       KANBAN_DATA_DIR: /data
       KANBAN_LEASE_MINUTES: "0"
+      # 1 only behind HTTPS: over plain HTTP the browser drops a Secure cookie.
+      KANBAN_COOKIE_SECURE: ${KANBAN_COOKIE_SECURE:-0}
     networks:
       kanban:
         ipv4_address: 172.28.0.10

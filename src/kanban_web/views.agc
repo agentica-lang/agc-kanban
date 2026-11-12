@@ -41,6 +41,9 @@ def layout(title: String, view: String, slug: String, content: String) -> String
       <script defer src="<%= AssetNames.SCRIPT %>"></script>
     </head>
     <body data-view="<%= view %>" data-slug="<%= slug %>">
+    <% if view != "login" %>
+      <form class="logout" method="post" action="/logout"><button type="submit">Sign out</button></form>
+    <% end %>
     <%== content %>
       <div id="app"></div>
     </body>

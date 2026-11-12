@@ -22,13 +22,25 @@ export struct Published
   slug: String
 end
 
-export def list(pool: Database.Pool, board: String, after: Int, card: Optional[Int], limit: Int) -> Result[Page]
+## The events of a board. Forward: the ones after `after`, oldest first. With `before`: the ones before that id, newest
+## first, and `last_event_id` is the oldest id read, the `before` of the next page. `before` and `after` do not mix.
+export def list(
+  pool: Database.Pool,
+  board: String,
+  after: Int,
+  before: Optional[Int],
+  card: Optional[Int],
+  limit: Int,
+) -> Result[Page]
   return error("INVALID:board") if board.empty?
   return error("INVALID:after") if after < 0
+  return error("INVALID:before") if before.some? and (before.unwrap! < 1 or after != 0)
   return error("INVALID:card") if card.some? and card.unwrap! <= 0
   return error("INVALID:limit") if limit < 1 or limit > 1000
 
-  Database.with_connection(pool) do |conn| Db.transaction(conn) do |tx| read(tx, board, after, card, limit) end end
+  Database.with_connection(pool) do |conn|
+    Db.transaction(conn) do |tx| read(tx, board, after, before, card, limit) end
+  end
 end
 
 ## The id of the newest event, 0 for none: where the live broadcast starts, so that history is not replayed.
@@ -57,7 +69,14 @@ export def published_after(pool: Database.Pool, last: Int, limit: Int) -> Result
   end
 end
 
-def read(conn: Db.Connection, board: String, after: Int, card: Optional[Int], limit: Int) -> Result[Page]
+def read(
+  conn: Db.Connection,
+  board: String,
+  after: Int,
+  before: Optional[Int],
+  card: Optional[Int],
+  limit: Int,
+) -> Result[Page]
   found = try Db.query(
     conn,
     "select id from boards where slug = ? or cast(id as text) = ? order by case when slug = ? then 0 else 1 end limit 1",
@@ -72,18 +91,27 @@ def read(conn: Db.Connection, board: String, after: Int, card: Optional[Int], li
     none -> Db.Value.Null
   end
 
-  rows = try Db.query(
-    conn,
-    "select id, board_id, card_id, kind, actor, data, created_at from events where board_id = ? and id > ? and (? is null or card_id = ?) order by id limit ?",
-    [Db.Value.Int(id), Db.Value.Int(after), card_value, card_value, Db.Value.Int(limit)],
-  )
+  rows = case before
+    some(value) ->
+      try Db.query(
+        conn,
+        "select id, board_id, card_id, kind, actor, data, created_at from events where board_id = ? and id < ? and (? is null or card_id = ?) order by id desc limit ?",
+        [Db.Value.Int(id), Db.Value.Int(value), card_value, card_value, Db.Value.Int(limit)],
+      )
+    none ->
+      try Db.query(
+        conn,
+        "select id, board_id, card_id, kind, actor, data, created_at from events where board_id = ? and id > ? and (? is null or card_id = ?) order by id limit ?",
+        [Db.Value.Int(id), Db.Value.Int(after), card_value, card_value, Db.Value.Int(limit)],
+      )
+  end
 
   events: List[Event] = []
   for row in rows
     events = events.push(try event(row))
   end
 
-  last = after
+  last = before.unwrap_or(after)
   if not events.empty?
     last = events[events.size - 1].id
   end

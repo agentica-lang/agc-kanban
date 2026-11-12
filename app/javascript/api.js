@@ -17,7 +17,9 @@ export function getJSON(path) {
 export function h(tag, attrs) {
   var el = document.createElement(tag);
   Object.keys(attrs || {}).forEach(function (name) {
-    if (attrs[name] !== null && attrs[name] !== false) {
+    if (typeof attrs[name] === "function") {
+      el[name] = attrs[name]; // an event handler: `onclick`
+    } else if (attrs[name] !== null && attrs[name] !== false) {
       el.setAttribute(name, attrs[name]);
     }
   });

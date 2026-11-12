@@ -42,6 +42,7 @@ def main() -> Void
       BDD.step("I delete column {int}", &delete_column),
       BDD.step("I mark column {int} as done", &mark_column_done),
       BDD.step("I get board events for {string} after {int}", &board_events),
+      BDD.step("I get board events for {string} with query {string}", &board_events_query),
       BDD.step("the response contains {string}", &response_contains),
       BDD.step("the response does not contain {string}", &response_lacks),
       BDD.step("the response contains exactly {int} occurrences of {string}", &response_occurrences),
@@ -255,12 +256,16 @@ def cleanup_database(ctx: BDD.Context, dir: String) -> Result[Void]
 end
 
 def board_events(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  board_events_query(ctx, [args[0], "after=#{args[1]}"])
+end
+
+def board_events_query(ctx: BDD.Context, args: List[String]) -> BDD.Context
   port = JSON.int(BDD.get(ctx, "port").unwrap!).unwrap!
   client = HTTP.client().unwrap!
   response = HTTP.request(
     client,
     "GET",
-    "http://127.0.0.1:#{port}/api/boards/#{args[0]}/events?after=#{args[1]}",
+    "http://127.0.0.1:#{port}/api/boards/#{args[0]}/events?#{args[1]}",
     "".bytes,
     [Header(name: "apikey", value: "01234567890123456789012345678901")],
   ).unwrap!

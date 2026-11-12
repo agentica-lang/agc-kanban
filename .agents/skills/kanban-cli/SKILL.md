@@ -84,7 +84,7 @@ kanban card comment 12 "ran the migration"   # or --file notes.md
 kanban card dep add 12 10              # 12 needs 10 first
 kanban card dep remove 12 10
 
-kanban events [--after 42] [--card 12] [--limit 50]
+kanban events [--after 42 | --before 42] [--card 12] [--limit 50]   # --before: newest first
 ```
 
 Long text: `--body`, `--body-file PATH`, or `-` to read standard input

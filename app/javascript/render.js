@@ -1,7 +1,7 @@
 import { h } from "./api.js";
 
-// Draws the whole board from `state` ({ board, cards, feed, changed }): a column is cheap to rebuild at this size, and
-// a card that an event named is marked so that it flashes once.
+// Draws the whole board from `state` ({ board, cards, feed, changed, more, loadMore }): a column is cheap to rebuild at
+// this size, and a card that an event named is marked so that it flashes once. `feed` is newest first.
 export function render(root, state) {
   var board = state.board;
   var byId = {};
@@ -28,7 +28,7 @@ export function render(root, state) {
   root.replaceChildren(
     h("header", { class: "top" }, h("a", { href: "/boards" }, "Boards"), h("h1", null, board.name)),
     h("main", { class: "board" }, columns),
-    feedView(state.feed)
+    feedView(state)
   );
 }
 
@@ -51,14 +51,15 @@ function cardView(card, isBlocked, isChanged) {
   );
 }
 
-function feedView(feed) {
+function feedView(state) {
   return h(
     "aside",
     { class: "feed" },
     h("h2", null, "Activity"),
-    h("ul", null, feed.map(function (event) {
-      return h("li", null, h("b", null, event.type), event.card_id !== null ? " #" + event.card_id : "", " ", h("span", { class: "actor" }, event.actor));
-    }))
+    h("ul", null, state.feed.map(function (event) {
+      return h("li", null, h("b", null, event.kind), event.card_id !== null ? " #" + event.card_id : "", " ", h("span", { class: "actor" }, event.actor));
+    })),
+    state.more ? h("button", { class: "more", type: "button", onclick: state.loadMore }, "Ver m\u00e1s") : null
   );
 }
 

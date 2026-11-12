@@ -18,10 +18,12 @@ export def steps() -> List[BDD.Step]
     BDD.step("I sign in with the key {string}", &sign_in),
     BDD.step("I get the page {string}", &get_page),
     BDD.step("I get the page {string} with the session", &get_page_signed),
+    BDD.step("I post to {string} with the session", &post_signed),
     BDD.step("I get the built stylesheet", &get_stylesheet),
     BDD.step("I get the page {string} with the key {string} as the apikey header", &get_page_with_key),
     BDD.step("the response sets the session cookie", &sets_cookie),
     BDD.step("the response sets no cookie", &sets_no_cookie),
+    BDD.step("the response clears the session cookie", &clears_cookie),
     BDD.step("the response redirects to {string}", &redirects_to),
     BDD.step("the page names the built stylesheet and script", &names_assets),
     BDD.step("the response header {string} contains {string}", &header_contains),
@@ -73,6 +75,11 @@ def get_page_signed(ctx: BDD.Context, args: List[String]) -> BDD.Context
   fetch(ctx, "GET", args[0], "", [Header(name: "Cookie", value: text_of(ctx, "cookie"))])
 end
 
+# A write with the cookie and no `apikey` header: the session never writes the API.
+def post_signed(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  fetch(ctx, "POST", args[0], "{}", [Header(name: "Cookie", value: text_of(ctx, "cookie"))])
+end
+
 def get_page_with_key(ctx: BDD.Context, args: List[String]) -> BDD.Context
   fetch(ctx, "GET", args[0], "", [Header(name: "apikey", value: args[1])])
 end
@@ -88,6 +95,11 @@ end
 
 def sets_no_cookie(ctx: BDD.Context, _args: List[String]) -> BDD.Context
   BDD.assert(ctx, header_of(ctx, "set-cookie") == "", "set-cookie was #{header_of(ctx, "set-cookie")}")
+end
+
+def clears_cookie(ctx: BDD.Context, _args: List[String]) -> BDD.Context
+  cookie = header_of(ctx, "set-cookie")
+  BDD.assert(ctx, cookie.start_with?("kanban_session=") and cookie.include?("Max-Age=0"), "set-cookie was #{cookie}")
 end
 
 def redirects_to(ctx: BDD.Context, args: List[String]) -> BDD.Context

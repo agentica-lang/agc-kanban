@@ -14,7 +14,8 @@ export def index(conn: Bond.Conn, pool: Optional[Database.Pool]) -> Result[Bond.
   after = Params.number(query, "after", 0)
   limit = Params.number(query, "limit", 100)
   card = Params.number(query, "card", 0)
-  if not after.ok? or not limit.ok? or not card.ok?
+  before = Params.number(query, "before", 0)
+  if not after.ok? or not limit.ok? or not card.ok? or not before.ok? or (query.key?("before") and query.key?("after"))
     return ok(Failure.reject(conn, 400, "INVALID", "invalid query", some("query")))
   end
 
@@ -23,7 +24,20 @@ export def index(conn: Bond.Conn, pool: Optional[Database.Pool]) -> Result[Bond.
     card_id = some(card.unwrap!)
   end
 
-  page = Events.list(pool.unwrap!, Bond.param(conn, "board").unwrap_or(""), after.unwrap!, card_id, limit.unwrap!)
+  before_id: Optional[Int] = none
+  if query.key?("before")
+    before_id = some(before.unwrap!)
+  end
+
+  page = Events.list(
+    pool.unwrap!,
+    Bond.param(conn, "board").unwrap_or(""),
+    after.unwrap!,
+    before_id,
+    card_id,
+    limit.unwrap!,
+  )
+
   return ok(Failure.answer(conn, page.message)) if not page.ok?
 
   result = page.unwrap!

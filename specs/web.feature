@@ -42,3 +42,19 @@ Feature: The web pages
     When I get the built stylesheet
     Then the response status is 200
     And the response header "cache-control" contains "immutable"
+
+  Scenario: The session reads the API and never writes it
+    Given the test server is running
+    When I get the page "/api/boards"
+    Then the response status is 401
+    When I sign in with the key "01234567890123456789012345678901"
+    And I post to "/api/boards" with the session
+    Then the response status is 401
+
+  Scenario: Signing out ends the session
+    Given the test server is running
+    When I sign in with the key "01234567890123456789012345678901"
+    And I post to "/logout" with the session
+    Then the response status is 303
+    And the response redirects to "/login"
+    And the response clears the session cookie

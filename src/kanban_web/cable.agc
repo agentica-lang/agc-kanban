@@ -5,6 +5,9 @@
 ## inside it, and goes out in the order of the journal. A write nudges it (`nudge`); a slow tick catches an event that a
 ## nudge missed, so a lost wake-up is a delay and not a missed event. A client that misses a broadcast (a reconnect)
 ## fetches the board again.
+##
+## The cursor (the id of the last event sent) lives in an `ATS` table, not in the loop of the publisher: a supervisor task
+## starts the publisher again if it crashes, and the new one goes on from the cursor, so a crash loses no event.
 
 import Bond from "pkg/bond/bond"
 import Channels from "pkg/channels/channels"
@@ -37,8 +40,10 @@ export def start(pool: Optional[Database.Pool]) -> Cable
   wake: Channel[Int] = Channel.new(1)
   if pool.some?
     cursor: ATS[String, Int] = ATS.new()
-    cursor.put(LAST, Events.latest_id(pool.unwrap!).unwrap_or(0))
-    _ = Task.spawn(&publish, Publisher(pool: pool.unwrap!, hub: hub, wake: wake, cursor: cursor))
+    job = Publisher(pool: pool.unwrap!, hub: hub, wake: wake, cursor: cursor)
+    # One try here, so that a write that follows the start is seen; `publish` retries while the read fails.
+    _ = seeded?(job)
+    _ = Task.spawn(&supervise, job)
   end
 
   Cable(hub: hub, wake: wake)
@@ -69,11 +74,44 @@ def board_subscribed(session: Channels.Session, params: Json) -> Result[Channels
   ok(Channels.Subscription(streams: ["board:#{board}"]))
 end
 
-def publish(job: Publisher) -> Void
+# Runs the publisher and runs it again after a crash (a runtime error in a task ends only that task).
+def supervise(job: Publisher) -> Void
+  while not job.wake.closed?
+    outcome = Task.await(Task.spawn(&publish, job))
+    if not outcome.ok?
+      IO.warn("kanban: the live publisher stopped, starting it again: #{outcome.message}")
+      Task.sleep(TICK_MS)
+    end
+  end
+end
+
+# The live broadcast starts at the newest event, so that history is not replayed. A failed read leaves the
+# cursor unset:
+# replaying the journal from 0 would flood the clients.
+def seeded?(job: Publisher) -> Bool
+  return true if job.cursor.get(LAST).ok?
+
+  newest = Events.latest_id(job.pool)
+  if not newest.ok?
+    IO.warn("kanban: live start read failed: #{newest.message}")
+    return false
+  end
+
+  job.cursor.put(LAST, newest.unwrap!)
+  true
+end
+
+def publish(job: Publisher) -> Result[Void]
+  while not seeded?(job)
+    Task.sleep(TICK_MS)
+  end
+
   while not job.wake.closed?
     _ = job.wake.recv(TICK_MS)
     flush(job)
   end
+
+  ok()
 end
 
 # Sends the events after the cursor and moves it. A failed read keeps it, so the next tick tries again.

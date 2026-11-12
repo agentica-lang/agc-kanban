@@ -29,6 +29,16 @@ Feature: CLI events and prime
     And kanban output contains "card.created"
     And kanban output does not contain "board.created"
 
+  Scenario: Events page backwards with --before
+    Given the database server is running
+    When I post a board named "Project" with slug "project" as "agent-1"
+    And I add a card titled "First"
+    And I add a card titled "Second"
+    When I run kanban "events --board project --before 3 --limit 1"
+    Then kanban exits with code 0
+    And kanban output contains "card.created"
+    And kanban output does not contain "board.created"
+
   Scenario: Prime prints the agent rules
     Given the database server is running
     When I run kanban "prime"

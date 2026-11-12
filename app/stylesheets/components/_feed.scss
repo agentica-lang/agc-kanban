@@ -7,3 +7,14 @@
   li { padding: 0.125rem 0; }
   .actor { color: var(--muted); }
 }
+
+.more {
+  margin-top: 0.5rem;
+  font: inherit;
+  padding: 0.25rem 0.75rem;
+  background: none;
+  color: var(--accent);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  cursor: pointer;
+}
