@@ -1,7 +1,7 @@
 AGENTICA ?= agentica
 JOBS ?= 1
 
-.PHONY: install run cli check fmt-check test assets assets-check
+.PHONY: install run cli check fmt-check test smoke assets assets-check
 install:
 	$(AGENTICA) install
 run:
@@ -15,6 +15,8 @@ fmt-check:
 	$(AGENTICA) fmt --check server.agc cli.agc src specs test
 test:
 	$(AGENTICA) test --jobs $(JOBS)
+smoke:
+	tools/smoke.sh
 assets:
 	@true
 assets-check:
