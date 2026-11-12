@@ -28,6 +28,9 @@ def main() -> Void
     BDD.step("one agent wins and seven receive CLAIMED", &assert_race),
     BDD.step("I list project cards", &list_cards),
     BDD.step("I add the column {string} at position {int}", &add_column),
+    BDD.step("I rename column {int} to {string}", &rename_column),
+    BDD.step("I delete column {int}", &delete_column),
+    BDD.step("I mark column {int} as done", &mark_column_done),
     BDD.step("I get board events for {string} after {int}", &board_events),
     BDD.step("the response contains {string}", &response_contains),
     BDD.step("an unrelated server is running", &start_unrelated),
@@ -427,4 +430,18 @@ end
 
 def remove_dependency(ctx: BDD.Context, args: List[String]) -> BDD.Context
   api_request(ctx, "DELETE", "/api/cards/#{args[0]}/deps/#{args[1]}", "")
+end
+
+def rename_column(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  body = JSON.encode(JSON.from({"name": args[1]}))
+  api_request(ctx, "PATCH", "/api/columns/#{args[0]}", body)
+end
+
+def delete_column(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  api_request(ctx, "DELETE", "/api/columns/#{args[0]}", "")
+end
+
+def mark_column_done(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  body = JSON.encode(JSON.from({"done": true}))
+  api_request(ctx, "PATCH", "/api/columns/#{args[0]}", body)
 end

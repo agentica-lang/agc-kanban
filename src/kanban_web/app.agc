@@ -64,6 +64,13 @@ struct CreateColumn
   wip_limit: Optional[Int]
 end
 
+struct UpdateColumn
+  name: Optional[String]
+  position: Optional[Int]
+  done: Optional[Bool]
+  wip_limit: Optional[Int]
+end
+
 struct ColumnAnswer
   column: Boards.Column
 end
@@ -126,6 +133,8 @@ export def build(key: String, pool: Optional[Database.Pool] = none, lease_minute
     |> Bond.post("/api/cards/:id/claim") do |conn| claim_card(conn, pool, lease_minutes) end
     |> Bond.get("/api/cards/:id") do |conn| show_card(conn, pool) end
     |> Bond.post("/api/boards/:board/columns") do |conn| add_column(conn, pool) end
+    |> Bond.patch("/api/columns/:id") do |conn| update_column(conn, pool) end
+    |> Bond.delete("/api/columns/:id") do |conn| delete_column(conn, pool) end
     |> Bond.get("/api/boards/:board/events") do |conn| board_events(conn, pool) end
   )
 end
@@ -550,4 +559,45 @@ def remove_dependency(conn: Bond.Conn, pool: Optional[Database.Pool], lease_minu
   return ok(failure(conn, result.message)) if not result.ok?
 
   ok(Bond.json_as(conn, 200, CardAnswer.codec, CardAnswer(card: result.unwrap!)))
+end
+
+def update_column(conn: Bond.Conn, pool: Optional[Database.Pool]) -> Result[Bond.Conn]
+  return ok(reject(conn, 503, "BUSY", "database unavailable")) if not pool.some?
+
+  id = Bond.param_int(conn, "id")
+  return ok(reject(conn, 400, "INVALID", "invalid id", some("id"))) if not id.ok?
+
+  body = Bond.body_text(conn)
+  return ok(reject(conn, 400, "INVALID", "invalid body", some("body"))) if not body.ok?
+
+  decoded = JSON.decode(body.unwrap!, UpdateColumn)
+  return ok(reject(conn, 400, "INVALID", "invalid body", some("body"))) if not decoded.ok?
+
+  data = decoded.unwrap!
+  input = Columns.Update(
+    id: id.unwrap!,
+    name: data.name,
+    position: data.position,
+    done: data.done,
+    wip_limit: data.wip_limit,
+    actor: Bond.request_header(conn, "X-Kanban-Agent").unwrap_or(""),
+  )
+
+  result = Columns.update(pool.unwrap!, input)
+  return ok(failure(conn, result.message)) if not result.ok?
+
+  ok(Bond.json_as(conn, 200, ColumnAnswer.codec, ColumnAnswer(column: result.unwrap!)))
+end
+
+def delete_column(conn: Bond.Conn, pool: Optional[Database.Pool]) -> Result[Bond.Conn]
+  return ok(reject(conn, 503, "BUSY", "database unavailable")) if not pool.some?
+
+  id = Bond.param_int(conn, "id")
+  return ok(reject(conn, 400, "INVALID", "invalid id", some("id"))) if not id.ok?
+
+  input = Columns.Remove(id: id.unwrap!, actor: Bond.request_header(conn, "X-Kanban-Agent").unwrap_or(""))
+  result = Columns.remove(pool.unwrap!, input)
+  return ok(failure(conn, result.message)) if not result.ok?
+
+  ok(Bond.status(conn, 204))
 end
