@@ -1,4 +1,5 @@
 import Input from "../src/kanban_cli/input"
+import {Kind, Opt} from "std/option_parser"
 
 def test_text_and_lists() -> Result[Void]
   try Test.eq(try Input.text(some("hi"), none), some("hi"))
@@ -18,4 +19,18 @@ def test_text_and_lists() -> Result[Void]
   try Test.eq(try Input.text(none, some(path)), some("from a file"))
   try Test.eq(Input.text(none, some("#{cache}/kanban-input-test-missing.txt")).ok?, false)
   Path.remove(path)
+end
+
+# The words after `--` and the value of another option are never a `--link`.
+def test_repeated_options() -> Result[Void]
+  opts = [Opt(name: "body"), Opt(name: "force", kind: Kind.Flag), Opt(name: "link")]
+  found = try Input.repeated(
+    ["1", "--link", "a", "--force", "--link=b", "--body", "--link", "--", "--link", "c"],
+    "link",
+    opts,
+  )
+
+  try Test.eq(found.values, ["a", "b"])
+  try Test.eq(found.rest, ["1", "--force", "--body", "--link", "--", "--link", "c"])
+  Test.eq(Input.repeated(["--link"], "link", opts).ok?, false)
 end
