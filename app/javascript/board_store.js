@@ -31,7 +31,8 @@ export function useBoard(slug) {
     loadMore: loadMore,
   });
   var timer = null;
-  var requests = 0; // the number of the newest snapshot request: an older answer that comes late is dropped
+  var requests = 0; // the number of the last snapshot request sent
+  var applied = 0; // the number of the snapshot request whose answer is shown (a failure does not move it)
   var synced = 0; // the newest event id that the feed is known to hold with nothing missing before it
 
   function same(a, b) {
@@ -57,17 +58,20 @@ export function useBoard(slug) {
     state.feed = Object.keys(byId).map(function (id) { return byId[id]; }).sort(function (a, b) { return b.id - a.id; });
   }
 
-  // A failed refetch keeps the board that is shown and sets `error` (a banner); the next success clears it.
+  // A failed refetch keeps the board that is shown and sets `error` (a banner); the next success clears it. An answer
+  // is shown when it is newer than the one shown, so only an answer that a newer one overtook is dropped: a steady
+  // stream of events faster than the fetch still shows each answer, and a failure never hides a valid board.
   function load() {
     timer = null;
     var mine = ++requests;
     return getJSON("/api/boards/" + encodeURIComponent(slug)).then(function (snapshot) {
-      if (mine === requests) {
+      if (applied < mine) {
+        applied = mine;
         state.error = "";
         reconcile(snapshot);
       }
     }, function (error) {
-      if (mine === requests) {
+      if (applied < mine) {
         state.error = error.message;
       }
     });
