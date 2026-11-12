@@ -15,6 +15,8 @@ def main() -> Void
     BDD.step("I get the project snapshot", &project_snapshot),
     BDD.step("I add a card titled {string}", &add_card),
     BDD.step("I get card {int}", &get_card),
+    BDD.step("I make card {int} depend on card {int}", &add_dependency),
+    BDD.step("I remove the dependency of card {int} on card {int}", &remove_dependency),
     BDD.step("agent {string} claims card {int}", &claim_card),
     BDD.step("agent {string} marks card {int} done", &done_card),
     BDD.step("agent {string} releases card {int}", &release_card),
@@ -416,4 +418,13 @@ end
 
 def move_card(ctx: BDD.Context, args: List[String]) -> BDD.Context
   api_request(ctx, "POST", "/api/cards/#{args[0]}/move", JSON.encode(JSON.from({"column": args[1]})))
+end
+
+def add_dependency(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  body = JSON.encode(JSON.from({"depends_on": args[1].to_i!}))
+  api_request(ctx, "POST", "/api/cards/#{args[0]}/deps", body)
+end
+
+def remove_dependency(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  api_request(ctx, "DELETE", "/api/cards/#{args[0]}/deps/#{args[1]}", "")
 end

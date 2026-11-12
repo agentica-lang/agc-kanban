@@ -4,6 +4,7 @@ import Boards from "../kanban/boards"
 import Cards from "../kanban/cards"
 import Claims from "../kanban/claims"
 import Columns from "../kanban/columns"
+import Deps from "../kanban/deps"
 import Events from "../kanban/events"
 import Snapshots from "../kanban/snapshots"
 import Transitions from "../kanban/transitions"
@@ -17,6 +18,10 @@ end
 
 struct CardsAnswer
   cards: List[Cards.Card]
+end
+
+struct DependencyInput
+  depends_on: Int
 end
 
 struct MoveInput
@@ -113,6 +118,8 @@ export def build(key: String, pool: Optional[Database.Pool] = none, lease_minute
     |> Bond.post("/api/boards/:board/claim-next") do |conn| claim_next(conn, pool, lease_minutes) end
     |> Bond.get("/api/boards/:board/cards") do |conn| list_cards(conn, pool) end
     |> Bond.post("/api/boards/:board/cards") do |conn| create_card(conn, pool) end
+    |> Bond.post("/api/cards/:id/deps") do |conn| add_dependency(conn, pool, lease_minutes) end
+    |> Bond.delete("/api/cards/:id/deps/:other") do |conn| remove_dependency(conn, pool, lease_minutes) end
     |> Bond.post("/api/cards/:id/release") do |conn| release_card(conn, pool) end
     |> Bond.post("/api/cards/:id/move") do |conn| move_card(conn, pool, lease_minutes) end
     |> Bond.post("/api/cards/:id/done") do |conn| done_card(conn, pool) end
@@ -202,6 +209,7 @@ def failure(conn: Bond.Conn, message: String) -> Bond.Conn
     return Bond.json_as(conn, 409, BlockedAnswer.codec, answer).with(halted: true)
   end
 
+  return reject(conn, 409, "CYCLE", "dependency cycle") if message.start_with?("CYCLE:")
   return reject(conn, 409, "NOT_CLAIMER", "agent does not hold the claim") if message.start_with?("NOT_CLAIMER:")
   return reject(conn, 409, "DONE", "card is done") if message.start_with?("DONE:")
   return reject(conn, 409, "CONFLICT", message) if message.start_with?("CONFLICT:")
@@ -494,6 +502,51 @@ def move_card(conn: Bond.Conn, pool: Optional[Database.Pool], lease_minutes: Int
   )
 
   result = Transitions.move(pool.unwrap!, input)
+  return ok(failure(conn, result.message)) if not result.ok?
+
+  ok(Bond.json_as(conn, 200, CardAnswer.codec, CardAnswer(card: result.unwrap!)))
+end
+
+def add_dependency(conn: Bond.Conn, pool: Optional[Database.Pool], lease_minutes: Int) -> Result[Bond.Conn]
+  return ok(reject(conn, 503, "BUSY", "database unavailable")) if not pool.some?
+
+  id = Bond.param_int(conn, "id")
+  return ok(reject(conn, 400, "INVALID", "invalid id", some("id"))) if not id.ok?
+
+  body = Bond.body_text(conn)
+  return ok(reject(conn, 400, "INVALID", "invalid body", some("body"))) if not body.ok?
+
+  data = JSON.decode(body.unwrap!, DependencyInput)
+  return ok(reject(conn, 400, "INVALID", "invalid body", some("body"))) if not data.ok?
+
+  input = Deps.Change(
+    card_id: id.unwrap!,
+    depends_on: data.unwrap!.depends_on,
+    actor: Bond.request_header(conn, "X-Kanban-Agent").unwrap_or(""),
+    lease_minutes: lease_minutes,
+  )
+
+  result = Deps.add(pool.unwrap!, input)
+  return ok(failure(conn, result.message)) if not result.ok?
+
+  ok(Bond.json_as(conn, 201, CardAnswer.codec, CardAnswer(card: result.unwrap!)))
+end
+
+def remove_dependency(conn: Bond.Conn, pool: Optional[Database.Pool], lease_minutes: Int) -> Result[Bond.Conn]
+  return ok(reject(conn, 503, "BUSY", "database unavailable")) if not pool.some?
+
+  id = Bond.param_int(conn, "id")
+  other = Bond.param_int(conn, "other")
+  return ok(reject(conn, 400, "INVALID", "invalid id", some("id"))) if not id.ok? or not other.ok?
+
+  input = Deps.Change(
+    card_id: id.unwrap!,
+    depends_on: other.unwrap!,
+    actor: Bond.request_header(conn, "X-Kanban-Agent").unwrap_or(""),
+    lease_minutes: lease_minutes,
+  )
+
+  result = Deps.remove(pool.unwrap!, input)
   return ok(failure(conn, result.message)) if not result.ok?
 
   ok(Bond.json_as(conn, 200, CardAnswer.codec, CardAnswer(card: result.unwrap!)))
