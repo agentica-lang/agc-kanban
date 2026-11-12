@@ -20,7 +20,8 @@ This file is the plan only. There is no product code yet.
 - The owner opens a web page and sees the boards change in real time.
 - A claim is atomic. Two agents never hold the same card.
 - A card can depend on other cards. A card with open dependencies cannot be
-  claimed.
+  claimed or closed. A card already in progress can gain a dependency: it keeps
+  its column and claim and shows as blocked, and only closing it waits.
 - Comments stay. They are the shared context of a card.
 - A card can record the git branch and worktree an agent works in.
 
@@ -329,7 +330,7 @@ the body decodes.
 | 404 | `NOT_FOUND` | No such board, column or card. |
 | 404 | `NO_READY_CARD` | `claim-next` found nothing ready. |
 | 409 | `CLAIMED` | The card is claimed by another agent. `claimed_by` names it. |
-| 409 | `BLOCKED` | A dependency is not done. `blocked_by` lists the card ids. |
+| 409 | `BLOCKED` | A claim, `done` or a move into the done column of a card with a dependency that is not done (`force` skips it, except for a claim). `blocked_by` lists the card ids. |
 | 409 | `NOT_CLAIMER` | Release or done by an agent that does not hold the claim (without `force`). |
 | 409 | `DONE` | Claim or `done` of a card that is already done. |
 | 409 | `CYCLE` | The dependency would make a cycle. |
@@ -348,7 +349,7 @@ Tests assert the `code` and the status, never the message.
 | `POST /api/boards` | `{"name", "slug"?, "columns"?: ["Todo", ...]}` | 201 `{"board"}` |
 | `GET /api/boards/:board` | | `{"board", "cards": [card], "last_event_id"}`: the snapshot the web draws |
 | `POST /api/boards/:board/columns` | `{"name", "position"?, "done"?, "wip_limit"?}` | 201 `{"column"}` |
-| `PATCH /api/columns/:id` | `{"name"?, "position"?, "done"?, "wip_limit"?}` | `{"column"}` |
+| `PATCH /api/columns/:id` | `{"name"?, "position"?, "done"?, "wip_limit"?, "force"?: false}` | `{"column"}`; making a column done is `BLOCKED` (`blocked_by` lists the cards of the column that wait for a card outside it) unless `force`, which the `column.updated` event records |
 | `DELETE /api/columns/:id` | | 204, or `CONFLICT` if it has cards |
 | `GET /api/boards/:board/cards` | query: `column`, `ready=1`, `claimed_by`, `label`, `done=0/1` | `{"cards": [card]}`, ordered by column, then position |
 | `POST /api/boards/:board/cards` | `{"title", "body"?, "column"?, "labels"?, "priority"?, "depends_on"?: [id], "links"?: [url]}` (at most 50 links, repeats included) | 201 `{"card"}`; the first column by default |
@@ -357,11 +358,11 @@ Tests assert the `code` and the status, never the message.
 | `POST /api/cards/:id/claim` | `{}` | `{"card"}`; `CLAIMED`, `BLOCKED`, `DONE`. Claiming a card you hold renews the lease. |
 | `POST /api/boards/:board/claim-next` | `{"column"?, "label"?}` | `{"card"}` or `NO_READY_CARD` |
 | `POST /api/cards/:id/release` | `{"force"?: false, "column"?}` | `{"card"}`; `NOT_CLAIMER` unless `force` |
-| `POST /api/cards/:id/move` | `{"column", "position"?}` | `{"card"}`; `CLAIMED` if another agent holds it |
-| `POST /api/cards/:id/done` | `{"force"?: false}` | `{"card"}`: moved to the done column, claim cleared |
+| `POST /api/cards/:id/move` | `{"column", "position"?, "force"?: false}` | `{"card"}`; `CLAIMED` if another agent holds it, `BLOCKED` into the done column with an open dependency; `force` skips both |
+| `POST /api/cards/:id/done` | `{"force"?: false}` | `{"card"}`: moved to the done column, claim cleared; `NOT_CLAIMER` or `BLOCKED` (an open dependency) unless `force` |
 | `POST /api/cards/:id/comments` | `{"body"}` | 201 `{"comment": {"id", "card_id", "author", "body", "created_at"}}` |
-| `POST /api/cards/:id/deps` | `{"depends_on": id}` | 201 `{"card"}`; `CYCLE`, or `BLOCKED` when the card you hold gains an unfinished blocker |
-| `DELETE /api/cards/:id/deps/:other` | | `{"card"}` |
+| `POST /api/cards/:id/deps` | `{"depends_on": id, "force"?: false}` | 201 `{"card"}`; `CYCLE`; `CLAIMED` if another agent holds the card, unless `force`. The holder can add one: the card keeps its column and claim and shows blocked. A new card in the done column with an open dependency is `BLOCKED` too |
+| `DELETE /api/cards/:id/deps/:other` | query: `force=1` | `{"card"}`; `CLAIMED` if another agent holds the card, unless `force` |
 | `GET /api/boards/:board/events` | query: `after` (oldest first), or `before` (newest first, for the pages of older events; with `after` it is `INVALID`), `card`, `limit` (100, at most 1000) | `{"events": [event], "last_event_id"}` |
 
 Event `data` holds the changed object: the `board`, `column`, `card` or
@@ -373,8 +374,14 @@ transaction.
 
 Who may change a card: anyone when it is free; only the claimer when it is
 claimed. `force: true` overrides, for the orchestrator and the owner; the
-event records it. Comments are always allowed, so another agent can leave a
-note on a claimed card.
+event records it (`forced` in the data of `card.moved`, `card.done`,
+`card.released`, `dep.added`, `dep.removed` and of a `column.updated` that made a
+column done). It is one switch for the refusals that are about who or when:
+`CLAIMED`, `NOT_CLAIMER` and the `BLOCKED` of `done`, of a move into the done
+column and of making a column done. On a dependency add or remove it skips
+`CLAIMED` only. It never skips `CYCLE`, a `BLOCKED` claim, or the `BLOCKED` of a
+new card in the done column. Comments are always allowed, so another agent can
+leave a note on a claimed card.
 
 `claim` sets the card's column to the first column that is neither the first
 nor done ("Doing") when the card sits in the first column. This keeps the
@@ -427,8 +434,8 @@ kanban card update ID [--title T] [--body TEXT | --body-file F] [--label L]...
                       [--priority N] [--branch B] [--worktree W]
 kanban card comment ID TEXT | --file F    `-` reads stdin
 kanban card done ID [--force]
-kanban card dep add ID DEPENDS_ON_ID
-kanban card dep remove ID DEPENDS_ON_ID
+kanban card dep add ID DEPENDS_ON_ID [--force]
+kanban card dep remove ID DEPENDS_ON_ID [--force]
 
 kanban events [--after N] [--card ID] [--limit N]
 kanban whoami                             url, agent, board, server health
@@ -461,7 +468,7 @@ Exit codes:
 | 1 | The server refused it: `INVALID`, `NOT_FOUND`, `NO_READY_CARD`, `NOT_CLAIMER`, `CYCLE`, `CONFLICT`. |
 | 2 | Bad usage (from `option_parser`), or `KANBAN_AGENT` is missing for a write; the code is `USAGE`. |
 | 3 | No server, `UNAUTHORIZED`, or `BUSY` after 3 tries. |
-| 4 | Lost a race: `CLAIMED`, `BLOCKED` or `DONE`. Pick another card. |
+| 4 | Lost a race: `CLAIMED`, `BLOCKED` or `DONE`. Pick another card. (`BLOCKED` on `done` or `move` of a card you hold is not a lost race: wait or comment, and keep the card.) |
 
 The CLI retries `BUSY` 3 times (200 ms, 400 ms, 800 ms). A connection failure
 is retried only for `GET`: a write that failed in transport may have arrived,
@@ -632,8 +639,8 @@ talks to a running server.
 - [x] One property test with `prop` (agentica-lang/packages): a random
       sequence of add, claim, release, move, done and dep commands by 3
       agents keeps the invariants (one claimer at most, a claimed card is
-      never in the done column, no claim of a blocked card, no dependency
-      cycle). This is the one place where generated inputs pay off.
+      never in the done column, a command that puts a card in the done column
+      leaves it with no open dependency, no dependency cycle). This is the one place where generated inputs pay off.
 
 Done when: every feature passes, the race scenarios pass 20 runs in a row,
 and `curl` with the key can run the whole loop by hand.

@@ -8,6 +8,13 @@ export struct Change
   depends_on: Int
   actor: String
   lease_minutes: Int
+  force: Bool = false
+end
+
+# The data of the dep.added and dep.removed events: the card after the change and whether `force` was given.
+struct EventData
+  card: Cards.Card
+  forced: Bool
 end
 
 export def add(pool: Database.Pool, input: Change) -> Result[Cards.Card]
@@ -32,13 +39,15 @@ end
 def change(conn: Db.Connection, input: Change, adding: Bool) -> Result[Cards.Card]
   now = Time.now_ms()
   card = try Cards.load_at(conn, input.card_id, now)
-  blocker: Optional[Cards.Card] = none
   if adding
-    blocker = some(try Cards.load_at(conn, input.depends_on, now))
+    # The dependency must exist.
+    _ = try Cards.load_at(conn, input.depends_on, now)
   end
 
   active = card.claimed_by.some? and (not card.lease_until.some? or card.lease_until.unwrap! > now)
-  return error("CLAIMED:#{card.claimed_by.unwrap!}") if active and card.claimed_by.unwrap! != input.actor
+  if active and card.claimed_by.unwrap! != input.actor and not input.force
+    return error("CLAIMED:#{card.claimed_by.unwrap!}")
+  end
 
   existing = try Db.query(
     conn,
@@ -56,7 +65,6 @@ def change(conn: Db.Connection, input: Change, adding: Bool) -> Result[Cards.Car
     )
 
     return error("CYCLE:dependency") if not cycle.empty?
-    return error("BLOCKED:#{input.depends_on}") if active and not blocker.unwrap!.done
 
     _ = try Db.execute(
       conn,
@@ -77,7 +85,7 @@ def change(conn: Db.Connection, input: Change, adding: Bool) -> Result[Cards.Car
   claimed_at: Db.Value = nullable_int(card.claimed_at)
   lease: Db.Value = nullable_int(card.lease_until)
   if card.claimed_by.some? and not active
-    # A lapsed claim is free: drop it, so no claim survives on a now blocked card.
+    # A lapsed claim is free: drop it, as every write does. A live claim stays: the card is blocked in its column.
     claim = Db.Value.Null
     claimed_at = Db.Value.Null
     lease = Db.Value.Null
@@ -111,7 +119,7 @@ def change(conn: Db.Connection, input: Change, adding: Bool) -> Result[Cards.Car
       Db.Value.Int(input.card_id),
       Db.Value.Text(kind),
       Db.Value.Text(input.actor),
-      Db.Value.Text(JSON.encode(JSON.from(updated))),
+      Db.Value.Text(JSON.encode(JSON.from(EventData(card: updated, forced: input.force)))),
       Db.Value.Int(now),
     ],
   )

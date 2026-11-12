@@ -39,6 +39,8 @@ def main() -> Void
       BDD.step("I create a board named {string} with key {string} and agent {string}", &create_board_as),
       BDD.step("I get card {int}", &get_card),
       BDD.step("I make card {int} depend on card {int}", &add_dependency),
+      BDD.step("agent {string} makes card {int} depend on card {int}", &add_dependency_as),
+      BDD.step("agent {string} forcibly makes card {int} depend on card {int}", &force_dependency_as),
       BDD.step("I remove the dependency of card {int} on card {int}", &remove_dependency),
       BDD.step("agent {string} claims card {int}", &claim_card),
       BDD.step("agent {string} marks card {int} done", &done_card),
@@ -54,6 +56,10 @@ def main() -> Void
       BDD.step("I rename column {int} to {string}", &rename_column),
       BDD.step("I delete column {int}", &delete_column),
       BDD.step("I mark column {int} as done", &mark_column_done),
+      BDD.step("I forcibly mark column {int} as done", &force_column_done),
+      BDD.step("I add a card titled {string} to board {string}", &add_card_to_board),
+      BDD.step("I add a card titled {string} in column {string} depending on card {int}", &add_card_waiting),
+      BDD.step("agent {string} forcibly removes the dependency of card {int} on card {int}", &force_remove_dependency),
       BDD.step("I get board events for {string} after {int}", &board_events),
       BDD.step("I get board events for {string} with query {string}", &board_events_query),
       BDD.step("the response contains {string}", &response_contains),
@@ -587,6 +593,16 @@ def add_dependency(ctx: BDD.Context, args: List[String]) -> BDD.Context
   api_request(ctx, "POST", "/api/cards/#{args[0]}/deps", body)
 end
 
+def add_dependency_as(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  body = JSON.encode(JSON.from({"depends_on": args[2].to_i!}))
+  api_request_as(ctx, args[0], "POST", "/api/cards/#{args[1]}/deps", body)
+end
+
+def force_dependency_as(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  body = JSON.encode(JSON.object({"depends_on": JSON.from(args[2].to_i!), "force": JSON.from(true)}))
+  api_request_as(ctx, args[0], "POST", "/api/cards/#{args[1]}/deps", body)
+end
+
 def remove_dependency(ctx: BDD.Context, args: List[String]) -> BDD.Context
   api_request(ctx, "DELETE", "/api/cards/#{args[0]}/deps/#{args[1]}", "")
 end
@@ -603,6 +619,24 @@ end
 def mark_column_done(ctx: BDD.Context, args: List[String]) -> BDD.Context
   body = JSON.encode(JSON.from({"done": true}))
   api_request(ctx, "PATCH", "/api/columns/#{args[0]}", body)
+end
+
+def add_card_to_board(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  api_request(ctx, "POST", "/api/boards/#{args[1]}/cards", JSON.encode(JSON.from({"title": args[0]})))
+end
+
+def force_column_done(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  body = JSON.encode(JSON.object({"done": JSON.from(true), "force": JSON.from(true)}))
+  api_request(ctx, "PATCH", "/api/columns/#{args[0]}", body)
+end
+
+def add_card_waiting(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  fields = {"title": JSON.from(args[0]), "column": JSON.from(args[1]), "depends_on": JSON.from([args[2].to_i!])}
+  api_request(ctx, "POST", "/api/boards/project/cards", JSON.encode(JSON.object(fields)))
+end
+
+def force_remove_dependency(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  api_request_as(ctx, args[0], "DELETE", "/api/cards/#{args[1]}/deps/#{args[2]}?force=1", "")
 end
 
 def retitle_card(ctx: BDD.Context, args: List[String]) -> BDD.Context

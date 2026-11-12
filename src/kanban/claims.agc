@@ -78,7 +78,7 @@ def acquire(conn: Db.Connection, id: Int, actor: String, lease_minutes: Int) -> 
 
   changed = try Db.execute(
     conn,
-    "update cards set claimed_by = ?, claimed_at = ?, lease_until = ?, updated_at = ?, version = version + 1, column_id = ?, position = ? where id = ? and archived_at is null and column_id not in (select id from columns where done = 1) and (claimed_by is null or claimed_by = ? or lease_until <= ?) and not exists (select 1 from card_deps d join cards dep on dep.id = d.depends_on_id join columns col on col.id = dep.column_id where d.card_id = cards.id and col.done = 0)",
+    "update cards set claimed_by = ?, claimed_at = ?, lease_until = ?, updated_at = ?, version = version + 1, column_id = ?, position = ? where id = ? and archived_at is null and column_id not in (select id from columns where done = 1) and (claimed_by is null or claimed_by = ? or lease_until <= ?) and (not exists (select 1 from card_deps d join cards dep on dep.id = d.depends_on_id join columns col on col.id = dep.column_id where d.card_id = cards.id and col.done = 0) or (claimed_by = ? and (lease_until is null or lease_until > ?)))",
     [
       Db.Value.Text(actor),
       Db.Value.Int(now),
@@ -87,6 +87,8 @@ def acquire(conn: Db.Connection, id: Int, actor: String, lease_minutes: Int) -> 
       Db.Value.Int(target.column_id),
       Db.Value.Int(target.position),
       Db.Value.Int(id),
+      Db.Value.Text(actor),
+      Db.Value.Int(now),
       Db.Value.Text(actor),
       Db.Value.Int(now),
     ],
@@ -156,14 +158,8 @@ def diagnose(conn: Db.Connection, card: Cards.Card, actor: String, now: Int) -> 
   active = card.claimed_by.some? and (not card.lease_until.some? or card.lease_until.unwrap! > now)
   return error("CLAIMED:#{card.claimed_by.unwrap!}") if active and card.claimed_by.unwrap! != actor
 
-  blocked = try Db.query(
-    conn,
-    "select dep.id from card_deps d join cards dep on dep.id = d.depends_on_id join columns col on col.id = dep.column_id where d.card_id = ? and col.done = 0 order by dep.id",
-    [Db.Value.Int(card.id)],
-  )
-
-  ids = blocked.map do |row| number(row, "id").to_s end
-  return error("BLOCKED:#{ids.join(",")}") if not ids.empty?
+  ids = try Cards.open_blockers(conn, card.id)
+  return error("BLOCKED:#{ids.map do |id| id.to_s end.join(",")}") if not ids.empty?
 
   error("CONFLICT:claim")
 end

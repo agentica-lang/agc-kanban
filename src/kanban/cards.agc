@@ -211,6 +211,36 @@ export def update(pool: Database.Pool, input: Update) -> Result[Card]
   Database.with_connection(pool) do |conn| Db.transaction(conn) do |tx| update_open(tx, input) end end
 end
 
+# The ids of the cards `id` depends on that are not done yet (in a column that is not a done column), lowest first.
+export def open_blockers(conn: Db.Connection, id: Int) -> Result[List[Int]]
+  rows = try Db.query(
+    conn,
+    "select dep.id from card_deps d join cards dep on dep.id = d.depends_on_id join columns col on col.id = dep.column_id where d.card_id = ? and col.done = 0 order by dep.id",
+    [Db.Value.Int(id)],
+  )
+
+  ok(rows.map do |row| number(row, "id") end)
+end
+
+# Of `ids`, the cards that are not done yet, once each, in the order given: what a new card in the done column would
+# wait for.
+export def open_among(conn: Db.Connection, ids: List[Int]) -> Result[List[Int]]
+  open: List[Int] = []
+  for id in ids
+    rows = try Db.query(
+      conn,
+      "select 1 as present from cards c join columns col on col.id = c.column_id where c.id = ? and col.done = 0",
+      [Db.Value.Int(id)],
+    )
+
+    if not rows.empty? and not open.include?(id)
+      open = open.push(id)
+    end
+  end
+
+  ok(open)
+end
+
 export def load_at(conn: Db.Connection, id: Int, now: Int) -> Result[Card]
   rows = try Db.query(
     conn,
@@ -400,6 +430,12 @@ def insert(conn: Db.Connection, input: Create) -> Result[Card]
   for id in input.depends_on
     found = try Db.query(conn, "select id from cards where id = ? and archived_at is null", [Db.Value.Int(id)])
     return error("NOT_FOUND:depends_on") if found.empty?
+  end
+
+  # A card is never created closed with an open dependency (the rule of `done` and of a move into the done column).
+  if number(column, "done") == 1
+    waiting = try open_among(conn, input.depends_on)
+    return error("BLOCKED:#{waiting.map do |id| id.to_s end.join(",")}") if not waiting.empty?
   end
 
   now = Time.now_ms()

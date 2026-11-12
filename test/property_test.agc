@@ -3,6 +3,7 @@ import Prop from "pkg/prop/prop"
 import Boards from "../src/kanban/boards"
 import Cards from "../src/kanban/cards"
 import Claims from "../src/kanban/claims"
+import Columns from "../src/kanban/columns"
 import Comments from "../src/kanban/comments"
 import Deps from "../src/kanban/deps"
 import Database from "../src/kanban/repo/database"
@@ -20,7 +21,7 @@ def test_command_sequences_keep_invariants() -> Result[Void]
   pool = try Database.open(dir)
   _ = try Boards.create(pool, "Project", "project", "agent", ["Todo", "Doing", "Review", "Done"])
   # 25 runs of up to 10 commands fit the runner's step budget; 40 exhaust it.
-  commands = Prop.list(Prop.int(0, 9), 10)
+  commands = Prop.list(Prop.int(0, 12), 10)
   outcome = Prop.check(commands, Prop.Config(runs: 25)) do |steps| run_sequence(pool, steps) end
   Database.close(pool)
   try Path.remove("#{dir}/kanban.sqlite3")
@@ -31,14 +32,19 @@ end
 def run_sequence(pool: Database.Pool, steps: List[Int]) -> Result[Void]
   try reset(pool)
   _ = try Boards.create(pool, "Project", "project", "agent", ["Todo", "Doing", "Review", "Done"])
+  # A chain, so that the commands meet cards that wait for one another from the start.
+  waits: List[Int] = []
   for seed in 1..3
-    _ = try Cards.create(pool, card_input("Base #{seed}", [], "agent-a"))
+    base = try Cards.create(pool, card_input("Base #{seed}", waits, "agent-a"))
+    waits = [base.id]
   end
 
   try Prop.eq(try violations(pool), [])
   for index in 0...steps.size
+    closed_before = try done_ids(pool)
     try apply(pool, index, steps[index])
     try Prop.eq(try violations(pool), [])
+    try Prop.eq(try closed_while_blocked(pool, closed_before), [])
   end
 
   ok()
@@ -50,8 +56,8 @@ def apply(pool: Database.Pool, index: Int, code: Int) -> Result[Void]
   target = ids[index % ids.size]
   column = ["Todo", "Doing", "Review", "Done"][index % 4]
   case code
-    0 -> discard(Cards.create(pool, card_input("C#{index}", [], agent)))
-    1 -> discard(Cards.create(pool, card_input("D#{index}", [target], agent)))
+    0 -> discard(Cards.create(pool, card_input("C#{index}", [], agent, some(column))))
+    1 -> discard(Cards.create(pool, card_input("D#{index}", [target], agent, some(column))))
     2 -> discard(Claims.claim(pool, target, agent, 30))
     3 -> discard(Transitions.release(pool, Transitions.Release(id: target, actor: agent, force: false, column: none)))
     4 ->
@@ -68,22 +74,36 @@ def apply(pool: Database.Pool, index: Int, code: Int) -> Result[Void]
       discard(
         Comments.add(pool, Comments.Add(card_id: target, body: "note #{index}", actor: agent, lease_minutes: 30)),
       )
-    _ ->
+    9 ->
       discard(
         Claims.claim_next(
           pool,
           Claims.Next(board: "project", column: none, label: none, actor: agent, lease_minutes: 30),
         ),
       )
+    _ ->
+      discard(
+        Columns.update(
+          pool,
+          Columns.Update(
+            id: try column_id(pool, index),
+            name: none,
+            position: none,
+            done: some(true),
+            wip_limit: none,
+            actor: agent,
+          ),
+        ),
+      )
   end
 end
 
-def card_input(title: String, depends_on: List[Int], actor: String) -> Cards.Create
+def card_input(title: String, depends_on: List[Int], actor: String, column: Optional[String] = none) -> Cards.Create
   Cards.Create(
     board: "project",
     title: title,
     body: "",
-    column: none,
+    column: column,
     labels: [],
     priority: 2,
     depends_on: depends_on,
@@ -103,6 +123,35 @@ def discard[T](value: Result[T]) -> Result[Void]
   return ok() if value.ok?
 
   ok()
+end
+
+# Codes 10 to 12 mark a column done; a column by turn, so the generated commands move the done flag around the board.
+def column_id(pool: Database.Pool, index: Int) -> Result[Int]
+  Database.with_connection(pool) do |conn|
+    columns = try ids(conn, "select id from columns order by position")
+    ok(columns[index % columns.size])
+  end
+end
+
+def done_ids(pool: Database.Pool) -> Result[List[Int]]
+  Database.with_connection(pool) do |conn|
+    ids(conn, "select c.id from cards c join columns col on col.id = c.column_id where col.done = 1 order by c.id")
+  end
+end
+
+# The transition rule: a card that one command put in the done column has no open dependency (no command here is
+# forced). A dependency added to a card that is already done is not a transition into done, so it is not checked.
+def closed_while_blocked(pool: Database.Pool, before: List[Int]) -> Result[List[String]]
+  Database.with_connection(pool) do |conn|
+    found: List[String] = []
+    for id in try ids(conn, "select c.id from cards c join columns col on col.id = c.column_id where col.done = 1")
+      if not before.include?(id) and not (try Cards.open_blockers(conn, id)).empty?
+        found = found.push("card #{id} was closed with an open dependency")
+      end
+    end
+
+    ok(found)
+  end
 end
 
 def reset(pool: Database.Pool) -> Result[Void]
@@ -138,15 +187,6 @@ def violations(pool: Database.Pool) -> Result[List[String]]
 
     for id in claimed_done
       found = found.push("card #{id} is claimed in the done column")
-    end
-
-    claimed_blocked = try ids(
-      conn,
-      "select c.id from cards c where c.claimed_by is not null and exists (select 1 from card_deps d join cards dep on dep.id = d.depends_on_id join columns col on col.id = dep.column_id where d.card_id = c.id and col.done = 0)",
-    )
-
-    for id in claimed_blocked
-      found = found.push("card #{id} is claimed while blocked")
     end
 
     misplaced = try ids(
