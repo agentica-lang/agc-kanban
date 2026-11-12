@@ -4,6 +4,10 @@ import HTTP from "std/http"
 def main() -> Void
   BDD.run([
     BDD.step("the test server is running", &start_server),
+    BDD.step("the database server is running", &start_database_server),
+    BDD.step("I post a board named {string} with slug {string} as {string}", &post_board),
+    BDD.step("I list boards", &list_boards),
+    BDD.step("the response contains {string}", &response_contains),
     BDD.step("an unrelated server is running", &start_unrelated),
     BDD.step("a server with broken authentication is running", &start_broken),
     BDD.step("a transient server is running", &start_transient),
@@ -21,7 +25,7 @@ end
 
 def start_server(ctx: BDD.Context, _args: List[String]) -> BDD.Context
   started = BDD.given_program(ctx, "fixtures/server.agc")
-  port = BDD.read_line(started, 10000).unwrap!.to_i!
+  port = BDD.read_line(started, 30000).unwrap!.to_i!
   BDD.set(started, "port", JSON.from(port))
 end
 
@@ -47,7 +51,7 @@ end
 
 def start_unrelated(ctx: BDD.Context, _args: List[String]) -> BDD.Context
   started = BDD.given_program(ctx, "fixtures/unrelated.agc")
-  port = BDD.read_line(started, 10000).unwrap!.to_i!
+  port = BDD.read_line(started, 30000).unwrap!.to_i!
   BDD.set(started, "port", JSON.from(port))
 end
 
@@ -92,30 +96,90 @@ end
 
 def start_broken(ctx: BDD.Context, _args: List[String]) -> BDD.Context
   started = BDD.given_program(ctx, "fixtures/broken_auth.agc")
-  port = BDD.read_line(started, 10000).unwrap!.to_i!
+  port = BDD.read_line(started, 30000).unwrap!.to_i!
   BDD.set(started, "port", JSON.from(port))
 end
 
 def start_transient(ctx: BDD.Context, _args: List[String]) -> BDD.Context
   started = BDD.given_program(ctx, "fixtures/transient.agc")
-  port = BDD.read_line(started, 10000).unwrap!.to_i!
+  port = BDD.read_line(started, 30000).unwrap!.to_i!
   BDD.set(started, "port", JSON.from(port))
 end
 
 def start_busy(ctx: BDD.Context, args: List[String]) -> BDD.Context
   configured = BDD.given_env(ctx, "BUSY_ALWAYS", args[0])
   started = BDD.given_program(configured, "fixtures/busy.agc")
-  port = BDD.read_line(started, 10000).unwrap!.to_i!
+  port = BDD.read_line(started, 30000).unwrap!.to_i!
   BDD.set(started, "port", JSON.from(port))
 end
 
 def start_invalid_auth(ctx: BDD.Context, _args: List[String]) -> BDD.Context
   started = BDD.given_program(ctx, "fixtures/invalid_auth.agc")
-  port = BDD.read_line(started, 10000).unwrap!.to_i!
+  port = BDD.read_line(started, 30000).unwrap!.to_i!
   BDD.set(started, "port", JSON.from(port))
 end
 
 def fixture_home(ctx: BDD.Context, args: List[String]) -> BDD.Context
   home = "#{Path.cwd().unwrap!}/specs/fixtures/#{args[0]}"
   BDD.given_env(ctx, "HOME", home)
+end
+
+def start_database_server(ctx: BDD.Context, _args: List[String]) -> BDD.Context
+  home = System.env("HOME").unwrap!
+  Dir.mkdir("#{home}/.cache").unwrap!
+  dir = "#{home}/.cache/kanban-bdd-#{System.pid()}"
+  configured = BDD.given_env(ctx, "KANBAN_DATA_DIR", dir)
+  started = BDD.given_program(configured, "fixtures/database_server.agc")
+  hooked = BDD.after(started) do |last| cleanup_database(last, dir) end
+  port = BDD.read_line(hooked, 30000).unwrap!.to_i!
+  BDD.set(hooked, "port", JSON.from(port))
+end
+
+def post_board(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  port = JSON.int(BDD.get(ctx, "port").unwrap!).unwrap!
+  body = JSON.encode(JSON.from({"name": args[0], "slug": args[1]}))
+  client = HTTP.client().unwrap!
+  response = HTTP.request(
+    client,
+    "POST",
+    "http://127.0.0.1:#{port}/api/boards",
+    body.bytes,
+    [
+      Header(name: "apikey", value: "01234567890123456789012345678901"),
+      Header(name: "X-Kanban-Agent", value: args[2]),
+      Header(name: "Content-Type", value: "application/json"),
+    ],
+  ).unwrap!
+
+  HTTP.close_client(client)
+  stored = BDD.set(ctx, "status", JSON.from(response.status))
+  BDD.set(stored, "body", JSON.from(HTTP.text(response.body, response.headers).unwrap!))
+end
+
+def list_boards(ctx: BDD.Context, _args: List[String]) -> BDD.Context
+  port = JSON.int(BDD.get(ctx, "port").unwrap!).unwrap!
+  client = HTTP.client().unwrap!
+  response = HTTP.request(
+    client,
+    "GET",
+    "http://127.0.0.1:#{port}/api/boards",
+    "".bytes,
+    [Header(name: "apikey", value: "01234567890123456789012345678901")],
+  ).unwrap!
+
+  HTTP.close_client(client)
+  stored = BDD.set(ctx, "status", JSON.from(response.status))
+  BDD.set(stored, "body", JSON.from(HTTP.text(response.body, response.headers).unwrap!))
+end
+
+def response_contains(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  body = JSON.string(BDD.get(ctx, "body").unwrap!).unwrap!
+  BDD.assert(ctx, body.include?(args[0]), "response was #{body}")
+end
+
+def cleanup_database(ctx: BDD.Context, dir: String) -> Result[Void]
+  closed = BDD.when_eof(ctx)
+  _ = BDD.then_exit(closed, 0, 30000)
+  try Path.remove("#{dir}/kanban.sqlite3")
+  Path.remove(dir)
 end

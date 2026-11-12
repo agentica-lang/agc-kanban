@@ -23,7 +23,7 @@ def main() -> Void
     System.exit(1)
   end
 
-  result = Bond.run(App.build(key), host, port.unwrap!)
+  result = Bond.run(App.build(key, some(pool.unwrap!)), host, port.unwrap!)
   Database.close(pool.unwrap!)
   if not result.ok?
     IO.warn(result.message)
