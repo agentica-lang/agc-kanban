@@ -115,7 +115,8 @@ kanban card comment 12 - <<'EOF'
 - CI green
 EOF
 ```
- Labels and `--depends-on` take a
+
+Labels and `--depends-on` take a
 comma-separated list.
 
 Card ids are global, so `card show`, `claim`, `comment`, `done` and `dep` need
