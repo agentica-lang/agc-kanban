@@ -404,11 +404,17 @@ Read in this order; the first value wins:
 2. Environment: `KANBAN_URL`, `KANBAN_API_KEY`, `KANBAN_AGENT`,
    `KANBAN_BOARD`.
 3. The file `~/.config/agc-kanban/config.toml` (read with `std/toml`):
-   `url`, `api_key`, `agent`, `board`.
+   `url`, `api_key`, `board`. An `agent` key is ignored, with a one-line
+   warning on stderr (see below).
 
 The key is never a flag, so it does not show in `ps` or shell history.
-`KANBAN_AGENT` names the agent. The orchestrator sets it per subagent, for
-example `KANBAN_AGENT=claude-2`. Without it, writes fail with a usage error.
+`KANBAN_AGENT` (or `--agent`) names the agent, and nothing else does: no
+config default, because a name shared by every session lets two agents act as
+one (the owner's decision, issue 39). The orchestrator gives each subagent its
+name in the brief, for example `KANBAN_AGENT=claude-2`. Every command that acts
+as an agent (a write, `card next`, `card list --mine`) fails without a name:
+`USAGE: no agent name; ask your coordinator, then set KANBAN_AGENT or --agent`,
+exit 2. Reads need no name. `whoami` prints the name, or `none`.
 
 ### Commands
 
@@ -466,7 +472,7 @@ Exit codes:
 |---|---|
 | 0 | Done. |
 | 1 | The server refused it: `INVALID`, `NOT_FOUND`, `NO_READY_CARD`, `NOT_CLAIMER`, `CYCLE`, `CONFLICT`. |
-| 2 | Bad usage (from `option_parser`), or `KANBAN_AGENT` is missing for a write; the code is `USAGE`. |
+| 2 | Bad usage (from `option_parser`), or the agent name is missing for a write, `card next` or `card list --mine`; the code is `USAGE`. |
 | 3 | No server, `UNAUTHORIZED`, or `BUSY` after 3 tries. |
 | 4 | Lost a race: `CLAIMED`, `BLOCKED` or `DONE`. Pick another card. (`BLOCKED` on `done` or `move` of a card you hold is not a lost race: wait or comment, and keep the card.) |
 
@@ -577,7 +583,8 @@ broadcast that fails is logged and dropped; the event log still has it.
    - Keep comments short and factual: they are the context the next agent
      reads. Pass long text with `--file` or stdin, not inline.
    - `--force` is for the orchestrator only.
-4. For orchestrators: set `KANBAN_AGENT` per subagent, and put the board
+4. For orchestrators: give each subagent its own name (`KANBAN_AGENT`, never a
+   shared default), and put the board
    and the card id in the subagent's prompt, or tell it to run
    `kanban prime`. A subagent needs no other tool than the shell.
 

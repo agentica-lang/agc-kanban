@@ -1,5 +1,6 @@
 import Settings from "../src/kanban_cli/settings"
 
+# The agent key of the file is never used: only a flag or the environment names the agent.
 def test_flag_then_environment_then_file_then_default() -> Result[Void]
   plain = Settings.Flags(url: none, agent: none, board: none, json: false)
   env = {
@@ -12,7 +13,7 @@ def test_flag_then_environment_then_file_then_default() -> Result[Void]
   file = {"url": "http://file:1", "api_key": "file-key", "agent": "file-agent", "board": "file-board"}
   try Test.eq(
     Settings.resolve(plain, {}, file),
-    Settings.Config(url: "http://file:1", key: "file-key", agent: "file-agent", board: "file-board", json: false),
+    Settings.Config(url: "http://file:1", key: "file-key", agent: "", board: "file-board", json: false),
   )
 
   try Test.eq(

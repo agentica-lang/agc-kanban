@@ -67,7 +67,7 @@ add_cards() {
 }
 
 if [ "$status" -ne 0 ]; then
-  reason=$(head -n 1 "$errors" | clean 200)
+  reason=$(grep -v '^kanban: warning:' "$errors" | head -n 1 | clean 200)
   add "agc-kanban: the board could not be read (${reason:-kanban exited with $status}). The URL and the key come from KANBAN_URL and KANBAN_API_KEY or the config file, and \`kanban whoami\` shows what fails. Claims and writes need a working board."
 else
   add "agc-kanban: this project's work queue is a kanban board; the agc-kanban and kanban-cli skills have the rules and the commands."

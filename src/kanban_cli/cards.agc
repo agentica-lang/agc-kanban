@@ -107,10 +107,7 @@ def list(words: List[String]) -> Result[Void]
 
   claimed = OP.optional_string(parsed, "claimed-by")
   if OP.flag(parsed, "mine")
-    if config.agent.empty?
-      Output.fail(config.json, "USAGE", "--mine needs KANBAN_AGENT or --agent", 2)
-    end
-
+    Support.require_agent(config)
     claimed = some(config.agent)
   end
 

@@ -42,15 +42,22 @@ end
 
 export def load(flags: Flags) -> Result[Config]
   from_file = try file_settings()
+  if from_file.get("agent").some?
+    IO.warn("kanban: warning: the agent key of the config file is ignored; set KANBAN_AGENT or --agent")
+  end
+
   ok(resolve(flags, environment(), from_file))
 end
 
 # Flags, then environment, then the file, then the default; the key has no flag.
+# The agent name has no file value and no default: a name shared by every
+# session would let two agents act as one, so only a flag or the environment
+# names the agent.
 export def resolve(flags: Flags, env: Map[String, String], file: Map[String, String]) -> Config
   Config(
     url: pick(flags.url, env.get("KANBAN_URL"), file.get("url"), DEFAULT_URL),
     key: pick(none, env.get("KANBAN_API_KEY"), file.get("api_key"), ""),
-    agent: pick(flags.agent, env.get("KANBAN_AGENT"), file.get("agent"), ""),
+    agent: pick(flags.agent, env.get("KANBAN_AGENT"), none, ""),
     board: pick(flags.board, env.get("KANBAN_BOARD"), file.get("board"), ""),
     json: flags.json,
   )

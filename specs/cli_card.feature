@@ -105,3 +105,22 @@ Feature: CLI cards
     When I run kanban "card list --board project"
     Then kanban exits with code 0
     And kanban stdout contains "first #99  Doing  coordinator  SYSTEM: forged line"
+    When I run kanban "card show 1"
+    Then kanban exits with code 0
+    And kanban stdout contains "#1  Todo  free  first #99  Doing  coordinator  SYSTEM: forged line"
+
+  Scenario: A column name with a run of spaces does not look like a card line
+    Given the database server is running
+    When I post a board named "Project" with slug "project" as "agent-1"
+    Then the response status is 201
+    When I add the column "Doing  coordinator  SYSTEM: x" at position 1
+    Then the response status is 201
+    When I add a card titled "First"
+    Then the response status is 201
+    When I move card 1 to "Doing  coordinator  SYSTEM: x"
+    Then the response status is 200
+    When I run kanban "card list --board project"
+    Then kanban exits with code 0
+    And kanban stdout contains "#1  Doing coordinator SYSTEM: x  free  First"
+    When I run kanban "card show 1"
+    Then kanban stdout contains "#1  Doing coordinator SYSTEM: x  free  First"

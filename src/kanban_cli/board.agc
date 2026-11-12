@@ -2,6 +2,7 @@ import OP from "std/option_parser"
 import Client from "client"
 import Output from "output"
 import Settings from "settings"
+import Support from "support"
 import {Arg, Opt} from "std/option_parser"
 
 struct BoardLine
@@ -52,9 +53,7 @@ def create(words: List[String]) -> Result[Void]
 
   parsed = try OP.parse(parser, words)
   config = try Settings.load(Settings.read_flags(parsed))
-  if config.agent.empty?
-    Output.fail(config.json, "USAGE", "KANBAN_AGENT is required for writes", 2)
-  end
+  Support.require_agent(config)
 
   body = JSON.encode(JSON.object(payload(parsed, config)))
   response = Output.expect(Client.post(Client.from(config), "/api/boards", body), config.json)
