@@ -1,0 +1,12 @@
+.git
+.github
+.agents
+_build
+data
+dist
+refs
+specs
+test
+tools
+*.md
+.env

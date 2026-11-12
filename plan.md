@@ -150,10 +150,14 @@ src/kanban/            the domain, no HTTP: boards.agc, columns.agc, cards.agc,
                        config.agc, codes.agc (error codes)
 src/kanban/repo/       database.agc (migrate, pool, with_connection, busy?),
                        migrations.agc, migrations/m0001_*.agc ..., rows.agc
-src/kanban_web/        app.agc (start), routes.agc, auth.agc (apikey filter,
-                       /login, session), api.agc (JSON handlers), cable.agc
-                       (channels and broadcasts), views.agc (EAG page shell),
-                       asset_names.agc (written by make assets)
+src/kanban_web/        app.agc (build: the filter and the router), routes.agc
+                       (paths), router.agc (the route table), auth.agc (apikey
+                       filter, /login, session), failure.agc (domain error to
+                       HTTP), params.agc (body and query), answers.agc (shared
+                       envelopes), health.agc, controllers/ (one module per
+                       resource), cable.agc (channels and broadcasts),
+                       views.agc (EAG page shell), asset_names.agc (written by
+                       make assets)
 src/kanban_cli/        config.agc (env and file), client.agc (HTTP calls),
                        commands.agc (option_parser specs), output.agc (text
                        and --json), main flow
@@ -283,8 +287,10 @@ CLI) or the session cookie (the web, read-only in v1). Writes need the
 `[A-Za-z0-9._@/-]`. The name is not a proof of identity: anyone with the key
 can use any name. It keeps honest agents apart, which is the goal.
 
-Bodies are JSON (`Content-Type: application/json`). A `:board` in a path is
-the slug or the id. Answers are JSON objects.
+Bodies are JSON. A `:board` in a path is the slug or the id. Answers are JSON
+objects. The server does not check `Content-Type`, and a body that does not
+decode reports `field: "body"`; field-level messages come from the domain once
+the body decodes.
 
 ### Shapes
 
@@ -316,7 +322,7 @@ the slug or the id. Answers are JSON objects.
 | 409 | `CLAIMED` | The card is claimed by another agent. `claimed_by` names it. |
 | 409 | `BLOCKED` | A dependency is not done. `blocked_by` lists the card ids. |
 | 409 | `NOT_CLAIMER` | Release or done by an agent that does not hold the claim (without `force`). |
-| 409 | `DONE` | Claim of a card that is already done. |
+| 409 | `DONE` | Claim or `done` of a card that is already done. |
 | 409 | `CYCLE` | The dependency would make a cycle. |
 | 409 | `CONFLICT` | A name or slug that exists, a column that still has cards. |
 | 503 | `BUSY` | The database is busy (pool or lock timeout). Safe to retry. |
@@ -328,6 +334,7 @@ Tests assert the `code` and the status, never the message.
 | Method and path | Request | Answer |
 |---|---|---|
 | `GET /api/health` (no auth) | | `{"ok": true, "version": "0.1.0"}` |
+| `GET /api/auth-check` | | `{"ok": true}`; 401 without a good key, the CLI's probe |
 | `GET /api/boards` | | `{"boards": [board]}` (without columns) |
 | `POST /api/boards` | `{"name", "slug"?, "columns"?: ["Todo", ...]}` | 201 `{"board"}` |
 | `GET /api/boards/:board` | | `{"board", "cards": [card], "last_event_id"}`: the snapshot the web draws |
@@ -344,9 +351,15 @@ Tests assert the `code` and the status, never the message.
 | `POST /api/cards/:id/move` | `{"column", "position"?}` | `{"card"}`; `CLAIMED` if another agent holds it |
 | `POST /api/cards/:id/done` | `{"force"?: false}` | `{"card"}`: moved to the done column, claim cleared |
 | `POST /api/cards/:id/comments` | `{"body"}` | 201 `{"comment": {"id", "card_id", "author", "body", "created_at"}}` |
-| `POST /api/cards/:id/deps` | `{"depends_on": id}` | 201 `{"card"}`; `CYCLE` |
+| `POST /api/cards/:id/deps` | `{"depends_on": id}` | 201 `{"card"}`; `CYCLE`, or `BLOCKED` when the card you hold gains an unfinished blocker |
 | `DELETE /api/cards/:id/deps/:other` | | `{"card"}` |
 | `GET /api/boards/:board/events` | query: `after`, `card`, `limit` (100, at most 1000) | `{"events": [event], "last_event_id"}` |
+
+Event `data` holds the changed object: the `board`, `column`, `card` or
+`comment` shape above, as `card.*` kinds do, with `forced` beside the card for
+`card.moved`, `card.released` and `card.done`. A column that changes the done
+flag of its cards emits one `card.updated` per affected card in the same
+transaction.
 
 Who may change a card: anyone when it is free; only the claimer when it is
 claimed. `force: true` overrides, for the orchestrator and the owner; the
@@ -576,28 +589,30 @@ talks to a running server.
 
 ### Phase 1: server core, API and storage
 
-- [ ] Features first, one per area: `boards.feature`, `columns.feature`,
+- [x] Features first, one per area: `boards.feature`, `columns.feature`,
       `cards.feature`, `claims.feature`, `deps.feature`, `comments.feature`,
-      `events.feature`, `auth.feature`. Steps call the API with `std/http`
-      against the server fixture and assert the status and `error.code`.
-- [ ] Migrations with `Migrate.up`, one file each, as agentica-db's layout:
+      `events.feature`, `auth.feature`, plus `busy.feature`. Steps call the
+      API with `std/http` against the server fixture and assert the status
+      and `error.code`.
+- [x] Migrations with `Migrate.up`, one file each, as agentica-db's layout:
       `m0001_boards`, `m0002_columns`, `m0003_cards`, `m0004_card_deps`,
       `m0005_comments`, `m0006_events`. `migrations.agc` lists them.
-- [ ] `test/migrations_test.agc`: versions go 1 to N, one file per version.
-- [ ] `repo/database.agc`: migrate at start, `DbPool` for requests,
+- [x] `test/migrations_test.agc`: versions go 1 to N, with one migration per version.
+- [x] `repo/database.agc`: migrate at start, `DbPool` for requests,
       `busy?` that maps to 503 `BUSY`.
-- [ ] Domain modules in `src/kanban/`. Each write: one `Db.transaction`,
-      the change, the event row; return the event.
-- [ ] The conditional-update claim, `claim-next`, release, move, done,
+- [x] Domain modules in `src/kanban/`. Each write: one `Db.transaction`,
+      the change, the event row; return the event. Column update/removal
+      and card update keep the same shape.
+- [x] The conditional-update claim, `claim-next`, release, move, done,
       and the rules of "who may change a card".
-- [ ] Dependency add with the recursive-CTE cycle check; `ready` as one
+- [x] Dependency add with the recursive-CTE cycle check; `ready` as one
       SQL query.
-- [ ] The `apikey` filter (constant-time compare) and `X-Kanban-Agent`
+- [x] The `apikey` filter (constant-time compare) and `X-Kanban-Agent`
       validation.
-- [ ] Race scenario: 8 tasks claim the same card at once through HTTP;
+- [x] Race scenario: 8 tasks claim the same card at once through HTTP;
       exactly one gets 200, seven get `CLAIMED`. And: 8 tasks call
       `claim-next` on a board with 8 ready cards; each gets a different card.
-- [ ] One property test with `prop` (agentica-lang/packages): a random
+- [x] One property test with `prop` (agentica-lang/packages): a random
       sequence of add, claim, release, move, done and dep commands by 3
       agents keeps the invariants (one claimer at most, a claimed card is
       never in the done column, no claim of a blocked card, no dependency
@@ -710,15 +725,17 @@ Storage is decided: agentica-db with SQLite.
    - Recommendation: a) in v1, b) in phase 5. Writes from the web need CSRF
      protection and a UI; viewing is the goal. The owner can use the CLI
      meanwhile.
-4. **Claim expiry.**
+4. **Claim expiry.** Decided: configurable, with b) implemented and a)
+   as the default.
    - a) No expiry: a claim lasts until release or done; the owner or the
      orchestrator uses `release --force`. The web shows the claim's age.
-   - b) A lease (for example 30 minutes) that any write by the claimer
-     renews; an expired card is ready again.
-   - Recommendation: a) until the trial in phase 4 says otherwise. Leases
-     add a heartbeat rule that agents must follow, and an agent that thinks
-     for 40 minutes would lose its card. The schema has `lease_until` from
-     the start, so b) needs no migration.
+   - b) A lease that any write by the claimer renews; an expired card is
+     ready again.
+   - `KANBAN_LEASE_MINUTES=0` (the default) keeps claims indefinite, so a)
+     holds. A positive value sets `lease_until`; every write of the holder
+     renews it, and a comment by another agent does not. An expired claim
+     is treated as free. The schema had `lease_until` from the start, so
+     this needed no migration.
 5. **Card ids.**
    - a) One global number (`#12`), as now.
    - b) A per-board number (`auth-12`), as Beads' prefixed ids.
@@ -778,5 +795,6 @@ Our stack, read for this plan:
 The recommendations in section 9 are accepted: start locally, keep blocking
 dependencies, make the web view-only, use claims without expiry by default,
 use global card ids, run the bytecode CLI with Agentica on PATH, and use the
-`apikey` header. When WebSocket tests are needed, use the `websocket-client`
-package from agentica packages.
+`apikey` header. Leases are configurable: zero disables expiry, and a positive
+value renews a live claim on writes by its holder. When WebSocket tests are
+needed, use `websocket-client-0.2.0` from agentica packages.

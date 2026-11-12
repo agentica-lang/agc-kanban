@@ -1,7 +1,7 @@
 AGENTICA ?= agentica
 JOBS ?= 1
 
-.PHONY: install run cli check fmt-check test assets assets-check
+.PHONY: install run cli check fmt-check test smoke smoke-docker up down assets assets-check
 install:
 	$(AGENTICA) install
 run:
@@ -12,9 +12,22 @@ cli:
 check:
 	$(AGENTICA) check
 fmt-check:
-	$(AGENTICA) fmt --check server.agc cli.agc src specs
+	$(AGENTICA) fmt --check server.agc cli.agc src specs test
 test:
 	$(AGENTICA) test --jobs $(JOBS)
+smoke:
+	tools/smoke.sh
+smoke-docker:
+	docker compose down -v
+	docker compose up -d --build --wait
+	SMOKE_URL=http://172.28.0.10:4580 SMOKE_KEY="$$(sed -n 's/^KANBAN_API_KEY=//p' .env)" tools/smoke.sh
+	docker compose restart --timeout 10
+	@for i in $$(seq 1 60); do curl -sf http://172.28.0.10:4580/api/health >/dev/null && break; sleep 0.5; done
+	@curl -sf -H "apikey: $$(sed -n 's/^KANBAN_API_KEY=//p' .env)" http://172.28.0.10:4580/api/boards/project | grep -Fq '"slug":"project"' && echo "PASS the board survives a container restart"
+up:
+	docker compose up -d --build --wait
+down:
+	docker compose down
 assets:
 	@true
 assets-check:

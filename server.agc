@@ -1,5 +1,6 @@
 import Bond from "pkg/bond/bond"
 import App from "src/kanban_web/app"
+import Database from "src/kanban/repo/database"
 
 def main() -> Void
   key = System.env("KANBAN_API_KEY").unwrap_or("")
@@ -15,7 +16,21 @@ def main() -> Void
     System.exit(1)
   end
 
-  result = Bond.run(App.build(key), host, port.unwrap!)
+  lease = System.env("KANBAN_LEASE_MINUTES").unwrap_or("0").to_i()
+  if not lease.ok? or lease.unwrap! < 0 or lease.unwrap! > 1000000000
+    IO.warn("invalid KANBAN_LEASE_MINUTES")
+    System.exit(1)
+  end
+
+  data_dir = System.env("KANBAN_DATA_DIR").unwrap_or("./data")
+  pool = Database.open(data_dir, 1000)
+  if not pool.ok?
+    IO.warn("kanban: #{pool.message}")
+    System.exit(1)
+  end
+
+  result = Bond.run(App.build(key, some(pool.unwrap!), lease.unwrap!), host, port.unwrap!)
+  Database.close(pool.unwrap!)
   if not result.ok?
     IO.warn(result.message)
     System.exit(1)

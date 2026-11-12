@@ -30,3 +30,11 @@ subdir = "src/pool"
 ref = "7df56bf2a4c6780a04fb9f605dcd7a78d4053ebf"
 commit = "7df56bf2a4c6780a04fb9f605dcd7a78d4053ebf"
 hash = "sha256:f3faca0b01ce33791f9bddabf6ff147376fda41ba12b135ca7ef55402ed7bdd2"
+
+[[package]]
+name = "prop"
+git = "https://github.com/agentica-lang/packages"
+subdir = "prop"
+tag = "prop-0.2.0"
+commit = "488b159801103ee7fef36d32fae9d8be274fd0e8"
+hash = "sha256:98923e75007ae8c5242cbd757f13e5750f1ecf504774acedee58c0701fee8b91"
