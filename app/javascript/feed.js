@@ -38,10 +38,18 @@ export var GROUPS = [
   ["other", "Other"],
 ];
 
-// `text` on one line, cut to `max` characters (whole characters: no half of a surrogate pair) with an ellipsis.
+// The grapheme segmenter keeps a family emoji or a letter with its accents whole at the cut; where it is missing the
+// text splits by code point, which is the best that `Array.from` gives.
+var segmenter = typeof Intl !== "undefined" && Intl.Segmenter ? new Intl.Segmenter("und", { granularity: "grapheme" }) : null;
+
+function characters(text) {
+  return segmenter ? Array.from(segmenter.segment(text), function (part) { return part.segment; }) : Array.from(text);
+}
+
+// `text` on one line, cut to `max` characters (whole ones: no half of a surrogate pair, no ZWJ fragment) with an ellipsis.
 export function cut(text, max) {
   var flat = String(text).replace(/\s+/g, " ").trim();
-  var chars = Array.from(flat);
+  var chars = characters(flat);
   return chars.length > max ? chars.slice(0, max - 1).join("").trimEnd() + "…" : flat;
 }
 
@@ -73,6 +81,7 @@ export function entry(event, titles) {
     from: "",
     to: "",
     toDone: false,
+    reordered: false,
     excerpt: "",
     // Every event has its time; a malformed one shows as now rather than breaking the feed.
     at: Number.isFinite(event.created_at) ? event.created_at : Date.now(),
@@ -86,13 +95,19 @@ export function entry(event, titles) {
   if (event.kind === "card.moved" || event.kind === "card.done" || event.kind === "card.released") {
     var moved = object(data.card);
     var from = object(data.from);
-    result.to = typeof moved.column === "string" ? moved.column : "";
+    result.to = typeof moved.column === "string" ? cut(moved.column, TITLE_MAX) : "";
     result.toDone = moved.done === true;
-    result.from = typeof from.name === "string" ? from.name : "";
-    // A release that keeps the card in its column, or a move inside one column, has no from and to.
+    result.from = typeof from.name === "string" ? cut(from.name, TITLE_MAX) : "";
+    // A release that keeps the card in its column has no from and to. A move inside one column is a reorder: it names
+    // that column once.
     if (from.id !== undefined && from.id === moved.column_id) {
       result.from = "";
-      result.to = event.kind === "card.moved" ? result.to : "";
+      if (event.kind === "card.moved") {
+        result.reordered = true;
+        result.verb = "reordered";
+      } else {
+        result.to = "";
+      }
     }
   } else if (event.kind === "comment.added") {
     result.excerpt = typeof data.body === "string" ? cut(data.body, EXCERPT_MAX) : "";
