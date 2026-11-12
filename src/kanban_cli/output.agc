@@ -50,6 +50,21 @@ end
 
 export def body(response: HttpResponse) -> String = HTTP.text(response.body, response.headers).unwrap_or("")
 
+# A connection failure is a 3 and a refused answer exits with its own code;
+# only a 2xx comes back.
+export def expect(result: Result[HttpResponse], json: Bool) -> Result[HttpResponse]
+  if not result.ok?
+    fail(json, "UNAVAILABLE", result.message, 3)
+  end
+
+  response = result.unwrap!
+  if response.status < 200 or response.status > 299
+    refuse(json, response)
+  end
+
+  ok(response)
+end
+
 export def json_requested?(words: List[String]) -> Bool
   for word in words
     return false if word == "--"

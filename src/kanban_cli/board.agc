@@ -30,7 +30,7 @@ def list(words: List[String]) -> Result[Void]
   parser = OP.new("kanban board list", "List the boards", [], Settings.common_opts())
   parsed = try OP.parse(parser, words)
   config = try Settings.load(Settings.read_flags(parsed))
-  response = request(Client.get(Client.from(config), "/api/boards"), config.json)
+  response = Output.expect(Client.get(Client.from(config), "/api/boards"), config.json)
   return ok() if not response.ok?
 
   if config.json
@@ -57,7 +57,7 @@ def create(words: List[String]) -> Result[Void]
   end
 
   body = JSON.encode(JSON.object(payload(parsed)))
-  response = request(Client.post(Client.from(config), "/api/boards", body), config.json)
+  response = Output.expect(Client.post(Client.from(config), "/api/boards", body), config.json)
   return ok() if not response.ok?
 
   answer = response.unwrap!
@@ -95,7 +95,7 @@ def show(words: List[String]) -> Result[Void]
     Output.fail(config.json, "INVALID", "board is required: pass BOARD or set KANBAN_BOARD", 2)
   end
 
-  response = request(Client.get(Client.from(config), "/api/boards/#{reference}"), config.json)
+  response = Output.expect(Client.get(Client.from(config), "/api/boards/#{reference}"), config.json)
   return ok() if not response.ok?
 
   if config.json
@@ -121,18 +121,4 @@ def payload(parsed: OP.Parsed) -> Map[String, Json]
   end
 
   fields
-end
-
-# A connection failure is a 3; everything else is left to Output.refuse.
-def request(result: Result[HttpResponse], json: Bool) -> Result[HttpResponse]
-  if not result.ok?
-    Output.fail(json, "UNAVAILABLE", result.message, 3)
-  end
-
-  response = result.unwrap!
-  if response.status < 200 or response.status > 299
-    Output.refuse(json, response)
-  end
-
-  ok(response)
 end
