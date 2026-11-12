@@ -54,6 +54,8 @@ def test_dependency_writes_validate_and_preserve_data() -> Result[Void]
 
   try Test.eq(Deps.remove(pool, edge.with(depends_on: third.id)), error("NOT_FOUND:dependency"))
   try Test.eq(try state(pool), before)
+  waiting = try Database.with_connection(pool) do |conn| Cards.open_among(conn, [second.id, third.id, second.id]) end
+  try Test.eq(waiting, [second.id, third.id])
   held = try Deps.add(pool, edge.with(card_id: first.id, depends_on: third.id))
   try Test.eq(held.claimed_by, some("agent"))
   try Test.eq(held.depends_on, [third.id])

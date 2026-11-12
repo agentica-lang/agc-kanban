@@ -3,6 +3,7 @@ import Prop from "pkg/prop/prop"
 import Boards from "../src/kanban/boards"
 import Cards from "../src/kanban/cards"
 import Claims from "../src/kanban/claims"
+import Columns from "../src/kanban/columns"
 import Comments from "../src/kanban/comments"
 import Deps from "../src/kanban/deps"
 import Database from "../src/kanban/repo/database"
@@ -20,7 +21,7 @@ def test_command_sequences_keep_invariants() -> Result[Void]
   pool = try Database.open(dir)
   _ = try Boards.create(pool, "Project", "project", "agent", ["Todo", "Doing", "Review", "Done"])
   # 25 runs of up to 10 commands fit the runner's step budget; 40 exhaust it.
-  commands = Prop.list(Prop.int(0, 9), 10)
+  commands = Prop.list(Prop.int(0, 12), 10)
   outcome = Prop.check(commands, Prop.Config(runs: 25)) do |steps| run_sequence(pool, steps) end
   Database.close(pool)
   try Path.remove("#{dir}/kanban.sqlite3")
@@ -31,8 +32,11 @@ end
 def run_sequence(pool: Database.Pool, steps: List[Int]) -> Result[Void]
   try reset(pool)
   _ = try Boards.create(pool, "Project", "project", "agent", ["Todo", "Doing", "Review", "Done"])
+  # A chain, so that the commands meet cards that wait for one another from the start.
+  waits: List[Int] = []
   for seed in 1..3
-    _ = try Cards.create(pool, card_input("Base #{seed}", [], "agent-a"))
+    base = try Cards.create(pool, card_input("Base #{seed}", waits, "agent-a"))
+    waits = [base.id]
   end
 
   try Prop.eq(try violations(pool), [])
@@ -70,11 +74,25 @@ def apply(pool: Database.Pool, index: Int, code: Int) -> Result[Void]
       discard(
         Comments.add(pool, Comments.Add(card_id: target, body: "note #{index}", actor: agent, lease_minutes: 30)),
       )
-    _ ->
+    9 ->
       discard(
         Claims.claim_next(
           pool,
           Claims.Next(board: "project", column: none, label: none, actor: agent, lease_minutes: 30),
+        ),
+      )
+    _ ->
+      discard(
+        Columns.update(
+          pool,
+          Columns.Update(
+            id: try column_id(pool, index),
+            name: none,
+            position: none,
+            done: some(true),
+            wip_limit: none,
+            actor: agent,
+          ),
         ),
       )
   end
@@ -105,6 +123,14 @@ def discard[T](value: Result[T]) -> Result[Void]
   return ok() if value.ok?
 
   ok()
+end
+
+# Codes 10 to 12 mark a column done; a column by turn, so the generated commands move the done flag around the board.
+def column_id(pool: Database.Pool, index: Int) -> Result[Int]
+  Database.with_connection(pool) do |conn|
+    columns = try ids(conn, "select id from columns order by position")
+    ok(columns[index % columns.size])
+  end
 end
 
 def done_ids(pool: Database.Pool) -> Result[List[Int]]

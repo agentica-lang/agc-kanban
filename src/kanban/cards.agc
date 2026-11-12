@@ -222,7 +222,8 @@ export def open_blockers(conn: Db.Connection, id: Int) -> Result[List[Int]]
   ok(rows.map do |row| number(row, "id") end)
 end
 
-# Of `ids`, the cards that are not done yet, in the order given: what a new card in the done column would wait for.
+# Of `ids`, the cards that are not done yet, once each, in the order given: what a new card in the done column would
+# wait for.
 export def open_among(conn: Db.Connection, ids: List[Int]) -> Result[List[Int]]
   open: List[Int] = []
   for id in ids
@@ -232,7 +233,7 @@ export def open_among(conn: Db.Connection, ids: List[Int]) -> Result[List[Int]]
       [Db.Value.Int(id)],
     )
 
-    if not rows.empty?
+    if not rows.empty? and not open.include?(id)
       open = open.push(id)
     end
   end

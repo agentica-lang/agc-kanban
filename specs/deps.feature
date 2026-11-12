@@ -128,3 +128,18 @@ Feature: Card dependencies
     And I move card 2 to "Review"
     And I mark column 3 as done
     Then the response status is 200
+
+  Scenario: Marking a column done leaves the old done column open, so a card that waits for it is refused
+    Given the database server is running
+    When I post a board named "Project" with slug "project" as "agent-1"
+    And I add a card titled "Closed"
+    And agent "agent-1" claims card 1
+    And agent "agent-1" marks card 1 done
+    And I add a card titled "Waiting"
+    And I make card 2 depend on card 1
+    And I move card 2 to "Review"
+    And I mark column 3 as done
+    Then the response status is 409
+    And the response contains "\"blocked_by\":[2]"
+    When I get card 2
+    Then the response contains "\"done\":false"
