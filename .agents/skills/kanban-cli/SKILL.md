@@ -89,10 +89,14 @@ kanban card dep remove 12 10
 kanban events [--after 42 | --before 42] [--card 12] [--limit 50]   # --before: newest first
 ```
 
-`--link` and `--unlink` repeat. A link is an http(s) URL (a PR, an issue, a CI
-run), at most 2,048 characters, without spaces, quotes or angle brackets;
-anything else is `INVALID`. Adding a link the card has, or removing one it has
-not, changes nothing. When you open a PR, add its link to the card.
+`--link` and `--unlink` repeat (not after `--`). A link is an http(s) URL (a
+PR, an issue, a CI run) in printable ASCII (an IDN host as punycode, a path
+percent-encoded), at most 2,048 characters, with no credentials (`user@`),
+spaces, quotes or angle brackets; a card holds at most 50. Anything else is
+`INVALID`. Adding a link the card has, or removing one it has not, writes
+nothing: no new version and no event. A server older than links drops them,
+so the CLI then exits 3 with `UNSUPPORTED` (the other fields were saved). When
+you open a PR, add its link to the card.
 
 Long text: `--body`, `--body-file PATH`, or `-` to read standard input
 (`kanban card comment 12 - < notes.md`). Labels and `--depends-on` take a
@@ -126,7 +130,7 @@ $ kanban card list
 | 0 | done |
 | 1 | the server refused: `NOT_FOUND`, `INVALID`, `CONFLICT`, `CYCLE`, `NOT_CLAIMER` (another agent holds it), `NO_READY_CARD` |
 | 2 | usage: unknown command, missing argument, missing agent or board; the code printed is `USAGE` |
-| 3 | no server, `UNAUTHORIZED`, `BUSY` after the retries, or any other failure |
+| 3 | no server, `UNAUTHORIZED`, `BUSY` after the retries, `UNSUPPORTED` (a server too old for the request), or any other failure |
 | 4 | lost the race: `CLAIMED`, `BLOCKED`, `DONE` |
 
 `bin/kanban` exits 141, silently, when its standard output is closed (`kanban board show | head -1`), as a Unix tool killed by SIGPIPE does.

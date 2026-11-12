@@ -22,6 +22,9 @@ def main() -> Void
       BDD.step("I add a card titled {string} with the link {string}", &add_linked_card),
       BDD.step("agent {string} links card {int} to {string}", &link_card),
       BDD.step("agent {string} unlinks card {int} from {string}", &unlink_card),
+      BDD.step("agent {string} links card {int} to {int} URLs", &link_many),
+      BDD.step("agent {string} unlinks {int} URLs from card {int}", &unlink_many),
+      BDD.step("a server older than links is running", &start_before_links),
       BDD.step("agent {string} retitles card {int} to {string}", &retitle_card),
       BDD.step("agent {string} forces a new title on card {int} to {string}", &force_retitle_card),
       BDD.step("agent {string} comments on card {int} with {string}", &comment_card),
@@ -163,6 +166,12 @@ end
 
 def start_broken(ctx: BDD.Context, _args: List[String]) -> BDD.Context
   started = BDD.given_program(ctx, "fixtures/broken_auth.agc")
+  port = BDD.read_line(started, 30000).unwrap!.to_i!
+  BDD.set(started, "port", JSON.from(port))
+end
+
+def start_before_links(ctx: BDD.Context, _args: List[String]) -> BDD.Context
+  started = BDD.given_program(ctx, "fixtures/before_links.agc")
   port = BDD.read_line(started, 30000).unwrap!.to_i!
   BDD.set(started, "port", JSON.from(port))
 end
@@ -322,6 +331,18 @@ end
 def unlink_card(ctx: BDD.Context, args: List[String]) -> BDD.Context
   body = JSON.encode(JSON.object({"unlink": JSON.from([args[2]])}))
   api_request_as(ctx, args[0], "PATCH", "/api/cards/#{args[1]}", body)
+end
+
+def numbered_urls(count: Int) -> List[String] = (1..count).map do |n| "https://github.com/o/r/pull/#{n}" end
+
+def link_many(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  body = JSON.encode(JSON.object({"link": JSON.from(numbered_urls(args[2].to_i!))}))
+  api_request_as(ctx, args[0], "PATCH", "/api/cards/#{args[1]}", body)
+end
+
+def unlink_many(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  body = JSON.encode(JSON.object({"unlink": JSON.from(numbered_urls(args[1].to_i!))}))
+  api_request_as(ctx, args[0], "PATCH", "/api/cards/#{args[2]}", body)
 end
 
 def get_card(ctx: BDD.Context, args: List[String]) -> BDD.Context

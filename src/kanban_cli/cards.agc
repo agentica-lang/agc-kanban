@@ -24,23 +24,18 @@ export def run(words: List[String]) -> Result[Void]
 end
 
 def add(words: List[String]) -> Result[Void]
-  parser = OP.new(
-    "kanban card add",
-    "Create a card",
-    [Arg(name: "title")],
-    [
-      Opt(name: "body"),
-      Opt(name: "body-file"),
-      Opt(name: "column"),
-      Opt(name: "label"),
-      Opt(name: "priority", kind: Kind.Int),
-      Opt(name: "depends-on"),
-      Opt(name: "link", help: "a URL to link, repeatable"),
-    ] +
-    Settings.common_opts(),
-  )
+  opts = [
+    Opt(name: "body"),
+    Opt(name: "body-file"),
+    Opt(name: "column"),
+    Opt(name: "label"),
+    Opt(name: "priority", kind: Kind.Int),
+    Opt(name: "depends-on"),
+    Opt(name: "link", help: "a URL to link, repeatable"),
+  ].concat(Settings.common_opts())
 
-  links = try Input.repeated(words, "link")
+  parser = OP.new("kanban card add", "Create a card", [Arg(name: "title")], opts)
+  links = try Input.repeated(words, "link", opts)
   parsed = try OP.parse(parser, links.rest)
   config = try Settings.load(Settings.read_flags(parsed))
   Support.require_agent(config)
@@ -75,6 +70,7 @@ def add(words: List[String]) -> Result[Void]
 
   return ok() if not response.ok?
 
+  require_links(config, response.unwrap!, not links.values.empty?)
   Support.print_card(config, response.unwrap!)
   ok()
 end
@@ -170,27 +166,22 @@ def show(words: List[String]) -> Result[Void]
 end
 
 def update(words: List[String]) -> Result[Void]
-  parser = OP.new(
-    "kanban card update",
-    "Change the fields of a card",
-    [Arg(name: "id", kind: Kind.Int)],
-    [
-      Opt(name: "title"),
-      Opt(name: "body"),
-      Opt(name: "body-file"),
-      Opt(name: "label"),
-      Opt(name: "priority", kind: Kind.Int),
-      Opt(name: "branch"),
-      Opt(name: "worktree"),
-      Opt(name: "force", kind: Kind.Flag),
-      Opt(name: "link", help: "a URL to link, repeatable"),
-      Opt(name: "unlink", help: "a linked URL to remove, repeatable"),
-    ] +
-    Settings.common_opts(),
-  )
+  opts = [
+    Opt(name: "title"),
+    Opt(name: "body"),
+    Opt(name: "body-file"),
+    Opt(name: "label"),
+    Opt(name: "priority", kind: Kind.Int),
+    Opt(name: "branch"),
+    Opt(name: "worktree"),
+    Opt(name: "force", kind: Kind.Flag),
+    Opt(name: "link", help: "a URL to link, repeatable"),
+    Opt(name: "unlink", help: "a linked URL to remove, repeatable"),
+  ].concat(Settings.common_opts())
 
-  links = try Input.repeated(words, "link")
-  unlinks = try Input.repeated(links.rest, "unlink")
+  parser = OP.new("kanban card update", "Change the fields of a card", [Arg(name: "id", kind: Kind.Int)], opts)
+  links = try Input.repeated(words, "link", opts)
+  unlinks = try Input.repeated(links.rest, "unlink", opts)
   parsed = try OP.parse(parser, unlinks.rest)
   config = try Settings.load(Settings.read_flags(parsed))
   Support.require_agent(config)
@@ -233,6 +224,25 @@ def update(words: List[String]) -> Result[Void]
 
   return ok() if not response.ok?
 
+  require_links(config, response.unwrap!, not (links.values.empty? and unlinks.values.empty?))
   Support.print_card(config, response.unwrap!)
   ok()
+end
+
+# A server older than links answers the write and drops the links it does not know; that is no silent success. The
+# other fields of the request were saved.
+def require_links(config: Settings.Config, response: HttpResponse, asked: Bool) -> Void
+  return if not asked
+
+  return if has_links?(Output.body(response))
+
+  Output.fail(config.json, "UNSUPPORTED", "the server is older than card links: the links were not saved", 3)
+end
+
+def has_links?(body: String) -> Bool
+  doc = JSON.parse(body)
+  return false if not doc.ok?
+
+  card = JSON.get(doc.unwrap!, "card")
+  card.ok? and JSON.get(card.unwrap!, "links").ok?
 end

@@ -276,10 +276,11 @@ Rules:
   recursive CTE in the same transaction.
 - Labels are a JSON array in one column: few labels, no label table, and the
   filter `--label` uses `json_each`.
-- Links are a JSON array of URLs too (a PR, an issue, a CI run), each once.
-  A link is http(s) with a host, at most 2,048 characters, with no space,
-  control character, quote, angle bracket, backslash or `^`, `` ` ``, `{`,
-  `|`, `}`: it is shown on the web, so anything else is `INVALID`.
+- Links are a JSON array of URLs too (a PR, an issue, a CI run), each once,
+  at most 50 per card. A link is http(s) with a host and no `@` before the
+  path, in printable ASCII, at most 2,048 bytes, with no quote, angle
+  bracket, backslash or `^`, `` ` ``, `{`, `|`, `}`: it is shown on the web
+  and printed to terminals, so anything else is `INVALID`.
 - Event kinds: `board.created`, `column.added`, `column.updated`,
   `column.removed`, `card.created`, `card.updated`, `card.moved`,
   `card.claimed`, `card.released`, `card.done`, `card.archived`,
@@ -351,7 +352,7 @@ Tests assert the `code` and the status, never the message.
 | `GET /api/boards/:board/cards` | query: `column`, `ready=1`, `claimed_by`, `label`, `done=0/1` | `{"cards": [card]}`, ordered by column, then position |
 | `POST /api/boards/:board/cards` | `{"title", "body"?, "column"?, "labels"?, "priority"?, "depends_on"?: [id], "links"?: [url]}` | 201 `{"card"}`; the first column by default |
 | `GET /api/cards/:id` | | `{"card", "comments": [comment]}` |
-| `PATCH /api/cards/:id` | `{"title"?, "body"?, "labels"?, "priority"?, "branch"?, "worktree"?, "link"?: [url], "unlink"?: [url]}` | `{"card"}`; `CLAIMED` if another agent holds it. `unlink` removes, then `link` adds the URLs the card lacks. |
+| `PATCH /api/cards/:id` | `{"title"?, "body"?, "labels"?, "priority"?, "branch"?, "worktree"?, "link"?: [url], "unlink"?: [url]}` | `{"card"}`; `CLAIMED` if another agent holds it. `unlink` (at most 50) removes, then `link` adds the URLs the card lacks; when only links were asked and none changed, nothing is written (no version, no event). |
 | `POST /api/cards/:id/claim` | `{}` | `{"card"}`; `CLAIMED`, `BLOCKED`, `DONE`. Claiming a card you hold renews the lease. |
 | `POST /api/boards/:board/claim-next` | `{"column"?, "label"?}` | `{"card"}` or `NO_READY_CARD` |
 | `POST /api/cards/:id/release` | `{"force"?: false, "column"?}` | `{"card"}`; `NOT_CLAIMER` unless `force` |

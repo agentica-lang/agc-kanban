@@ -1,3 +1,5 @@
+import {Kind, Opt} from "std/option_parser"
+
 # Long text and id lists shared by the card commands.
 
 export struct Repeated
@@ -32,15 +34,19 @@ export def ids(value: Optional[String]) -> Result[List[Int]]
 end
 
 # The values of an option that may repeat (`--link A --link=B`), taken out of the words before the option parser, which
-# keeps only the last one.
-export def repeated(words: List[String], name: String) -> Result[Repeated]
+# keeps only the last one. The scan stops at `--`, and the word after another option that takes a value is that value
+# (`--body --link` is a body), so `opts` are the options of the command.
+export def repeated(words: List[String], name: String, opts: List[Opt]) -> Result[Repeated]
   flag = "--#{name}"
+  valued = opts.select do |opt| opt.kind != Kind.Flag end.map do |opt| "--#{opt.name}" end
   values: List[String] = []
   rest: List[String] = []
   i = 0
   while i < words.size
     word = words[i]
-    if word == flag
+    if word == "--"
+      return ok(Repeated(values: values, rest: rest + List.drop(words, i)))
+    elsif word == flag
       return error("#{flag} needs a value") if i + 1 >= words.size
 
       values = values.push(words[i + 1])
@@ -48,6 +54,9 @@ export def repeated(words: List[String], name: String) -> Result[Repeated]
     elsif word.start_with?("#{flag}=")
       values = values.push(word.slice(flag.length + 1, word.length - flag.length - 1))
       i += 1
+    elsif valued.include?(word) and i + 1 < words.size
+      rest = rest.push(word).push(words[i + 1])
+      i += 2
     else
       rest = rest.push(word)
       i += 1
