@@ -4,6 +4,7 @@ import { useBoard } from "../board_store.js";
 import { useCard } from "../card_store.js";
 import { useDrawer } from "../drawer.js";
 import { useFilters } from "../filter_store.js";
+import { closesPanel } from "../outside.js";
 import { active, count, matches } from "../filters.js";
 import { useTheme } from "../theme.js";
 import CardPanel from "./CardPanel.vue";
@@ -34,19 +35,57 @@ provide("openCardId", drawer.card);
 var filter = useFilters();
 provide("filter", filter);
 
-// When the filters panel closes (Escape, ✕, the button, a tap beside it), the focus goes back to the Filters button
-// instead of the page, also when the activity shows again behind it. A card that opens keeps the focus in its panel, and
-// a click on another header button (Activity) keeps it on that button.
+// When a panel closes (Escape, ✕, its button, a click or tap beside it) and the focus was in it or nowhere, the focus
+// goes back to where the panel came from: the Filters or the Activity button, or the card's link on the board (when the
+// filters hide it, the focus stays where it is). Also when another panel shows again behind it. A card that opens keeps
+// the focus in its panel, and a click on another header button keeps it on that button.
 var filtersButton = ref(null);
-watch(panel, function (now, before) {
-  if (before === "filters" && now !== "card") {
-    nextTick(function () {
-      var focused = document.activeElement;
-      if (!focused || focused === document.body || focused === filtersButton.value) {
-        filtersButton.value.focus();
-      }
-    });
+var activityButton = ref(null);
+
+function origin(closed, id) {
+  if (closed === "filters") {
+    return filtersButton.value;
   }
+  if (closed === "activity") {
+    return activityButton.value;
+  }
+  return id === null ? null : document.querySelector('.card a.title[data-card="' + id + '"]');
+}
+
+watch([panel, drawer.card], function (now, before) {
+  var closed = before[0];
+  if (closed === "" || closed === now[0] || now[0] === "card") {
+    return;
+  }
+  nextTick(function () {
+    var focused = document.activeElement;
+    var target = origin(closed, before[1]);
+    if (target && (!focused || focused === document.body || focused === target)) {
+      target.focus();
+    }
+  });
+});
+
+// A click beside the open panel closes it on a wide screen too (outside.js says which clicks). Where the button went
+// down is kept, so a text selection that leaves the panel does not close it.
+var downPath = [];
+function onDown(event) {
+  downPath = event.composedPath();
+}
+function onOutside(event) {
+  var down = downPath;
+  downPath = [];
+  var click = { path: event.composedPath(), button: event.button, ctrlKey: event.ctrlKey, metaKey: event.metaKey,
+    shiftKey: event.shiftKey, altKey: event.altKey };
+  if (panel.value !== "" && closesPanel(click, down)) {
+    drawer.close();
+  }
+}
+document.addEventListener("pointerdown", onDown, true);
+document.addEventListener("click", onOutside);
+onBeforeUnmount(function () {
+  document.removeEventListener("pointerdown", onDown, true);
+  document.removeEventListener("click", onOutside);
 });
 
 // Escape closes the panel that is open.
@@ -114,7 +153,7 @@ var filtersLabel = computed(function () { return filterCount.value ? "Filters ·
         <span class="filters-word">{{ filtersLabel }}</span>
         <span v-if="filterCount" class="badge" aria-hidden="true">{{ filterCount }}</span>
       </button>
-      <button type="button" class="toggle" aria-label="Activity" title="Activity" aria-controls="drawer" :aria-expanded="panel === 'activity'" @click="drawer.toggleActivity()">
+      <button ref="activityButton" type="button" class="toggle" aria-label="Activity" title="Activity" aria-controls="drawer" :aria-expanded="panel === 'activity'" @click="drawer.toggleActivity()">
         <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M2 3h1.5v1.5H2zM5 3h9v1.5H5zM2 7.25h1.5v1.5H2zM5 7.25h9v1.5H5zM2 11.5h1.5V13H2zM5 11.5h9V13H5z" fill="currentColor" /></svg>
       </button>
     </header>
