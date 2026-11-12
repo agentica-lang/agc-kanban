@@ -1,0 +1,15 @@
+{
+  "description": "Show the agc-kanban rules and the cards in progress at the start of a session and of a subagent",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [{"type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/board-context.sh\" session", "timeout": 15}]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "hooks": [{"type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/board-context.sh\" subagent", "timeout": 15}]
+      }
+    ]
+  }
+}

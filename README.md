@@ -89,3 +89,16 @@ ln -sfn "$PWD/.agents/skills/kanban-cli" ~/.agents/skills/kanban-cli
 If an agent reads only an `AGENTS.md`, add one line there: `On the kanban board, follow skill/agc-kanban/SKILL.md and run kanban prime.`
 
 Set `KANBAN_AGENT` to a different name for each agent, and `KANBAN_BOARD` to the board slug.
+
+## Install the Claude Code plugin
+
+The repository is also a Claude Code plugin (`.claude-plugin/`): it carries the two skills and two hooks. The hooks run `hooks/board-context.sh` at the start of a session and of a subagent and add to the context the rule about the agent name and the Doing cards of the other agents (at most 15 lines, then "and N more"). They only read the board.
+
+```sh
+claude plugin marketplace add agentica-lang/agc-kanban
+claude plugin install agc-kanban@agc-kanban
+```
+
+The plugin needs the `kanban` client on `PATH` (`make install-cli`) and `KANBAN_URL`, `KANBAN_API_KEY` and `KANBAN_BOARD` in the environment or in the config file. Without `kanban` or without a board, the hooks print nothing; with a board that cannot be read, they print one notice. The hooks never choose an agent name: the main agent names itself from its conversation with you, and a subagent asks its coordinator.
+
+To try it without installing: `claude --plugin-dir /path/to/agc-kanban`. Check the manifests with `claude plugin validate .`.
