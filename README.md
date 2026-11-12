@@ -4,22 +4,23 @@
 
 An agent with no skill installed learns the same rules from `kanban prime`; paste its output into a prompt.
 
-Link the skill folders (`agc-kanban` and `kanban-cli`), so a change in the repository reaches the agent:
+Run these from the repository root. They link the skill folders (`agc-kanban` and `kanban-cli`), so a change in the repository reaches the agent:
 
 ```sh
 # Claude Code: ~/.claude/skills/ (or .claude/skills/ in a project)
-ln -s "$PWD/skill/agc-kanban" ~/.claude/skills/agc-kanban
-ln -s "$PWD/.agents/skills/kanban-cli" ~/.claude/skills/kanban-cli
+mkdir -p ~/.claude/skills
+ln -sfn "$PWD/skill/agc-kanban" ~/.claude/skills/agc-kanban
+ln -sfn "$PWD/.agents/skills/kanban-cli" ~/.claude/skills/kanban-cli
 
 # OpenCode: ~/.config/opencode/skills/
 mkdir -p ~/.config/opencode/skills
-ln -s "$PWD/skill/agc-kanban" ~/.config/opencode/skills/agc-kanban
-ln -s "$PWD/.agents/skills/kanban-cli" ~/.config/opencode/skills/kanban-cli
+ln -sfn "$PWD/skill/agc-kanban" ~/.config/opencode/skills/agc-kanban
+ln -sfn "$PWD/.agents/skills/kanban-cli" ~/.config/opencode/skills/kanban-cli
 
 # Codex: ~/.agents/skills/ (or .agents/skills/ in a project)
 mkdir -p ~/.agents/skills
-ln -s "$PWD/skill/agc-kanban" ~/.agents/skills/agc-kanban
-ln -s "$PWD/.agents/skills/kanban-cli" ~/.agents/skills/kanban-cli
+ln -sfn "$PWD/skill/agc-kanban" ~/.agents/skills/agc-kanban
+ln -sfn "$PWD/.agents/skills/kanban-cli" ~/.agents/skills/kanban-cli
 ```
 
 If an agent reads only an `AGENTS.md`, add one line there: `On the kanban board, follow skill/agc-kanban/SKILL.md and run kanban prime.`

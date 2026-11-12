@@ -55,7 +55,7 @@ def main() -> Void
       BDD.step("a server with an invalid authentication response is running", &start_invalid_auth),
       BDD.step("a server is busy {string}", &start_busy),
       BDD.step("I run kanban {string}", &run_kanban),
-      BDD.step("I run the kanban wrapper with its standard output closed {string}", &run_wrapper_closed),
+      BDD.step("I run the kanban wrapper whose reader has left {string}", &run_wrapper_closed),
       BDD.step("kanban exits with code {int}", &kanban_status),
       BDD.step("kanban output contains {string}", &kanban_output),
       BDD.step("kanban output does not contain {string}", &kanban_output_lacks),
@@ -592,16 +592,21 @@ def run_kanban_with(ctx: BDD.Context, words: List[String], env: Map[String, Stri
   BDD.set(with_err, "kanban_stderr", JSON.from(output.stderr))
 end
 
-# The wrapper needs a compiled program; one per run keeps parallel jobs apart.
-# `>&-` closes standard output for the wrapper only, which is what a reader
-# that exits early (`| head -1`) leaves behind.
+# The wrapper needs a compiled program; one temporary folder per run keeps
+# parallel jobs apart. The reader of the pipe (`true`) exits at once, so the
+# CLI writes to a pipe nobody reads, as `kanban board show | head -1` does.
+# bash gives the status of the first command of the pipe.
 def run_wrapper_closed(ctx: BDD.Context, args: List[String]) -> BDD.Context
-  program = "#{System.env("HOME").unwrap!}/.cache/kanban-wrapper-#{System.pid()}-#{Random.int(0, 999_999)}.agcb"
   script = (
-    "agentica compile cli.agc -o \"$1\" && { KANBAN_PROGRAM=\"$1\" bin/kanban #{args[0]} >&-; code=$?; rm -f \"$1\"; exit $code; }"
+    "dir=$(mktemp -d) && agentica compile cli.agc -o \"$dir/k.agcb\" && { KANBAN_TEST_PROGRAM=\"$dir/k.agcb\" bin/kanban \"$1\" | true; code=${PIPESTATUS[0]}; rm -rf \"$dir\"; exit $code; }"
   )
 
-  process = Process.spawn_captured("sh", ["-c", script, "sh", program], Process.Options(env: kanban_env(ctx))).unwrap!
+  process = Process.spawn_captured(
+    "bash",
+    ["-c", script, "bash", args[0]],
+    Process.Options(env: {"KANBAN_API_KEY": "01234567890123456789012345678901", "KANBAN_AGENT": "agent-1"}),
+  ).unwrap!
+
   code = Process.wait(process, 60000).unwrap!
   output = Process.output(process, 30000).unwrap!
   Process.close(process)

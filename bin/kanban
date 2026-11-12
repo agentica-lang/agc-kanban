@@ -10,19 +10,39 @@ while [ -L "$self" ]; do
   esac
 done
 root=$(CDPATH= cd -- "$(dirname -- "$self")/.." && pwd)
-program=${KANBAN_PROGRAM:-$root/dist/kanban.agcb}
+# KANBAN_TEST_PROGRAM is for the specs only: they run a program compiled to a
+# temporary file.
+program=${KANBAN_TEST_PROGRAM:-$root/dist/kanban.agcb}
 
-# Agentica has no way to see a closed standard output: the write ends the
-# program with RUNTIME-INTERNAL "cannot write to standard output" (exit 1).
-# Exit quietly with 141, as a Unix tool killed by SIGPIPE, so
-# `kanban board show | head -1` prints nothing more.
+# Agentica cannot see a closed standard output: the write ends the program
+# with RUNTIME-INTERNAL "cannot write to standard output" (exit 1), whatever
+# the cause. When standard output is a pipe and that is the VM's own line,
+# the reader left early (`kanban board show | head -1`): exit 141, silently,
+# as a Unix tool killed by SIGPIPE. Any other failure (a full disk, a
+# closed descriptor) keeps its message.
 # See https://github.com/agentica-lang/agentica/issues/1455.
-errors=$(mktemp)
-trap 'rm -f "$errors"' EXIT
+# The price: stderr is shown at the end, not live, and is never a terminal.
+errors=$(mktemp 2>/dev/null) || exec agentica run -- "$program" "$@"
+
+# The child runs in the background so a signal reaches this shell at once.
+# Without these traps (dash runs no EXIT trap on a signal) a TERM would leave
+# `agentica` running and the temp file behind.
+pid=
+cleanup() { rm -f "$errors"; }
+trap cleanup EXIT
+trap '[ -z "$pid" ] || kill "$pid" 2>/dev/null; exit 143' TERM HUP
+trap '[ -z "$pid" ] || kill -INT "$pid" 2>/dev/null; exit 130' INT
+
+# `<&0` is explicit because a background job of a non-interactive shell
+# otherwise reads /dev/null, and `card comment ID -` reads standard input.
+agentica run -- "$program" "$@" <&0 2>"$errors" &
+pid=$!
 status=0
-agentica run -- "$program" "$@" 2>"$errors" || status=$?
-if [ "$status" -ne 0 ] && grep -qF 'cannot write to standard output' "$errors"; then
+wait "$pid" || status=$?
+pid=
+
+if [ "$status" -ne 0 ] && [ -p /dev/stdout ] && grep -qx 'cannot write to standard output' "$errors"; then
   exit 141
 fi
-cat "$errors" >&2
+cat "$errors" >&2 || :
 exit "$status"

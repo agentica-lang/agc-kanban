@@ -20,9 +20,12 @@ This skill is only the rules.
 ## Rules
 
 - Claim before you work. Do not start on a card you do not hold.
-- Exit 4 (`CLAIMED`, `BLOCKED`, `DONE`) means you lost the card. Stop on it
-  and pick another with `card next`; never retry the same card.
-- Never work a blocked card. Comment why you stopped and take another one.
+- Exit 4 (`CLAIMED`, `BLOCKED`, `DONE`) means you lost the card. Never retry
+  it. If you were given the card, stop and report to whoever started you.
+  Only when you took work with `card next`, take another.
+- A reviewer never claims: it comments its verdict on the card.
+- Never work a blocked card. Comment why you stopped, then stop (a card you
+  were given) or take another one (work from `card next`).
 - Never move, update or release a card another agent holds. Comments are fine.
 - Comment at each phase: the branch and worktree, the PR number and head,
   the test or CI verdict, a blocker. Comment before every status change, so
