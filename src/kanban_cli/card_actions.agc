@@ -237,13 +237,14 @@ def dep_add(words: List[String]) -> Result[Void]
     "kanban card dep add",
     "Make a card depend on another",
     [Arg(name: "id", kind: Kind.Int), Arg(name: "depends-on", kind: Kind.Int)],
-    Settings.common_opts(),
+    [Opt(name: "force", kind: Kind.Flag)] + Settings.common_opts(),
   )
 
   parsed = try OP.parse(parser, words)
   config = try Settings.load(Settings.read_flags(parsed))
   Support.require_agent(config)
-  body = JSON.encode(JSON.object({"depends_on": JSON.from(OP.int(parsed, "depends-on"))}))
+  fields: Map[String, Json] = {"depends_on": JSON.from(OP.int(parsed, "depends-on"))}
+  body = JSON.encode(JSON.object(Support.force(fields, parsed)))
   response = Output.expect(
     Client.post(Client.from(config), "/api/cards/#{OP.int(parsed, "id")}/deps", body),
     config.json,

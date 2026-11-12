@@ -39,6 +39,8 @@ def main() -> Void
       BDD.step("I create a board named {string} with key {string} and agent {string}", &create_board_as),
       BDD.step("I get card {int}", &get_card),
       BDD.step("I make card {int} depend on card {int}", &add_dependency),
+      BDD.step("agent {string} makes card {int} depend on card {int}", &add_dependency_as),
+      BDD.step("agent {string} forcibly makes card {int} depend on card {int}", &force_dependency_as),
       BDD.step("I remove the dependency of card {int} on card {int}", &remove_dependency),
       BDD.step("agent {string} claims card {int}", &claim_card),
       BDD.step("agent {string} marks card {int} done", &done_card),
@@ -575,6 +577,16 @@ end
 def add_dependency(ctx: BDD.Context, args: List[String]) -> BDD.Context
   body = JSON.encode(JSON.from({"depends_on": args[1].to_i!}))
   api_request(ctx, "POST", "/api/cards/#{args[0]}/deps", body)
+end
+
+def add_dependency_as(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  body = JSON.encode(JSON.from({"depends_on": args[2].to_i!}))
+  api_request_as(ctx, args[0], "POST", "/api/cards/#{args[1]}/deps", body)
+end
+
+def force_dependency_as(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  body = JSON.encode(JSON.object({"depends_on": JSON.from(args[2].to_i!), "force": JSON.from(true)}))
+  api_request_as(ctx, args[0], "POST", "/api/cards/#{args[1]}/deps", body)
 end
 
 def remove_dependency(ctx: BDD.Context, args: List[String]) -> BDD.Context

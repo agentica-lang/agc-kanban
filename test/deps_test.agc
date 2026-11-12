@@ -47,7 +47,6 @@ def test_dependency_writes_validate_and_preserve_data() -> Result[Void]
   try Test.eq(Deps.add(pool, edge), error("CONFLICT:dependency"))
   try Test.eq(Deps.add(pool, edge.with(card_id: first.id, depends_on: first.id)), error("CYCLE:dependency"))
   try Test.eq(Deps.add(pool, edge.with(card_id: first.id, depends_on: second.id)), error("CYCLE:dependency"))
-  try Test.eq(Deps.add(pool, edge.with(card_id: first.id, depends_on: third.id)), error("BLOCKED:#{third.id}"))
   try Test.eq(
     Deps.add(pool, edge.with(card_id: first.id, depends_on: third.id, actor: "other")),
     error("CLAIMED:agent"),
@@ -55,6 +54,11 @@ def test_dependency_writes_validate_and_preserve_data() -> Result[Void]
 
   try Test.eq(Deps.remove(pool, edge.with(depends_on: third.id)), error("NOT_FOUND:dependency"))
   try Test.eq(try state(pool), before)
+  held = try Deps.add(pool, edge.with(card_id: first.id, depends_on: third.id))
+  try Test.eq(held.claimed_by, some("agent"))
+  try Test.eq(held.depends_on, [third.id])
+  try Test.eq(held.ready, false)
+  _ = try Deps.remove(pool, edge.with(card_id: first.id, depends_on: third.id))
   removed = try Deps.remove(pool, edge)
   try Test.eq(removed.ready, true)
   try Test.eq(removed.depends_on, [])

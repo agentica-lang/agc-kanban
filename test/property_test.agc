@@ -140,15 +140,6 @@ def violations(pool: Database.Pool) -> Result[List[String]]
       found = found.push("card #{id} is claimed in the done column")
     end
 
-    claimed_blocked = try ids(
-      conn,
-      "select c.id from cards c where c.claimed_by is not null and exists (select 1 from card_deps d join cards dep on dep.id = d.depends_on_id join columns col on col.id = dep.column_id where d.card_id = c.id and col.done = 0)",
-    )
-
-    for id in claimed_blocked
-      found = found.push("card #{id} is claimed while blocked")
-    end
-
     misplaced = try ids(
       conn,
       "select c.id from cards c join columns col on col.id = c.column_id where (col.done = 1 and c.done_at is null) or (col.done = 0 and c.done_at is not null)",

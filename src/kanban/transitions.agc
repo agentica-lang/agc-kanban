@@ -79,6 +79,7 @@ def finish_open(conn: Db.Connection, input: Action) -> Result[Cards.Card]
 
   active = card.claimed_by.some? and (not card.lease_until.some? or card.lease_until.unwrap! > now)
   return error("NOT_CLAIMER:card") if not input.force and (not active or card.claimed_by.unwrap! != input.actor)
+  try refuse_blocked(conn, card.id, input.force)
 
   rows = try Db.query(
     conn,
@@ -129,6 +130,18 @@ def finish_open(conn: Db.Connection, input: Action) -> Result[Cards.Card]
   ok(updated)
 end
 
+# A card with an open dependency cannot be closed (`done`, or a move into a done column) unless forced, with the
+# same `force` that skips CLAIMED and NOT_CLAIMER. Every other move stays free, so a blocked card can sit in Doing
+# or Review.
+def refuse_blocked(conn: Db.Connection, id: Int, force: Bool) -> Result[Void]
+  return ok() if force
+
+  ids = try Cards.open_blockers(conn, id)
+  return error("BLOCKED:#{ids.map do |blocker| blocker.to_s end.join(",")}") if not ids.empty?
+
+  ok()
+end
+
 def number(row: Db.Row, key: String) -> Int
   case row.get(key, Db.Value.Null)
     Db.Value.Int(value) -> value
@@ -163,6 +176,10 @@ def move_open(conn: Db.Connection, input: Move, release: Bool) -> Result[Cards.C
 
     target = number(rows[0], "id")
     target_done = number(rows[0], "done") == 1
+  end
+
+  if target_done and not card.done
+    try refuse_blocked(conn, card.id, input.force)
   end
 
   count = try Db.query(

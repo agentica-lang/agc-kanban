@@ -83,7 +83,9 @@ kanban card release 12 [--to Todo] [--force]   # releasing a free card is a no-o
 kanban card move 12 Doing [--position 0] [--force]
 kanban card done 12 [--force]
 kanban card comment 12 "ran the migration"   # or --file notes.md
-kanban card dep add 12 10              # 12 needs 10 first
+kanban card dep add 12 10 [--force]    # 12 needs 10 first; allowed on a card you hold (it stays in its column, shown blocked)
+                                       # while 10 is open, `done 12` and `move 12 Done` are refused (BLOCKED, exit 4)
+                                       # --force: one switch for CLAIMED, NOT_CLAIMER and that BLOCKED (never CYCLE)
 kanban card dep remove 12 10
 
 kanban events [--after 42 | --before 42] [--card 12] [--limit 50]   # --before: newest first

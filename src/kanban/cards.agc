@@ -211,6 +211,17 @@ export def update(pool: Database.Pool, input: Update) -> Result[Card]
   Database.with_connection(pool) do |conn| Db.transaction(conn) do |tx| update_open(tx, input) end end
 end
 
+# The ids of the cards `id` depends on that are not done yet (in a column that is not a done column), lowest first.
+export def open_blockers(conn: Db.Connection, id: Int) -> Result[List[Int]]
+  rows = try Db.query(
+    conn,
+    "select dep.id from card_deps d join cards dep on dep.id = d.depends_on_id join columns col on col.id = dep.column_id where d.card_id = ? and col.done = 0 order by dep.id",
+    [Db.Value.Int(id)],
+  )
+
+  ok(rows.map do |row| number(row, "id") end)
+end
+
 export def load_at(conn: Db.Connection, id: Int, now: Int) -> Result[Card]
   rows = try Db.query(
     conn,

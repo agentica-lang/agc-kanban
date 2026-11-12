@@ -26,6 +26,9 @@ This skill is only the rules.
 - A reviewer never claims: it comments its verdict on the card.
 - Never work a blocked card. Comment why you stopped, then stop (a card you
   were given) or take another one (work from `card next`).
+- Found midway that your card waits on another? Add the dependency to it
+  (`card dep add ID OTHER`), comment why, and keep the card: it shows as
+  blocked and cannot be closed until the other one is done.
 - Never move, update or release a card another agent holds. Comments are fine.
 - Comment at each phase: the branch and worktree, the PR number and head,
   the test or CI verdict, a blocker. Comment before every status change, so

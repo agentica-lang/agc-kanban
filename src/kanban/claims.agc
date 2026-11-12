@@ -156,14 +156,8 @@ def diagnose(conn: Db.Connection, card: Cards.Card, actor: String, now: Int) -> 
   active = card.claimed_by.some? and (not card.lease_until.some? or card.lease_until.unwrap! > now)
   return error("CLAIMED:#{card.claimed_by.unwrap!}") if active and card.claimed_by.unwrap! != actor
 
-  blocked = try Db.query(
-    conn,
-    "select dep.id from card_deps d join cards dep on dep.id = d.depends_on_id join columns col on col.id = dep.column_id where d.card_id = ? and col.done = 0 order by dep.id",
-    [Db.Value.Int(card.id)],
-  )
-
-  ids = blocked.map do |row| number(row, "id").to_s end
-  return error("BLOCKED:#{ids.join(",")}") if not ids.empty?
+  ids = try Cards.open_blockers(conn, card.id)
+  return error("BLOCKED:#{ids.map do |id| id.to_s end.join(",")}") if not ids.empty?
 
   error("CONFLICT:claim")
 end

@@ -79,6 +79,32 @@ Feature: CLI card lifecycle
     When I run kanban "card claim 2 --board project"
     Then kanban exits with code 0
 
+  Scenario: A held card gets a dependency, closing needs force, and force also adds to another agent's card
+    Given the database server is running
+    When I post a board named "Project" with slug "project" as "agent-1"
+    And I add a card titled "First"
+    And I add a card titled "Second"
+    And I run kanban "card claim 2 --board project"
+    And I run kanban "card dep add 2 1 --board project"
+    Then kanban exits with code 0
+    When I run kanban "card done 2 --board project"
+    Then kanban exits with code 4
+    And kanban stderr is "kanban: BLOCKED: card is blocked by #1"
+    When I run kanban "card move 2 Done --board project"
+    Then kanban exits with code 4
+    When I run kanban as agent "agent-2" "card dep add 1 2 --board project"
+    Then kanban exits with code 1
+    And kanban stderr contains "CYCLE"
+    When I run kanban "card done 2 --board project --force"
+    Then kanban exits with code 0
+    When I add a card titled "Third"
+    And I run kanban "card claim 3 --board project"
+    And I run kanban as agent "agent-2" "card dep add 3 1 --board project"
+    Then kanban exits with code 4
+    And kanban stderr contains "CLAIMED"
+    When I run kanban as agent "agent-2" "card dep add 3 1 --board project --force"
+    Then kanban exits with code 0
+
   Scenario: Releasing a card nobody holds is a no-op
     Given the database server is running
     When I post a board named "Project" with slug "project" as "agent-1"
