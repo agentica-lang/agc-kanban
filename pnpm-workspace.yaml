@@ -1,6 +1,3 @@
-# Only esbuild runs its install script (Vite uses it; it picks the platform binary).
+# No package needs its install script: the one of @parcel/watcher (a dependency of sass) is not run.
 allowBuilds:
-  esbuild: true
   "@parcel/watcher": false
-minimumReleaseAgeExclude:
-  - "@vitejs/plugin-vue@6.0.11"
