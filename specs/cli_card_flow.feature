@@ -47,7 +47,7 @@ Feature: CLI card lifecycle
     And kanban output contains "Done"
     When I run kanban "card done 1 --board project"
     Then kanban exits with code 4
-    And kanban output contains "DONE"
+    And kanban stderr is "kanban: DONE: card is done"
 
   Scenario: Comment on a card
     Given the database server is running
@@ -73,7 +73,7 @@ Feature: CLI card lifecycle
     Then kanban exits with code 0
     When I run kanban "card claim 2 --board project"
     Then kanban exits with code 4
-    And kanban output contains "BLOCKED"
+    And kanban stderr is "kanban: BLOCKED: card is blocked"
     When I run kanban "card dep remove 2 1 --board project"
     Then kanban exits with code 0
     When I run kanban "card claim 2 --board project"

@@ -29,8 +29,7 @@ Feature: CLI failures
     Then the response status is 200
     When I run kanban "card claim 1 --board project"
     Then kanban exits with code 4
-    And kanban output contains "CLAIMED"
-    And kanban stderr contains "card 1 is claimed by agent-2"
+    And kanban stderr is "kanban: CLAIMED: card 1 is claimed by agent-2"
 
   Scenario: Two agents claiming one card end with one 0 and one 4
     Given the database server is running
@@ -47,7 +46,7 @@ Feature: CLI failures
     When I run kanban "card show 999"
     Then kanban exits with code 1
     And kanban stdout is empty
-    And kanban stderr contains "NOT_FOUND"
+    And kanban stderr is "kanban: NOT_FOUND: card not found"
 
   Scenario: A JSON error is a document on stdout
     Given the database server is running
@@ -92,8 +91,7 @@ Feature: CLI failures
     Then the response status is 200
     When I run kanban "card done 1 --board project"
     Then kanban exits with code 1
-    And kanban output contains "NOT_CLAIMER"
-    And kanban stderr contains "does not hold the claim"
+    And kanban stderr is "kanban: NOT_CLAIMER: agent does not hold the claim"
     When I run kanban "card done 1 --board project --force"
     Then kanban exits with code 0
 
@@ -108,3 +106,17 @@ Feature: CLI failures
     When I run kanban "card add --help"
     Then kanban exits with code 0
     And kanban stdout contains "kanban card add"
+
+  Scenario: A JSON refusal is the server document with every field
+    Given the database server is running
+    When I post a board named "Project" with slug "project" as "agent-1"
+    Then the response status is 201
+    When I add a card titled "First"
+    Then the response status is 201
+    When agent "agent-2" claims card 1
+    Then the response status is 200
+    When I run kanban "card claim 1 --board project --json"
+    Then kanban exits with code 4
+    And kanban stdout contains "\"card_id\":1"
+    And kanban stdout contains "\"claimed_by\":\"agent-2\""
+    And kanban stderr is empty

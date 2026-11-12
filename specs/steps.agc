@@ -64,8 +64,10 @@ def main() -> Void
     BDD.step("two agents run kanban {string}", &run_two_kanban),
     BDD.step("kanban exit codes are {string}", &kanban_codes),
     BDD.step("kanban stderr contains {string}", &kanban_stderr),
+    BDD.step("kanban stderr is {string}", &kanban_stderr_is),
     BDD.step("kanban stdout contains {string}", &kanban_stdout),
     BDD.step("kanban stdout is empty", &kanban_stdout_empty),
+    BDD.step("kanban stderr is empty", &kanban_stderr_empty),
     BDD.step("I run whoami with key {string}", &whoami),
     BDD.step("whoami exits with code {int}", &whoami_status),
     BDD.step("I run whoami as JSON with key {string}", &whoami_json),
@@ -663,9 +665,20 @@ def kanban_stderr(ctx: BDD.Context, args: List[String]) -> BDD.Context
   BDD.assert(ctx, output.include?(args[0]), "stderr was #{output}")
 end
 
+def kanban_stderr_is(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  output = JSON.string(BDD.get(ctx, "kanban_stderr").unwrap!).unwrap!
+  text = output.strip
+  BDD.assert(ctx, text == args[0], "stderr was #{text}")
+end
+
 def kanban_stdout(ctx: BDD.Context, args: List[String]) -> BDD.Context
   output = JSON.string(BDD.get(ctx, "kanban_stdout").unwrap!).unwrap!
   BDD.assert(ctx, output.include?(args[0]), "stdout was #{output}")
+end
+
+def kanban_stderr_empty(ctx: BDD.Context, _args: List[String]) -> BDD.Context
+  output = JSON.string(BDD.get(ctx, "kanban_stderr").unwrap!).unwrap!
+  BDD.assert(ctx, output.strip.empty?, "stderr was #{output}")
 end
 
 def kanban_stdout_empty(ctx: BDD.Context, _args: List[String]) -> BDD.Context

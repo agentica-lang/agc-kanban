@@ -152,14 +152,15 @@ export def refuse(json: Bool, response: HttpResponse) -> Void
   code = error_code(response).unwrap_or("UNAVAILABLE")
   case response.status
     400, 404, 409 ->
+      lost = 1
       if LOST_CODES.include?(code)
-        fail(json, code, human_message(code, response), 4)
+        lost = 4
       end
 
-      fail(json, code, human_message(code, response), 1)
-    401 -> fail(json, "UNAUTHORIZED", "authentication failed", 3)
-    503 -> fail(json, "BUSY", "server is busy", 3)
-    _ -> fail(json, "UNAVAILABLE", "server returned #{response.status}", 3)
+      stop(json, response, code, lost)
+    401 -> stop(json, response, "UNAUTHORIZED", 3)
+    503 -> stop(json, response, "BUSY", 3)
+    _ -> stop(json, response, "UNAVAILABLE", 3)
   end
 end
 
@@ -291,6 +292,20 @@ def error_code(response: HttpResponse) -> Optional[String]
   some(decoded.unwrap!.error.code)
 end
 
+# With --json the server's document is printed as it came, fields included;
+# only the text form is rewritten.
+def stop(json: Bool, response: HttpResponse, code: String, exit_code: Int) -> Void
+  if json
+    text = body(response)
+    if text.strip.start_with?("{")
+      puts(text)
+      System.exit(exit_code)
+    end
+  end
+
+  fail(json, code, human_message(code, response), exit_code)
+end
+
 def human_message(code: String, response: HttpResponse) -> String
   claimed = JSON.decode(body(response), ClaimedOutput)
   if claimed.ok?
@@ -314,20 +329,18 @@ def detail(code: String, message: String) -> String
   return "the server refused the request" if text.empty?
 
   phrase = text.replace("_", " ")
+  # The server sends a field (`NOT_FOUND:card`) or a whole sentence
+  # (`BLOCKED:card is blocked`); only a field takes the suffix.
+  return phrase if phrase.include?(" ")
+
   case code
     "NOT_FOUND" -> "#{phrase} not found"
     "BLOCKED" -> "#{phrase} is blocked"
     "DONE" -> "#{phrase} is done"
-    "NOT_CLAIMER" -> holder_phrase(phrase)
+    "NOT_CLAIMER" -> "agent does not hold the #{phrase}"
     "INVALID" -> "invalid #{phrase}"
     _ -> phrase
   end
-end
-
-def holder_phrase(phrase: String) -> String
-  return phrase if phrase.include?(" ")
-
-  "agent does not hold the #{phrase}"
 end
 
 def message_of(response: HttpResponse) -> String
