@@ -17,6 +17,7 @@ export function startBoard(root, slug) {
   var events = "/api/boards/" + encodeURIComponent(slug) + "/events?limit=";
   var state = { board: null, cards: [], feed: [], changed: {}, more: false, loadMore: loadMore };
   var timer = null;
+  var synced = 0; // the newest event id that the feed is known to hold with nothing missing before it
 
   function draw() {
     render(root, state);
@@ -66,16 +67,31 @@ export function startBoard(root, slug) {
   }
 
   function loadMore() {
-    retried(function () { return loadOlder(oldest()); }).then(draw, function () {});
+    if (state.loading) {
+      return;
+    }
+    state.loading = true;
+    state.loadError = false;
+    draw();
+    retried(function () { return loadOlder(oldest()); }).catch(function () {
+      state.loadError = true;
+    }).then(function () {
+      state.loading = false;
+      draw();
+    });
   }
 
-  // The events after `last`, a page at a time, until a short page. A page is merged only when it arrived, so `last`
-  // (the newest event seen) stays where it was until a fetch succeeds, and the next confirmation asks again from it.
-  function catchUp(last) {
-    return retried(function () { return getJSON(events + PAGE + "&after=" + last); }).then(function (answer) {
+  // The events after `synced`, a page at a time, until a short page. `synced` moves only when a page arrived, so a
+  // failed fetch leaves it where it was and the next confirmation asks again from there. (The newest event of the feed
+  // is no good for this: an event of the cable moves it past a hole.)
+  function catchUp() {
+    return retried(function () { return getJSON(events + PAGE + "&after=" + synced); }).then(function (answer) {
       merge(answer.events);
+      if (answer.events.length > 0) {
+        synced = Math.max(synced, answer.last_event_id);
+      }
       if (answer.events.length === PAGE) {
-        return catchUp(answer.last_event_id);
+        return catchUp();
       }
     });
   }
@@ -91,14 +107,14 @@ export function startBoard(root, slug) {
   }
 
   // Every confirmation, the first too, fetches again: an event that came between the first fetch and the
-  // confirmation was not broadcast to this client. `after` is read now, before any event of the cable is handled.
+  // confirmation was not broadcast to this client. The pages that did arrive are drawn even when a later one fails.
   function onSubscribed() {
-    var last = newest();
     load();
-    catchUp(last).then(draw, function () {});
+    catchUp().catch(function () {}).then(draw);
   }
 
   loadOlder(NEWEST).then(function () {
+    synced = newest();
     return load();
   }).then(function () {
     subscribe({ channel: "BoardChannel", board: slug }, onEvent, onSubscribed);

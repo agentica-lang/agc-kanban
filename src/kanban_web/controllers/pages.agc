@@ -32,7 +32,14 @@ export def board(conn: Bond.Conn, pool: Optional[Database.Pool]) -> Result[Bond.
   reference = Bond.param(conn, "slug").unwrap_or("")
   if pool.some? and Regex.match?(reference, /^[0-9]+$/)
     found = Database.with_connection(pool.unwrap!) do |db| Boards.get_open(db, reference) end
-    return ok(Bond.redirect(conn, "/boards/#{found.unwrap!.slug}")) if found.ok? and found.unwrap!.slug != reference
+    if found.ok? and found.unwrap!.slug != reference
+      suffix = ""
+      if not conn.query.empty?
+        suffix = "?#{conn.query}"
+      end
+
+      return ok(Bond.redirect(conn, "/boards/#{found.unwrap!.slug}#{suffix}"))
+    end
   end
 
   ok(Bond.html(conn, 200, Views.board(reference)))

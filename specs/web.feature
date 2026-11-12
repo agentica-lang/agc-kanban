@@ -46,6 +46,17 @@ Feature: The web pages
     And the response redirects to "/boards/project"
     When I get the page "/boards/project" with the session
     Then the response status is 200
+    When I get the page "/boards/1?card=5" with the session
+    Then the response redirects to "/boards/project?card=5"
+    When I get the page "/boards/99" with the session
+    Then the response status is 200
+
+  Scenario: A board with a numeric slug is not redirected
+    Given the database server is running
+    When I post a board named "Numbers" with slug "123" as "agent-1"
+    And I sign in with the key "01234567890123456789012345678901"
+    And I get the page "/boards/123" with the session
+    Then the response status is 200
 
   Scenario: The built assets are served for a year
     Given the test server is running

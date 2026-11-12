@@ -13,7 +13,7 @@ With Docker (the compose file runs it at `172.28.0.10:4580` on a private
 network):
 
 ```sh
-echo "KANBAN_API_KEY=$(openssl rand -hex 32)" > .env
+cp .env.example .env   # then set KANBAN_API_KEY (openssl rand -hex 32)
 make up        # docker compose up -d --build --wait
 make down      # stop (the data volume stays)
 ```
@@ -52,6 +52,8 @@ Usage, commands and exit codes are in
 | `KANBAN_COOKIE_SECURE` | `1` to mark the web session cookie Secure (HTTPS only) |
 
 ## Tests
+
+Run `make install` once first. The tests need Node and corepack too, because they build the web assets.
 
 ```sh
 make test
