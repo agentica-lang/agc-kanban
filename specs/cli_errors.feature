@@ -39,7 +39,7 @@ Feature: CLI failures
     Then the response status is 201
     When two agents run kanban "card claim 1 --board project"
     Then kanban exit codes are "0,4"
-    And kanban output contains "agent-"
+    And kanban output contains "CLAIMED"
 
   Scenario: Errors go to stderr and leave stdout clean
     Given the database server is running
