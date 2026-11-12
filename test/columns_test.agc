@@ -87,6 +87,20 @@ def test_update_and_remove_preserve_invariants() -> Result[Void]
   moved = try Columns.update(pool, update.with(id: ids[3], position: some(0)))
   try Test.eq(moved.position, 0)
   try Test.eq(try names(pool), ["Done", "Doing", "Review", "Backlog"])
+  card = try Cards.create(
+    pool,
+    Cards.Create(
+      board: "project",
+      title: "First",
+      body: "",
+      column: some("Done"),
+      labels: [],
+      priority: 2,
+      depends_on: [],
+      actor: "agent",
+    ),
+  )
+
   marked = try Columns.update(pool, update.with(id: ids[2], done: some(true)))
   try Test.eq(marked.done, true)
   rows = try columns(pool)
@@ -95,27 +109,16 @@ def test_update_and_remove_preserve_invariants() -> Result[Void]
     [Db.Value.Int(0), Db.Value.Int(0), Db.Value.Int(1), Db.Value.Int(0)],
   )
 
-  card = try Cards.create(
-    pool,
-    Cards.Create(
-      board: "project",
-      title: "First",
-      body: "",
-      column: some("Backlog"),
-      labels: [],
-      priority: 2,
-      depends_on: [],
-      actor: "agent",
-    ),
-  )
-
+  reopened = try Cards.show(pool, card.id)
+  try Test.eq(reopened.card.done, false)
+  try Test.eq(reopened.card.done_at, none)
+  try Test.eq((try kinds(pool)).include?("card.updated"), true)
   try Test.eq(Columns.remove(pool, Columns.Remove(id: ids[2], actor: "agent")), error("CONFLICT:done_column"))
-  try Test.eq(Columns.remove(pool, Columns.Remove(id: ids[0], actor: "agent")), error("CONFLICT:column_not_empty"))
+  try Test.eq(Columns.remove(pool, Columns.Remove(id: ids[3], actor: "agent")), error("CONFLICT:column_not_empty"))
   try Columns.remove(pool, Columns.Remove(id: ids[1], actor: "agent"))
   remaining = try columns(pool)
   try Test.eq(remaining.size, 3)
-  try Test.eq(card.column, "Backlog")
-  try Test.eq(try event_count(pool), 6)
+  try Test.eq(try event_count(pool), 7)
 
   Database.close(pool)
   try Path.remove("#{dir}/kanban.sqlite3")
@@ -154,5 +157,19 @@ def number(row: Db.Row, key: String) -> Int
   case row.get(key, Db.Value.Null)
     Db.Value.Int(value) -> value
     _ -> -1
+  end
+end
+
+def kinds(pool: Database.Pool) -> Result[List[String]]
+  Database.with_connection(pool) do |conn|
+    rows = try Db.query(conn, "select kind from events order by id", [])
+    ok(
+      rows.map do |row|
+        case row.get("kind", Db.Value.Null)
+          Db.Value.Text(value) -> value
+          _ -> ""
+        end
+      end,
+    )
   end
 end

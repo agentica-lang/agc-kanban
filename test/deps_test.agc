@@ -43,7 +43,7 @@ def test_dependency_writes_validate_and_preserve_data() -> Result[Void]
   try Test.eq(Deps.add(pool, edge.with(lease_minutes: -1)), error("INVALID:lease"))
   try Test.eq(Deps.remove(pool, edge.with(lease_minutes: -1)), error("INVALID:lease"))
   try Test.eq(Deps.add(pool, edge.with(card_id: 999)), error("NOT_FOUND:card"))
-  try Test.eq(Deps.remove(pool, edge.with(depends_on: 999)), error("NOT_FOUND:card"))
+  try Test.eq(Deps.remove(pool, edge.with(depends_on: 999)), error("NOT_FOUND:dependency"))
   try Test.eq(Deps.add(pool, edge), error("CONFLICT:dependency"))
   try Test.eq(Deps.add(pool, edge.with(card_id: first.id, depends_on: first.id)), error("CYCLE:dependency"))
   try Test.eq(Deps.add(pool, edge.with(card_id: first.id, depends_on: second.id)), error("CYCLE:dependency"))
@@ -58,6 +58,12 @@ def test_dependency_writes_validate_and_preserve_data() -> Result[Void]
   removed = try Deps.remove(pool, edge)
   try Test.eq(removed.ready, true)
   try Test.eq(removed.depends_on, [])
+  _ = try Claims.claim(pool, first.id, "agent", 1)
+  try expire(pool, first.id)
+  adopted = try Deps.add(pool, edge.with(card_id: first.id, depends_on: third.id, actor: "other"))
+  try Test.eq(adopted.claimed_by, none)
+  try Test.eq(adopted.claimed_at, none)
+  try Test.eq(adopted.ready, false)
   Database.close(pool)
   try Path.remove("#{dir}/kanban.sqlite3")
   Path.remove(dir)
@@ -73,5 +79,12 @@ def state(pool: Database.Pool) -> Result[State]
 
     deps = try Db.query(conn, "select card_id, depends_on_id from card_deps order by card_id, depends_on_id", [])
     ok(State(cards: cards, deps: deps))
+  end
+end
+
+def expire(pool: Database.Pool, id: Int) -> Result[Void]
+  Database.with_connection(pool) do |conn|
+    _ = try Db.execute(conn, "update cards set lease_until = 1 where id = ?", [Db.Value.Int(id)])
+    ok()
   end
 end
