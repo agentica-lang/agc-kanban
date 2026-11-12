@@ -3,7 +3,7 @@
 ## `BoardChannel` (param `board`, the slug) streams `board:SLUG`. The publisher (`publisher.agc`) is an actor
 ## (`std/actor`) under a supervisor (`std/supervisor`). It reads the events that are newer than the last one it sent
 ## and broadcasts them, so a broadcast always follows the commit, never runs inside it, and goes out in the order of
-## the journal. A write sends it `Nudge`, at most one while one is pending; a timer sends `Tick` each second, so a
+## the journal. A write sends it `Nudge`, at most one while one is pending; a timer sends `Tick` every 5 s, so a
 ## lost nudge is a delay and not a missed event. A client that misses a broadcast (a reconnect) fetches the board again.
 ##
 ## A restart builds the actor again from the job that the child captured, and the new one reads the cursor from the
@@ -21,7 +21,7 @@ import Routes from "routes"
 BOARD_CHANNEL = "BoardChannel"
 NAME = "publisher"
 PENDING = "pending"
-TICK_MS = 1_000
+TICK_MS = 5_000
 # The address of the publisher: a restart gives a new actor a new address, so the writes look it up on each nudge.
 NAMES: ATS[String, Address[Msg]] = ATS.new()
 # Set while a `Nudge` is in the inbox, so a burst of writes is one flush and not one read of the journal per write.
@@ -90,7 +90,7 @@ def board_subscribed(session: Channels.Session, params: Json) -> Result[Channels
   ok(Channels.Subscription(streams: ["board:#{board}"]))
 end
 
-# Casts `Tick` to the publisher each second, wherever it lives now.
+# Casts `Tick` to the publisher every 5 s, wherever it lives now.
 def ticker() -> Void
   while true
     Task.sleep(TICK_MS)

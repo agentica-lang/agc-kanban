@@ -675,7 +675,7 @@ boards is not live, and the build uses pnpm (`corepack pnpm`).
       `/assets`.
 - [x] `src/kanban_web/cable.agc`: hub, `BoardChannel`, and a publisher task
       that broadcasts the events after the commit, in journal order (a write
-      nudges it, a one second tick catches the rest). `BoardsChannel` is left
+      nudges it, a five second tick catches the rest). `BoardsChannel` is left
       out: the list of boards is not live.
 - [x] `package.json` (esbuild, sass), `pnpm-lock.yaml`, `tools/assets.mjs`,
       `make assets`; the built files are not in git. The Dockerfile builds them too.
