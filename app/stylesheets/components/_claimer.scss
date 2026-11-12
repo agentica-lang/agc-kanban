@@ -1,0 +1,15 @@
+// The chip of the agent that holds a card, on the board and on the home page. The color comes from the agent's name
+// (`--hue`), so an agent keeps one color. White text on one lightness is under 4.5:1 for about half of the hues (the
+// yellows and greens are light), so each hue takes one of two tones: a dark chip with white text, or, when `light` is
+// set (claimer.js and src/kanban_web/claimer.agc choose it from the hue), a light chip with dark text. Every hue then
+// reaches at least 5:1 (test/web/styles.test.mjs). The colors are literals, not theme tokens: the chip looks the same
+// in the light and the dark theme.
+@mixin claimer {
+  background: hsl(var(--hue) 60% 38%);
+  color: #fff;
+
+  &.light {
+    background: hsl(var(--hue) 60% 58%);
+    color: #14181f;
+  }
+}

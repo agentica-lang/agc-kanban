@@ -117,7 +117,7 @@ Feature: The web pages
     And the response contains "<b>0</b> <span>Review</span>"
     And the response contains "<b>1</b> <span>Done</span>"
     And the response contains "1 blocked"
-    And the response contains "<span class=\"claimer\" style=\"--hue:157\">bob</span>"
+    And the response contains "<span class=\"claimer light\" style=\"--hue:157\">bob</span>"
     And the response contains "1 agent working"
     And the response contains "just now"
     And the response contains "1 board"
