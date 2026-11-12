@@ -1,3 +1,4 @@
+import HTTP from "std/http"
 import OP from "std/option_parser"
 import Client from "client"
 import Output from "output"
@@ -200,7 +201,7 @@ def column_id(client: Client.Client, config: Settings.Config, reference: String)
   0
 end
 
-def print_column(config: Settings.Config, response: HttpResponse, verb: String) -> Void
+def print_column(config: Settings.Config, response: HTTP.Response, verb: String) -> Void
   if config.json
     puts(Output.body(response))
     return

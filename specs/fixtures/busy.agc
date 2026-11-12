@@ -5,7 +5,7 @@ def main() -> Void
   always = System.env("BUSY_ALWAYS").unwrap_or("0") == "1"
   app = (
     Bond.app()
-    |> Bond.get("/api/health") do |conn| health(conn, counts, always) end
+    |> Bond.get("/api/health", ->(conn) { health(conn, counts, always) })
     |> Bond.get("/api/auth-check", &auth)
   )
 

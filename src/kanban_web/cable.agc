@@ -46,10 +46,7 @@ export def start(pool: Optional[Database.Pool]) -> Cable
     job = Publisher.new(pool.unwrap!, hub, cursor)
     # One try here, so that a write that follows the start is seen; the actor retries while the read fails.
     _ = Publisher.seeded(job)
-    behaviour: Actor.Behaviour[Publisher.Publisher, Msg] = Actor.Behaviour(
-      init: init_from() do job end,
-      handle: &handle,
-    )
+    behaviour: Actor.Behaviour[Publisher.Publisher, Msg] = Actor.Behaviour(init: init_from do job end, handle: &handle)
 
     child = Supervisor.child(NAME, behaviour) do |address| NAMES.put(NAME, address) end
     _ = Supervisor.start([child])

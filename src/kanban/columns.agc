@@ -234,7 +234,7 @@ def update_open(conn: Db.Connection, input: Update) -> Result[Boards.Column]
         [Db.Value.Int(input.id), Db.Value.Int(input.id), Db.Value.Int(board_id)],
       )
 
-      return error("BLOCKED:#{waiting.map do |row| int_of(row, "id").to_s end.join(",")}") if not waiting.empty?
+      return error("BLOCKED:#{waiting.map { |row| int_of(row, "id").to_s }.join(",")}") if not waiting.empty?
     end
 
     affected = try card_ids_in_done(conn, board_id)
@@ -361,7 +361,7 @@ def remove_open(conn: Db.Connection, input: Remove) -> Result[Void]
 end
 
 def reorder(conn: Db.Connection, board_id: Int, ordered: List[Db.Row], id: Int, position: Int) -> Result[Void]
-  others = ordered.map do |row| int_of(row, "id") end.select do |current| current != id end
+  others = ordered.map { |row| int_of(row, "id") }.select do |current| current != id end
   wanted: List[Int] = []
   for index in 0...ordered.size
     if index == position

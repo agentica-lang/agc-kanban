@@ -159,7 +159,7 @@ def diagnose(conn: Db.Connection, card: Cards.Card, actor: String, now: Int) -> 
   return error("CLAIMED:#{card.claimed_by.unwrap!}") if active and card.claimed_by.unwrap! != actor
 
   ids = try Cards.open_blockers(conn, card.id)
-  return error("BLOCKED:#{ids.map do |id| id.to_s end.join(",")}") if not ids.empty?
+  return error("BLOCKED:#{ids.map { |id| id.to_s }.join(",")}") if not ids.empty?
 
   error("CONFLICT:claim")
 end

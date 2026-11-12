@@ -23,8 +23,8 @@ export def build(
   app = (
     Bond.app()
     |> Bond.sessions(Bond.SessionOptions(secret: secret, name: "kanban_session", secure: secure_cookie))
-    |> Bond.before() do |conn| Auth.authorize(conn, key) end
-    |> Bond.after() do |conn| wake(cable, conn) end
+    |> Bond.before(->(conn) { Auth.authorize(conn, key) })
+    |> Bond.after(->(conn) { wake(cable, conn) })
     |> Bond.static(Routes.ASSETS, assets_dir, ASSET_MAX_BYTES, 0, true)
     |> Router.install(pool, lease_minutes, key)
   )

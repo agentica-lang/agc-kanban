@@ -11,7 +11,7 @@ id, `whoami` checks health and auth, and `prime` calls nothing.
 
 ## Install
 
-Requires Agentica 0.30.1 (the version the server and the Docker image pin) and
+Requires Agentica 0.31.0-alpha.1 (the version the server and the Docker image pin) and
 a running server.
 
 ```sh

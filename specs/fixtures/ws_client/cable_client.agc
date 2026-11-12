@@ -3,6 +3,7 @@
 ##
 ## Usage: cable_client.agc PORT COOKIE BOARD (COOKIE may be empty).
 
+import HTTP from "std/http"
 import WebSocket from "pkg/websocket-client/websocket"
 
 PROTOCOL = "actioncable-v1-json"
@@ -11,9 +12,9 @@ FOREVER_MS = 86_400_000
 
 def main() -> Void
   args = System.args()
-  headers: List[Header] = []
+  headers: List[HTTP.Header] = []
   if not args[1].empty?
-    headers = [Header(name: "Cookie", value: args[1])]
+    headers = [HTTP.Header(name: "Cookie", value: args[1])]
   end
 
   options = WebSocket.Options(headers: headers, protocols: [PROTOCOL], read_timeout_ms: FOREVER_MS)

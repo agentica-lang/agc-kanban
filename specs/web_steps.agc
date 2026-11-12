@@ -41,7 +41,7 @@ def text_of(ctx: BDD.Context, name: String) -> String
 end
 
 # One request with no redirect followed, and its status, body and headers kept for the checks.
-def fetch(ctx: BDD.Context, method: String, path: String, body: String, headers: List[Header]) -> BDD.Context
+def fetch(ctx: BDD.Context, method: String, path: String, body: String, headers: List[HTTP.Header]) -> BDD.Context
   client = HTTP.client().unwrap!
   response = HTTP.request(client, method, "http://127.0.0.1:#{port_of(ctx)}#{path}", body.bytes, headers).unwrap!
   HTTP.close_client(client)
@@ -64,7 +64,7 @@ def header_of(ctx: BDD.Context, name: String) -> String
 end
 
 def sign_in(ctx: BDD.Context, args: List[String]) -> BDD.Context
-  form = [Header(name: "Content-Type", value: "application/x-www-form-urlencoded")]
+  form = [HTTP.Header(name: "Content-Type", value: "application/x-www-form-urlencoded")]
   done = fetch(ctx, "POST", "/login", "key=#{args[0]}", form)
   cookie = header_of(done, "set-cookie").split(";")[0]
   BDD.set(done, "cookie", JSON.from(cookie))
@@ -73,16 +73,16 @@ end
 def get_page(ctx: BDD.Context, args: List[String]) -> BDD.Context = fetch(ctx, "GET", args[0], "", [])
 
 def get_page_signed(ctx: BDD.Context, args: List[String]) -> BDD.Context
-  fetch(ctx, "GET", args[0], "", [Header(name: "Cookie", value: text_of(ctx, "cookie"))])
+  fetch(ctx, "GET", args[0], "", [HTTP.Header(name: "Cookie", value: text_of(ctx, "cookie"))])
 end
 
 # A write with the cookie and no `apikey` header: the session never writes the API.
 def post_signed(ctx: BDD.Context, args: List[String]) -> BDD.Context
-  fetch(ctx, "POST", args[0], "{}", [Header(name: "Cookie", value: text_of(ctx, "cookie"))])
+  fetch(ctx, "POST", args[0], "{}", [HTTP.Header(name: "Cookie", value: text_of(ctx, "cookie"))])
 end
 
 def get_page_with_key(ctx: BDD.Context, args: List[String]) -> BDD.Context
-  fetch(ctx, "GET", args[0], "", [Header(name: "apikey", value: args[1])])
+  fetch(ctx, "GET", args[0], "", [HTTP.Header(name: "apikey", value: args[1])])
 end
 
 def get_stylesheet(ctx: BDD.Context, _args: List[String]) -> BDD.Context
@@ -132,7 +132,7 @@ def serving(f: Fn[Json, Result[Json]]) -> Fn[Json, Result[Json]] = f
 # Starts the live client and keeps it behind a service: a request `{"timeout_ms": N}` answers its next line.
 def subscribe(ctx: BDD.Context, cookie: String, board: String) -> BDD.Context
   process = Process.spawn_captured("agentica", [CLIENT, "#{port_of(ctx)}", cookie, board]).unwrap!
-  service = serving() do |request| next_line(process, request) end
+  service = serving do |request| next_line(process, request) end
   BDD.keep(ctx, "live", service)
 end
 
