@@ -1,6 +1,7 @@
 import Bond from "pkg/bond/bond"
 import Regex from "std/regex"
 import Boards from "../kanban/boards"
+import Events from "../kanban/events"
 import Database from "../kanban/repo/database"
 
 struct CreateBoard
@@ -35,6 +36,7 @@ export def build(key: String, pool: Optional[Database.Pool] = none) -> Bond.App
     |> Bond.get("/api/auth-check", &auth_check)
     |> Bond.get("/api/boards") do |conn| list_boards(conn, pool) end
     |> Bond.post("/api/boards") do |conn| create_board(conn, pool) end
+    |> Bond.get("/api/boards/:board/events") do |conn| board_events(conn, pool) end
   )
 end
 
@@ -106,7 +108,60 @@ def failure(conn: Bond.Conn, message: String) -> Bond.Conn
   end
 
   return reject(conn, 409, "CONFLICT", message) if message.start_with?("CONFLICT:")
+  return reject(conn, 404, "NOT_FOUND", message) if message.start_with?("NOT_FOUND:")
   return reject(conn, 503, "BUSY", "database busy") if Database.busy?(message)
 
   reject(conn, 500, "INTERNAL", "internal error")
+end
+
+def board_events(conn: Bond.Conn, pool: Optional[Database.Pool]) -> Result[Bond.Conn]
+  return ok(reject(conn, 503, "BUSY", "database unavailable")) if not pool.some?
+
+  params = Bond.query_params(conn)
+  return ok(reject(conn, 400, "INVALID", "invalid query", some("query"))) if not params.ok?
+
+  query = params.unwrap!
+  after = query_number(query, "after", 0)
+  limit = query_number(query, "limit", 100)
+  card = query_number(query, "card", 0)
+  if not after.ok? or not limit.ok? or not card.ok?
+    return ok(reject(conn, 400, "INVALID", "invalid query", some("query")))
+  end
+
+  card_id: Optional[Int] = none
+  if query.key?("card")
+    card_id = some(card.unwrap!)
+  end
+
+  page = Events.list(pool.unwrap!, Bond.param(conn, "board").unwrap_or(""), after.unwrap!, card_id, limit.unwrap!)
+  return ok(failure(conn, page.message)) if not page.ok?
+
+  result = page.unwrap!
+  events = result.events.map do |entry| event_json(entry) end
+  ok(
+    Bond.json(
+      conn,
+      200,
+      JSON.object({"events": JSON.array(events), "last_event_id": JSON.from(result.last_event_id)}),
+    ),
+  )
+end
+
+def query_number(params: Map[String, List[String]], name: String, default: Int) -> Result[Int]
+  case params.get(name)
+    none -> ok(default)
+    some(values) -> values[0].to_i()
+  end
+end
+
+def event_json(entry: Events.Event) -> Json
+  JSON.object({
+    "id": JSON.from(entry.id),
+    "board_id": JSON.from(entry.board_id),
+    "card_id": JSON.from(entry.card_id),
+    "kind": JSON.from(entry.kind),
+    "actor": JSON.from(entry.actor),
+    "data": entry.data,
+    "created_at": JSON.from(entry.created_at),
+  })
 end

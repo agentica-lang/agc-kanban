@@ -7,6 +7,7 @@ def main() -> Void
     BDD.step("the database server is running", &start_database_server),
     BDD.step("I post a board named {string} with slug {string} as {string}", &post_board),
     BDD.step("I list boards", &list_boards),
+    BDD.step("I get board events for {string} after {int}", &board_events),
     BDD.step("the response contains {string}", &response_contains),
     BDD.step("an unrelated server is running", &start_unrelated),
     BDD.step("a server with broken authentication is running", &start_broken),
@@ -182,4 +183,20 @@ def cleanup_database(ctx: BDD.Context, dir: String) -> Result[Void]
   _ = BDD.then_exit(closed, 0, 30000)
   try Path.remove("#{dir}/kanban.sqlite3")
   Path.remove(dir)
+end
+
+def board_events(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  port = JSON.int(BDD.get(ctx, "port").unwrap!).unwrap!
+  client = HTTP.client().unwrap!
+  response = HTTP.request(
+    client,
+    "GET",
+    "http://127.0.0.1:#{port}/api/boards/#{args[0]}/events?after=#{args[1]}",
+    "".bytes,
+    [Header(name: "apikey", value: "01234567890123456789012345678901")],
+  ).unwrap!
+
+  HTTP.close_client(client)
+  stored = BDD.set(ctx, "status", JSON.from(response.status))
+  BDD.set(stored, "body", JSON.from(HTTP.text(response.body, response.headers).unwrap!))
 end
