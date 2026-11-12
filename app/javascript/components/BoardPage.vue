@@ -35,11 +35,17 @@ var filter = useFilters();
 provide("filter", filter);
 
 // When the filters panel closes (Escape, ✕, the button, a tap beside it), the focus goes back to the Filters button
-// instead of the page.
+// instead of the page, also when the activity shows again behind it. A card that opens keeps the focus in its panel, and
+// a click on another header button (Activity) keeps it on that button.
 var filtersButton = ref(null);
 watch(panel, function (now, before) {
-  if (before === "filters" && now === "") {
-    nextTick(function () { filtersButton.value.focus(); });
+  if (before === "filters" && now !== "card") {
+    nextTick(function () {
+      var focused = document.activeElement;
+      if (!focused || focused === document.body || focused === filtersButton.value) {
+        filtersButton.value.focus();
+      }
+    });
   }
 });
 
