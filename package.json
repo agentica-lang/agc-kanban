@@ -1,0 +1,13 @@
+{
+  "name": "agc-kanban-assets",
+  "private": true,
+  "description": "Build tools of the stylesheet and the script (make assets). Nothing here runs in the server or the specs.",
+  "packageManager": "pnpm@12.18.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2",
+    "sass": "1.108.0"
+  }
+}

@@ -1,8 +1,18 @@
-# Image of the agc-kanban API server: plain HTTP, SQLite in /data. Build with
+# Image of the agc-kanban server (API and live web): plain HTTP, SQLite in /data. Build with
 # `docker compose build`; the compose file runs it on the private 172.28.0.10.
-# Stage 1 holds the tools that must not reach the image: curl and git
-# (`agentica install` fetches with git) and the C compiler that builds the
+# Stage 1 builds the stylesheet and the script, so Node and pnpm never reach the image. Stage 2 holds the tools that
+# must not reach it either: curl and git (`agentica install` fetches with git) and the C compiler that builds the
 # native SQLite driver of agentica-db.
+FROM node:24-slim AS assets
+
+WORKDIR /web
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+RUN corepack enable && pnpm install --frozen-lockfile
+COPY app ./app
+COPY tools/assets.mjs ./tools/assets.mjs
+# The build writes public/assets/ and the file with their names, which stage 2 compiles in.
+RUN mkdir -p src/kanban_web && node tools/assets.mjs
+
 FROM debian:13-slim AS build
 
 # Change the version and the sha256 together, taken from the release's
@@ -33,6 +43,8 @@ RUN /opt/agentica/bin/agentica install
 
 COPY server.agc ./
 COPY src ./src
+COPY --from=assets /web/public ./public
+COPY --from=assets /web/src/kanban_web/asset_names.agc ./src/kanban_web/asset_names.agc
 # Compiling imports pkg/db/db, which builds the native SQLite driver into the
 # package cache, and the bytecode stores its absolute path. The build fails if
 # the library is missing: at run time a missing one would quietly fall back to
@@ -43,7 +55,7 @@ RUN /opt/agentica/bin/agentica compile server.agc -o server.agcb \
  && grep -aq "$XDG_CACHE_HOME/agentica/pkg/native-build/.*/libdb_sqlite.so" server.agcb \
  && chmod -R a+rX "$XDG_CACHE_HOME/agentica/pkg/native-build"
 
-# Stage 2: the binary, the compiled program and the native driver (no compiler).
+# Stage 3: the binary, the compiled program and the native driver (no compiler).
 # libsqlite3 is the database the driver opens.
 FROM debian:13-slim
 

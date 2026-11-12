@@ -130,6 +130,7 @@ Many agents can call it at once and each gets a different card.
 | `KANBAN_PORT` | `4580` | Port. |
 | `KANBAN_DATA_DIR` | `./data` | Folder of `kanban.sqlite3`. Created with mode 0700. |
 | `KANBAN_LEASE_MINUTES` | `0` | Claim lease. `0` means a claim never expires (see the open questions). |
+| `KANBAN_COOKIE_SECURE` | `0` | `1` marks the session cookie Secure. Set it behind HTTPS only: over plain HTTP the browser drops the cookie and nobody can sign in. |
 
 The session cookie is signed with a key derived from the API key
 (HMAC-SHA256 of a fixed label). So there is one secret, and a new API key
@@ -142,7 +143,7 @@ Copied from agentica-campfire, smaller.
 ```text
 agentica.toml          name, [style], deps: bond, db, channels (bond-channels)
 agentica.lock
-Makefile               install, run, cli, check, fmt-check, test, assets, assets-check
+Makefile               install, run, cli, check, fmt-check, test, assets
 server.agc             main of the server: config, migrate, pool, hub, app
 cli.agc                main of the CLI
 src/kanban/            the domain, no HTTP: boards.agc, columns.agc, cards.agc,
@@ -164,7 +165,7 @@ src/kanban_cli/        config.agc (env and file), client.agc (HTTP calls),
 app/javascript/        application.js, cable.js, board.js, render.js
 app/stylesheets/       application.scss, settings/, base/, components/
 tools/assets.mjs       Dart Sass + esbuild, fingerprinted names
-public/assets/         built CSS and JS, committed
+public/assets/         built CSS and JS, not in git (make assets)
 package.json, pnpm-lock.yaml   only esbuild and sass, as dev dependencies
 bin/kanban             shell wrapper: runs dist/kanban.agcb
 skill/agc-kanban/SKILL.md
@@ -353,7 +354,7 @@ Tests assert the `code` and the status, never the message.
 | `POST /api/cards/:id/comments` | `{"body"}` | 201 `{"comment": {"id", "card_id", "author", "body", "created_at"}}` |
 | `POST /api/cards/:id/deps` | `{"depends_on": id}` | 201 `{"card"}`; `CYCLE`, or `BLOCKED` when the card you hold gains an unfinished blocker |
 | `DELETE /api/cards/:id/deps/:other` | | `{"card"}` |
-| `GET /api/boards/:board/events` | query: `after`, `card`, `limit` (100, at most 1000) | `{"events": [event], "last_event_id"}` |
+| `GET /api/boards/:board/events` | query: `after` (oldest first), or `before` (newest first, for the pages of older events; with `after` it is `INVALID`), `card`, `limit` (100, at most 1000) | `{"events": [event], "last_event_id"}` |
 
 Event `data` holds the changed object: the `board`, `column`, `card` or
 `comment` shape above, as `card.*` kinds do, with `forced` beside the card for
@@ -495,10 +496,13 @@ A broadcast is the event row as JSON plus the new state of what changed:
  "data": {"from": "Doing", "to": "Review"}}
 ```
 
-The browser replaces the card by id and redraws the two columns. It keeps
-`last_event_id`. On a reconnect it calls `GET /api/boards/:slug/events
-?after=N`. If the answer is more than 1000 events behind, it fetches the
-whole board again. So a missed broadcast is never a wrong board.
+The browser fetches the board again after an event. The activity feed shows
+the last 30 events (`?before=<newest>&limit=31`, newest first) and a "Ver mas"
+button loads the 30 before the oldest shown (`before` is the cursor of the
+older pages). On every confirmed subscription, the first too, it fetches the
+board again and reads `?after=<newest seen>&limit=30` page by page, ordered
+by id; the feed merges by id, so an event from the cable and from a fetch
+shows once. So a missed broadcast is never a wrong board.
 
 The server broadcasts after the commit, never inside the transaction. A
 broadcast that fails is logged and dropped; the event log still has it.
@@ -512,8 +516,9 @@ broadcast that fails is logged and dropped; the event log still has it.
   `app/javascript/application.js` (IIFE, minified), both are named by the
   first 16 hex digits of their SHA-256, written to `public/assets/`, and
   their names go to `src/kanban_web/asset_names.agc`.
-- The built files are committed. The server needs no Node at run time.
-  `make assets-check` fails when the build changes a committed file.
+- The built files are not in git (`.gitignore`). `make run`, `make check` and
+  `make test` build them first (`make assets`), and the Dockerfile builds them
+  in its Node stage, so the server needs no Node at run time.
 - `Bond.static` with `fingerprint` on serves them with
   `immutable` caching.
 - The Action Cable client is a small hand-written module (`cable.js`), as
@@ -577,7 +582,7 @@ tests and no Python peers.
       `channels` (bond-channels), at the same tags as agentica-campfire;
       `agentica install`; commit `agentica.lock`.
 - [x] `Makefile` with `install`, `run`, `cli`, `check`, `fmt-check`, `test`,
-      `assets`, `assets-check` (asset targets are placeholders until the web phase).
+      `assets` (asset targets are placeholders until the web phase).
 - [x] `server.agc` that serves `GET /api/health`, and `cli.agc` with
       `kanban whoami`.
 - [x] `specs/steps.agc` and `specs/fixtures/server.agc`: start the server
@@ -651,27 +656,35 @@ from a shell with only `bin/kanban`.
 
 ### Phase 3: the live web
 
-- [ ] Features first: `web.feature` (login sets the cookie, a wrong key
-      does not, `/boards/:slug` needs the session, the page names the
-      fingerprinted assets) and `cable.feature`.
-- [ ] `specs/fixtures/ws_client.agc`: a small WebSocket client in Agentica
-      over `TCP` (handshake, masked text frames, read frames), driven by a
-      step through JSON lines, as bond-channels drives its peer. It replaces
-      the Python peer that Campfire and bond-channels use.
-- [ ] `cable.feature`: a client subscribes to `BoardChannel`; a CLI claim
-      makes it receive `card.claimed` with the card; a client with no
-      session is refused.
-- [ ] `/login`, the session, the page shell (EAG), `Bond.static` for
+Built small (the owner asked for a minimal, fast dashboard): the view is
+read-only, the browser fetches the board again after each event, the list of
+boards is not live, and the build uses pnpm (`corepack pnpm`).
+
+- [x] Features first: `web.feature` (login sets the cookie, a wrong key
+      does not, a page needs the session, the page names the fingerprinted
+      assets) and `cable.feature`.
+- [x] `specs/fixtures/ws_client/cable_client.agc`: the browser of
+      `cable.feature`, a program of the package `websocket-client` (tag
+      `websocket-client-0.2.0`, its own manifest as in bond-channels) that
+      prints each frame as a line, which a step reads. It replaces the Python
+      peer.
+- [x] `cable.feature`: a client subscribes to `BoardChannel`; a CLI claim
+      makes it receive `card.claimed`; a client with no session is refused.
+- [x] `/login`, the session, the page shell (EAG), `Bond.static` for
       `/assets`.
-- [ ] `src/kanban_web/cable.agc`: hub, `BoardsChannel`, `BoardChannel`,
-      broadcast after each committed write.
-- [ ] `package.json` (esbuild, sass), `pnpm-lock.yaml`, `tools/assets.mjs`,
-      `make assets`, `make assets-check`.
-- [ ] `app/javascript`: `cable.js`, `board.js` (state, apply event, catch
-      up after reconnect), `render.js`.
-- [ ] `app/stylesheets`: tokens, light and dark themes, board, column,
-      card, panel, feed.
-- [ ] A manual check with a browser (playwright-cli): open a board, run
+- [x] `src/kanban_web/cable.agc`: hub, `BoardChannel`, and a publisher task
+      that broadcasts the events after the commit, in journal order (a write
+      nudges it, a one second tick catches the rest). `BoardsChannel` is left
+      out: the list of boards is not live.
+- [x] `package.json` (esbuild, sass), `pnpm-lock.yaml`, `tools/assets.mjs`,
+      `make assets`; the built files are not in git. The Dockerfile builds them too.
+- [x] `app/javascript`: `cable.js`, `board.js` (state, refetch after an event
+      and after a reconnect), `render.js`. Plain JavaScript, no framework.
+- [x] `app/stylesheets`: tokens, light and dark themes, board, column, card,
+      feed. The side panel (body, dependencies, comments) is left out.
+- [x] The activity feed pages with `before` (`kanban events --before N`), a
+      "Ver mas" button, and `POST /logout`; `KANBAN_COOKIE_SECURE`.
+- [x] A manual check with a browser (playwright-cli): open a board, run
       `kanban card move` in a shell, see the card move without a reload.
 
 Done when: the features pass, and the owner watches a card move live while
@@ -793,7 +806,7 @@ Our stack, read for this plan:
 - agentica-campfire: the layout (`src/<domain>/repo/` with migrations, one
   file each), `Database.with_connection` over `DbPool`, `tools/assets.mjs`
   (Dart Sass, esbuild, fingerprinted names, the `asset_names.agc` file,
-  committed output and `assets-check`), a hand-written Action Cable client
+  an `assets-check` of the committed output), a hand-written Action Cable client
   in `live.js`, and BDD specs that start the server as a fixture program.
   Campfire uses npm; we use pnpm as the owner asked. Campfire's cable tests
   use a Python peer; we write that peer in Agentica.

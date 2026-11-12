@@ -1,10 +1,11 @@
 AGENTICA ?= agentica
 JOBS ?= 1
 
-.PHONY: install run cli install-cli check fmt-check test smoke smoke-docker up down assets assets-check
+.PHONY: install run cli install-cli check fmt-check test smoke smoke-docker up down assets
 install:
 	$(AGENTICA) install
-run:
+	cd specs/fixtures/ws_client && $(AGENTICA) install
+run: assets
 	$(AGENTICA) server.agc
 cli:
 	mkdir -p dist
@@ -12,11 +13,11 @@ cli:
 install-cli: cli
 	mkdir -p "$(HOME)/.local/bin"
 	ln -sf "$(CURDIR)/bin/kanban" "$(HOME)/.local/bin/kanban"
-check:
+check: assets
 	$(AGENTICA) check
 fmt-check:
 	$(AGENTICA) fmt --check server.agc cli.agc src specs test
-test:
+test: assets
 	$(AGENTICA) test --jobs $(JOBS)
 smoke:
 	tools/smoke.sh
@@ -31,7 +32,7 @@ up:
 	docker compose up -d --build --wait
 down:
 	docker compose down
+# The built files (public/assets/ and src/kanban_web/asset_names.agc) are not in git: run, check and test build them.
 assets:
-	@true
-assets-check:
-	@true
+	corepack pnpm install --frozen-lockfile
+	node tools/assets.mjs

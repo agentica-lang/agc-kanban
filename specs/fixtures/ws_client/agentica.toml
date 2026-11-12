@@ -1,0 +1,10 @@
+name = "cable-client"
+
+# Every bare `end` is followed by an empty line.
+[style]
+blank_line_after_end = true
+
+# A manifest of its own, so that the server does not depend on the client: this is the peer of cable.feature, which
+# shares no code with the server.
+[dependencies]
+websocket-client = { git = "https://github.com/agentica-lang/packages", tag = "websocket-client-0.2.0", subdir = "websocket-client" }

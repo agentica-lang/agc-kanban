@@ -3,3 +3,7 @@ deps/
 dist/
 data/
 .env
+node_modules/
+.playwright-cli/
+public/assets/
+src/kanban_web/asset_names.agc

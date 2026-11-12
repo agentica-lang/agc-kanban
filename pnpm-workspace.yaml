@@ -1,0 +1,4 @@
+# Only esbuild runs its install script (it picks the platform binary).
+allowBuilds:
+  esbuild: true
+  "@parcel/watcher": false

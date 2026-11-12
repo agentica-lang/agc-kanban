@@ -29,7 +29,10 @@ def main() -> Void
     System.exit(1)
   end
 
-  result = Bond.run(App.build(key, some(pool.unwrap!), lease.unwrap!), host, port.unwrap!)
+  assets = System.env("KANBAN_ASSETS_DIR").unwrap_or("public/assets")
+  # Behind HTTPS the browser keeps a Secure cookie only over HTTPS, so it stays off by default (plain HTTP).
+  secure_cookie = System.env("KANBAN_COOKIE_SECURE").unwrap_or("0") == "1"
+  result = Bond.run(App.build(key, some(pool.unwrap!), lease.unwrap!, assets, secure_cookie), host, port.unwrap!)
   Database.close(pool.unwrap!)
   if not result.ok?
     IO.warn(result.message)

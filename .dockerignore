@@ -7,6 +7,8 @@ dist
 refs
 specs
 test
-tools
+tools/smoke.sh
+node_modules
+public
 *.md
 .env

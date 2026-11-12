@@ -12,7 +12,12 @@ export def run(words: List[String]) -> Result[Void]
     "kanban events",
     "Read the board journal",
     [],
-    [Opt(name: "after", kind: Kind.Int), Opt(name: "card", kind: Kind.Int), Opt(name: "limit", kind: Kind.Int)] +
+    [
+      Opt(name: "after", kind: Kind.Int),
+      Opt(name: "before", kind: Kind.Int),
+      Opt(name: "card", kind: Kind.Int),
+      Opt(name: "limit", kind: Kind.Int),
+    ] +
     Settings.common_opts(),
   )
 
@@ -23,6 +28,11 @@ export def run(words: List[String]) -> Result[Void]
   after = OP.optional_int(parsed, "after")
   if after.some?
     pairs = pairs.push(Pair(name: "after", value: after.unwrap!.to_s))
+  end
+
+  before = OP.optional_int(parsed, "before")
+  if before.some?
+    pairs = pairs.push(Pair(name: "before", value: before.unwrap!.to_s))
   end
 
   card = OP.optional_int(parsed, "card")

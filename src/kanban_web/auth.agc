@@ -2,16 +2,34 @@ import Bond from "pkg/bond/bond"
 import Failure from "failure"
 import Regex from "std/regex"
 
+SESSION_USER = "user"
+OWNER = "owner"
+SESSION_LABEL = "kanban session v1"
+
+## The signing key of the session cookie, derived from the API key: one secret, and a new API key signs everyone out.
+export def session_secret(key: String) -> String = OpenSSL.HMAC.sha256_hexdigest(key.bytes, SESSION_LABEL.bytes)
+
+## The API key given on the login form is the right one.
+export def key_matches?(given: String, key: String) -> Bool = OpenSSL.HMAC.secure_compare(given.bytes, key.bytes)
+
+## The connection carries a signed session that `sign_in` made.
+export def signed_in?(conn: Bond.Conn) -> Bool = Bond.get_session(conn, SESSION_USER).unwrap_or("") == OWNER
+
+## The connection with a fresh session of the owner (nothing of an earlier session is kept).
+export def sign_in(conn: Bond.Conn) -> Bond.Conn = Bond.set_session(Bond.clear_session(conn), SESSION_USER, OWNER)
+
 export def authorize(conn: Bond.Conn, key: String) -> Result[Bond.Conn]
-  # Public by name, never by prefix: a page added later must opt in explicitly.
-  return ok(conn) if conn.path == "/api/health"
+  return ok(conn) if public?(conn.path)
+  return ok(page_access(conn)) if not conn.path.start_with?("/api/")
+
+  # The session reads the API, never writes it: a write needs the key and the agent name.
+  read = conn.method == "GET" or conn.method == "HEAD"
+  return ok(conn) if read and signed_in?(conn)
 
   given = Bond.request_header(conn, "apikey").unwrap_or("")
-  if not OpenSSL.HMAC.secure_compare(given.bytes, key.bytes)
-    return ok(Failure.reject(conn, 401, "UNAUTHORIZED", "unauthorized"))
-  end
+  return ok(Failure.reject(conn, 401, "UNAUTHORIZED", "unauthorized")) if not key_matches?(given, key)
 
-  if conn.method != "GET" and conn.method != "HEAD"
+  if not read
     agent = Bond.request_header(conn, "X-Kanban-Agent").unwrap_or("")
     if not Regex.match?(agent, /^[A-Za-z0-9._@\/-]{1,64}$/)
       return ok(Failure.reject(conn, 400, "INVALID", "invalid agent", some("X-Kanban-Agent")))
@@ -19,4 +37,16 @@ export def authorize(conn: Bond.Conn, key: String) -> Result[Bond.Conn]
   end
 
   ok(conn)
+end
+
+# Public by name, never by prefix (but the assets folder): a page added later must opt in explicitly. `/cable` checks
+# the session itself, in `connect`, as a redirect on the handshake would make the client retry in a loop.
+def public?(path: String) -> Bool
+  path == "/api/health" or path == "/login" or path == "/cable" or path.start_with?("/assets/")
+end
+
+def page_access(conn: Bond.Conn) -> Bond.Conn
+  return conn if signed_in?(conn)
+
+  Bond.redirect(conn, "/login")
 end
