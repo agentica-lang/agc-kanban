@@ -13,9 +13,11 @@ export def board_of(config: Settings.Config) -> String
   config.board
 end
 
+# Every command that acts as an agent needs a name from --agent or KANBAN_AGENT;
+# the name never has a default, so the coordinator must give each agent its own.
 export def require_agent(config: Settings.Config) -> Void
   if config.agent.empty?
-    Output.fail(config.json, "USAGE", "KANBAN_AGENT is required for writes", 2)
+    Output.fail(config.json, "USAGE", "no agent name; ask your coordinator, then set KANBAN_AGENT or --agent", 2)
   end
 end
 

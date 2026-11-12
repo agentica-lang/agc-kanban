@@ -13,9 +13,10 @@ struct AuthResult
   ok: Bool
 end
 
+# A session without a name has agent none (null in JSON): whoami does not need one.
 struct Identity
   url: String
-  agent: String
+  agent: Optional[String]
   board: String
   health: String
 end
@@ -27,10 +28,15 @@ export def run(words: List[String]) -> Result[Void]
   client = Client.from(config)
   _ = try check_health(client, config.json)
   check_auth(client, config.json)
+  agent: Optional[String] = none
+  if not config.agent.empty?
+    agent = some(config.agent)
+  end
+
   if config.json
-    puts(JSON.encode(JSON.from(Identity(url: config.url, agent: config.agent, board: config.board, health: "ok"))))
+    puts(JSON.encode(JSON.from(Identity(url: config.url, agent: agent, board: config.board, health: "ok"))))
   else
-    puts("url: #{config.url}\nagent: #{config.agent}\nboard: #{config.board}\nhealth: ok")
+    puts("url: #{config.url}\nagent: #{agent.unwrap_or("none")}\nboard: #{config.board}\nhealth: ok")
   end
 
   ok()

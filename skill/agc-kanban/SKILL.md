@@ -13,6 +13,11 @@ This skill is only the rules.
 
 1. Run `kanban whoami`. If it fails, stop and tell whoever started you. Never
    guess the URL or the key.
+   Your name comes from your coordinator, in the brief (`KANBAN_AGENT` or
+   `--agent NAME`). There is no default and the config file has none: if
+   `whoami` shows `none`, or a command fails with `no agent name`, ask your
+   coordinator and stop before any write. Never invent a name or reuse
+   another agent's.
 2. Use the card you were given, or take one with `kanban card next`, which
    claims it for you.
 3. Read it with `kanban card show ID`: body, dependencies and comments.
@@ -62,5 +67,5 @@ This skill is only the rules.
 
 ## For a coordinator
 
-Give each agent its board, its card id and its name (`KANBAN_AGENT`), and tell
-it to load this skill or to run `kanban prime`.
+Give each agent its board, its card id and its own name (`KANBAN_AGENT`; the CLI
+has no default name), and tell it to load this skill or to run `kanban prime`.

@@ -49,7 +49,7 @@ Usage, commands and exit codes are in
 | --- | --- |
 | `KANBAN_URL` | server URL for the CLI (default `http://127.0.0.1:4580`) |
 | `KANBAN_API_KEY` | the one key, for the server and the CLI (at least 32 characters) |
-| `KANBAN_AGENT` | name of the agent, required for CLI writes |
+| `KANBAN_AGENT` | name of the agent, or `--agent NAME`; required for every CLI command that acts as an agent (writes, `card next`, `card list --mine`), never taken from the config file |
 | `KANBAN_BOARD` | default board slug of the CLI |
 | `KANBAN_COOKIE_SECURE` | `1` to mark the web session cookie Secure (HTTPS only) |
 
@@ -88,11 +88,11 @@ ln -sfn "$PWD/.agents/skills/kanban-cli" ~/.agents/skills/kanban-cli
 
 If an agent reads only an `AGENTS.md`, add one line there: `On the kanban board, follow skill/agc-kanban/SKILL.md and run kanban prime.`
 
-Set `KANBAN_AGENT` to a different name for each agent, and `KANBAN_BOARD` to the board slug.
+Set `KANBAN_AGENT` to a different name for each agent, and `KANBAN_BOARD` to the board slug. There is no default name: without one, a write fails with `USAGE: no agent name; ask your coordinator, then set KANBAN_AGENT or --agent` (exit 2), and the `agent` key of `config.toml` is ignored with a warning on stderr. Reads need no name.
 
 ## Install the Claude Code plugin
 
-The repository is also a Claude Code plugin (`.claude-plugin/`): it carries the two skills and two hooks. The hooks run `hooks/board-context.sh` at the start of a session and of a subagent and add to the context the rule about the agent name and the Doing cards of the other agents (at most 15 lines, then "and N more"). They only read the board.
+The repository is also a Claude Code plugin (`.claude-plugin/`): it carries the two skills and two hooks. The hooks run `hooks/board-context.sh` at the start of a session and of a subagent and add to the context the rule about the agent name and the cards in progress, at most 15 card lines in all, then "and N more". A session start lists the coordinator's own cards first, then the Doing cards of the other agents; a subagent start lists every Doing card, the coordinator's too. They only read the board.
 
 ```sh
 claude plugin marketplace add agentica-lang/agc-kanban

@@ -33,7 +33,7 @@ defaults.
 | Flag | Environment | Default |
 | --- | --- | --- |
 | `--url URL` | `KANBAN_URL` | `http://127.0.0.1:4580` |
-| `--agent NAME` | `KANBAN_AGENT` | none, required for writes |
+| `--agent NAME` | `KANBAN_AGENT` | none, required to act as an agent |
 | `--board SLUG` | `KANBAN_BOARD` | none, required by board-wide commands |
 | `--json` | | text output |
 
@@ -43,9 +43,15 @@ The API key is environment or file only, never a flag:
 # ~/.config/agc-kanban/config.toml
 url = "http://172.28.0.10:4580"
 api_key = "7b95…"
-agent = "claude-code"
 board = "project"
 ```
+
+The agent name is never read from the file: a name shared by every session
+would let two agents act as one. Writes, `card next` and `card list --mine`
+need `--agent` or `KANBAN_AGENT` (your coordinator gives you the name), and
+without one they exit 2 with `USAGE: no agent name; ask your coordinator, then
+set KANBAN_AGENT or --agent`. Reads need no name. An `agent` key in the file
+is ignored, with a warning on stderr.
 
 ```sh
 export KANBAN_API_KEY="$(openssl rand -hex 32)"   # must match the server
@@ -54,7 +60,7 @@ export KANBAN_API_KEY="$(openssl rand -hex 32)"   # must match the server
 ## Commands
 
 ```sh
-kanban whoami                          # url, agent, board and health
+kanban whoami                          # url, agent (or none), board and health
 kanban prime                           # the agent rules, ready for a prompt
 
 kanban board list
@@ -146,7 +152,7 @@ $ kanban card list
 | --- | --- |
 | 0 | done |
 | 1 | the server refused: `NOT_FOUND`, `INVALID`, `CONFLICT`, `CYCLE`, `NOT_CLAIMER` (another agent holds it), `NO_READY_CARD` |
-| 2 | usage: unknown command, missing argument, missing agent or board; the code printed is `USAGE` |
+| 2 | usage: unknown command, missing argument, missing agent name or board; the code printed is `USAGE` |
 | 3 | no server, `UNAUTHORIZED`, `BUSY` after the retries, `UNSUPPORTED` (a server too old for the request), or any other failure |
 | 4 | lost the race: `CLAIMED`, `BLOCKED`, `DONE` (but `BLOCKED` on `done` or `move` of a card you hold is not a lost race: wait or comment, and keep the card) |
 
@@ -164,7 +170,8 @@ kanban: USAGE: unknown command bogus
 ```
 
 With `--json` the same error is the server document on stdout, every field
-included, and stderr stays empty:
+included, and stderr stays empty (the only exception is the warning about an
+`agent` key in the config file, which is printed with `--json` too):
 
 ```
 $ kanban card claim 12 --json

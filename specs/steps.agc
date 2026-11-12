@@ -79,6 +79,7 @@ def main() -> Void
       BDD.step("I run the {string} hook", &run_hook),
       BDD.step("I run the {string} hook as agent {string}", &run_hook_as),
       BDD.step("I run the {string} hook without a server", &run_hook_dead),
+      BDD.step("I run the {string} hook without a server and the home fixture {string}", &run_hook_dead_home),
       BDD.step("I run the {string} hook without a board", &run_hook_no_board),
       BDD.step("I run the {string} hook without kanban on PATH", &run_hook_no_kanban),
       BDD.step("I add a card whose title has a line break and a forged card line", &add_forged_title_card),
@@ -94,6 +95,7 @@ def main() -> Void
       BDD.step("kanban output lists {string} before {string}", &kanban_output_before),
       BDD.step("I run kanban without a key {string}", &run_kanban_no_key),
       BDD.step("I run kanban without an agent {string}", &run_kanban_no_agent),
+      BDD.step("I run kanban without an agent and the home fixture {string} {string}", &run_kanban_home_fixture),
       BDD.step("I run kanban as agent {string} {string}", &run_kanban_as),
       BDD.step("I run kanban with board {string} {string}", &run_kanban_for_board),
       BDD.step("I run kanban {string} reading the body {string}", &run_kanban_stdin),
@@ -882,6 +884,19 @@ def run_hook_dead(ctx: BDD.Context, args: List[String]) -> BDD.Context
   run_hook_with(ctx, args[0], env)
 end
 
+# The home fixture has a config file with the old `agent` key, whose warning must not reach the notice.
+def run_hook_dead_home(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  env = {
+    "KANBAN_URL": "http://127.0.0.1:1",
+    "KANBAN_API_KEY": "01234567890123456789012345678901",
+    "KANBAN_BOARD": "project",
+    "KANBAN_AGENT": "",
+    "HOME": "#{Path.cwd().unwrap!}/specs/fixtures/#{args[1]}",
+  }
+
+  run_hook_with(ctx, args[0], env)
+end
+
 # The system tools only, so `kanban` is not found even when it is installed for the user.
 def run_hook_no_kanban(ctx: BDD.Context, args: List[String]) -> BDD.Context
   run_hook_with(ctx, args[0], kanban_env(ctx).put("KANBAN_BOARD", "project").put("PATH", "/usr/bin:/bin"))
@@ -977,6 +992,13 @@ end
 def run_kanban_no_agent(ctx: BDD.Context, args: List[String]) -> BDD.Context
   env = kanban_env(ctx).put("KANBAN_AGENT", "")
   run_kanban_with(ctx, args[0].split(" "), env, "")
+end
+
+# The home fixture holds a config file that still has the old `agent` key.
+def run_kanban_home_fixture(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  home = "#{Path.cwd().unwrap!}/specs/fixtures/#{args[0]}"
+  env = kanban_env(ctx).put("KANBAN_AGENT", "").put("HOME", home)
+  run_kanban_with(ctx, args[1].split(" "), env, "")
 end
 
 # Both processes boot their own interpreter, so this is a smoke check of the
