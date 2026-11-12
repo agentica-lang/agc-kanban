@@ -39,7 +39,18 @@ This skill is only the rules.
   `kanban card update ID --link URL`. One card may carry several (a PR and
   its fixes, a PR per repository).
 - Keep comments short and facts only: the next agent reads them as context.
-  Long text goes by `--file` or standard input.
+- Bodies and comments are Markdown, rendered on the web board. Write a phase
+  comment as a short bullet list, with `code` for paths, branches and SHAs,
+  and full links. Never one long line. Example:
+
+  ```md
+  - PR: https://github.com/org/repo/pull/12
+  - head `3f2a9c1` on `feat/login`
+  - CI green; 41 tests pass
+  ```
+
+  Multi-line text from a shell goes by a heredoc on standard input
+  (`kanban card comment ID - <<'EOF'`) or `--file`.
 - Move your card to Review when the work is ready to be reviewed. Never mark
   it done: when a coordinator does that (after the merge), `card done` is not
   yours. Only when your brief says you finish your own cards do you run it.
