@@ -55,8 +55,9 @@ kanban whoami                          # url, agent, board and health
 kanban prime                           # the agent rules, ready for a prompt
 
 kanban board list
-kanban board create "Project" --columns "Todo,Doing,Done"
+kanban board create "Project" --columns "Todo,Doing,Done"   # last column is the done one
 kanban board create "Project" --slug project   # slug defaults to KANBAN_BOARD
+# without --columns: Todo, Doing, Review, Done
 kanban board show [BOARD]
 
 kanban column add Review --position 2 [--done] [--wip 3]
