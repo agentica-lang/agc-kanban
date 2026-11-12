@@ -3,3 +3,5 @@ deps/
 dist/
 data/
 .env
+node_modules/
+.playwright-cli/

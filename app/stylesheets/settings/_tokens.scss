@@ -1,0 +1,29 @@
+// Colors, spacing and radius as custom properties: light by default, dark from the system setting.
+:root {
+  --bg: #f4f5f7;
+  --panel: #e9ebef;
+  --card: #fff;
+  --text: #1c2330;
+  --muted: #667085;
+  --line: #d5d9e0;
+  --accent: #3b6df0;
+  --warn: #b54708;
+  --flash: #fff3b0;
+  --gap: 0.75rem;
+  --radius: 8px;
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #12151b;
+    --panel: #1b2029;
+    --card: #232a36;
+    --text: #e6e9ef;
+    --muted: #98a2b3;
+    --line: #313949;
+    --accent: #7c9cff;
+    --warn: #f79009;
+    --flash: #4d4416;
+  }
+}

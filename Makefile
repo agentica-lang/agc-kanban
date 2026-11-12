@@ -32,6 +32,8 @@ up:
 down:
 	docker compose down
 assets:
-	@true
-assets-check:
-	@true
+	corepack pnpm install --frozen-lockfile
+	node tools/assets.mjs
+assets-check: assets
+	@changed="$$(git status --porcelain -- public/assets src/kanban_web/asset_names.agc)"; \
+	if [ -n "$$changed" ]; then echo "make assets changed the built files; commit them:" >&2; echo "$$changed" >&2; exit 1; fi
