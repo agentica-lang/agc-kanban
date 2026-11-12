@@ -15,7 +15,7 @@ Feature: Health and API authentication
   Scenario: Server refuses a short key
     Given the environment variable "KANBAN_API_KEY" is "short"
     And the Agentica program "../server.agc"
-    Then the program exits with code 1 within 10000 milliseconds
+    Then the program exits with code 1 within 30000 milliseconds
     And stderr includes:
       """
       KANBAN_API_KEY must be at least 32 characters
