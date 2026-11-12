@@ -42,8 +42,6 @@ Feature: The web pages
     And the page names the built stylesheet and script
     And the page applies the saved theme before the stylesheet
     And the response contains "Loading..."
-    When I get the page "/boards" with the session
-    Then the response contains "Loading..."
     When I get the page "/api/auth-check" with the session
     Then the response status is 200
 
@@ -89,3 +87,88 @@ Feature: The web pages
     Then the response status is 303
     And the response redirects to "/login"
     And the response clears the session cookie
+
+  Scenario: The home page without boards says what to run
+    Given the database server is running
+    When I sign in with the key "01234567890123456789012345678901"
+    And I get the page "/boards" with the session
+    Then the response status is 200
+    And the response contains "A shared Kanban board for coding agents"
+    And the response contains "No boards yet"
+    And the response contains "kanban board create"
+    And the response does not contain "Loading..."
+
+  Scenario: The home page shows each board with its cards, blocked cards and agents
+    Given the database server is running
+    When I post a board named "Project" with slug "project" as "agent-1"
+    And I add a card titled "A"
+    And I add a card titled "B"
+    And I add a card titled "C"
+    And I add a card titled "D"
+    And I move card 4 to "Done"
+    And agent "bob" claims card 1
+    And I make card 3 depend on card 2
+    And I sign in with the key "01234567890123456789012345678901"
+    And I get the page "/boards" with the session
+    Then the response status is 200
+    And the response contains "href=\"/boards/project\""
+    And the response contains "<b>2</b> <span>Todo</span>"
+    And the response contains "<b>1</b> <span>Doing</span>"
+    And the response contains "<b>0</b> <span>Review</span>"
+    And the response contains "<b>1</b> <span>Done</span>"
+    And the response contains "1 blocked"
+    And the response contains "<span class=\"claimer\" style=\"--hue:157\">bob</span>"
+    And the response contains "1 agent working"
+    And the response contains "just now"
+    And the response contains "1 board"
+
+  Scenario: A claim whose lease ran out shows no agent
+    Given the database server is running
+    When I post a board named "Project" with slug "project" as "agent-1"
+    And I add a card titled "A"
+    And I add a card titled "B"
+    And agent "bob" claims card 1
+    And agent "carol" claims card 2
+    And the lease of card 2 has run out
+    And I sign in with the key "01234567890123456789012345678901"
+    And I get the page "/boards" with the session
+    Then the response contains "--hue:157\">bob</span>"
+    And the response does not contain "carol"
+    And the response contains "1 agent working"
+
+  Scenario: A claimed card in the done column shows no agent
+    Given the database server is running
+    When I post a board named "Project" with slug "project" as "agent-1"
+    And I add a card titled "A"
+    And I move card 1 to "Done"
+    And the store keeps card 1 claimed by "bob"
+    And I sign in with the key "01234567890123456789012345678901"
+    And I get the page "/boards" with the session
+    Then the response does not contain "bob"
+    And the response contains "0 agents working"
+
+  Scenario: A board with no cards and a board with every card done
+    Given the database server is running
+    When I post a board named "Empty" with slug "empty" as "agent-1"
+    And I post a board named "Project" with slug "project" as "agent-1"
+    And I add a card titled "A"
+    And I move card 1 to "Done"
+    And I sign in with the key "01234567890123456789012345678901"
+    And I get the page "/boards" with the session
+    Then the response contains "No cards yet"
+    And the response contains "All done"
+    And the response does not contain "blocked"
+
+  Scenario: The home page escapes a board name and has no write controls
+    Given the database server is running
+    When I post a board named "<b>x</b>" with slug "project" as "agent-1"
+    And I add the column "<i>y</i>" at position 1
+    And I sign in with the key "01234567890123456789012345678901"
+    And I get the page "/boards" with the session
+    Then the response contains "&lt;b&gt;x&lt;/b&gt;"
+    And the response does not contain "<b>x</b>"
+    And the response contains "&lt;i&gt;y&lt;/i&gt;"
+    And the response does not contain "<i>y</i>"
+    And the response contains exactly 1 occurrences of "<form"
+    And the response does not contain "<input"
+    And the response does not contain "<textarea"

@@ -16,6 +16,8 @@ def main() -> Void
       BDD.step("the database server is running with leases of {int} minutes", &start_leased_database_server),
       BDD.step("a database server with a short busy timeout is running", &start_busy_database_server),
       BDD.step("I post a board while the database is locked", &post_board_locked),
+      BDD.step("the lease of card {int} has run out", &expire_lease),
+      BDD.step("the store keeps card {int} claimed by {string}", &keep_claim),
       BDD.step("I post a board named {string} with slug {string} as {string}", &post_board),
       BDD.step("I list boards", &list_boards),
       BDD.step("I get the project snapshot", &project_snapshot),
@@ -677,6 +679,26 @@ def post_board_locked(ctx: BDD.Context, _args: List[String]) -> BDD.Context
   _ = Db.execute(conn, "rollback", []).unwrap!
   Db.close(conn)
   answered
+end
+
+# The lease is set in the past by a second connection: a spec cannot wait a minute for a real one to end.
+def expire_lease(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  dir = JSON.string(BDD.get(ctx, "data_dir").unwrap!).unwrap!
+  conn = Db.open("sqlite:#{dir}/kanban.sqlite3").unwrap!
+  _ = Db.execute(conn, "update cards set lease_until = 1 where id = ?", [Db.Value.Int(args[0].to_i!)]).unwrap!
+  Db.close(conn)
+  ctx
+end
+
+# The API clears a claim when a card reaches the done column, so a spec cannot reach that state through it: a second
+# connection writes it, to check that the home page still shows no agent for such a row.
+def keep_claim(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  dir = JSON.string(BDD.get(ctx, "data_dir").unwrap!).unwrap!
+  conn = Db.open("sqlite:#{dir}/kanban.sqlite3").unwrap!
+  sql = "update cards set claimed_by = ?, lease_until = null where id = ?"
+  _ = Db.execute(conn, sql, [Db.Value.Text(args[1]), Db.Value.Int(args[0].to_i!)]).unwrap!
+  Db.close(conn)
+  ctx
 end
 
 def response_lacks(ctx: BDD.Context, args: List[String]) -> BDD.Context

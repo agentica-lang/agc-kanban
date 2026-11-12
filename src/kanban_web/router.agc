@@ -18,7 +18,7 @@ export def install(app: Bond.App, pool: Optional[Database.Pool], lease_minutes: 
     |> Bond.get(Routes.LOGIN, &Pages.login_form)
     |> Bond.post(Routes.LOGIN, ->(conn) { Pages.login(conn, key) })
     |> Bond.post(Routes.LOGOUT, &Pages.logout)
-    |> Bond.get(Routes.BOARDS_PAGE, &Pages.boards)
+    |> Bond.get(Routes.BOARDS_PAGE, ->(conn) { Pages.boards(conn, pool) })
     |> Bond.get(Routes.BOARD_PAGE, ->(conn) { Pages.board(conn, pool) })
     |> Bond.get(Routes.HEALTH, ->(conn) { Health.health(conn) })
     |> Bond.get(Routes.AUTH_CHECK, ->(conn) { Health.auth_check(conn) })
