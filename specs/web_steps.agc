@@ -26,6 +26,7 @@ export def steps() -> List[BDD.Step]
     BDD.step("the response clears the session cookie", &clears_cookie),
     BDD.step("the response redirects to {string}", &redirects_to),
     BDD.step("the page names the built stylesheet and script", &names_assets),
+    BDD.step("the page applies the saved theme before the stylesheet", &theme_first),
     BDD.step("the response header {string} contains {string}", &header_contains),
     BDD.step("a live client with the session subscribes to the board {string}", &subscribe_signed),
     BDD.step("a live client without a session subscribes to the board {string}", &subscribe_anonymous),
@@ -109,6 +110,14 @@ end
 def header_contains(ctx: BDD.Context, args: List[String]) -> BDD.Context
   value = header_of(ctx, args[0])
   BDD.assert(ctx, value.include?(args[1]), "#{args[0]} was #{value}")
+end
+
+# The inline script must come before the stylesheet, or a dark choice paints light first.
+def theme_first(ctx: BDD.Context, _args: List[String]) -> BDD.Context
+  page = text_of(ctx, "body")
+  theme = page.index_of("localStorage.getItem(\"agc-kanban.theme\")")
+  sheet = page.index_of(AssetNames.STYLESHEET)
+  BDD.assert(ctx, theme.some? and sheet.some? and theme.unwrap! < sheet.unwrap!, "the page was #{page}")
 end
 
 def names_assets(ctx: BDD.Context, _args: List[String]) -> BDD.Context

@@ -40,6 +40,7 @@ Feature: The web pages
     And I get the page "/boards/project" with the session
     Then the response status is 200
     And the page names the built stylesheet and script
+    And the page applies the saved theme before the stylesheet
     And the response contains "Loading..."
     When I get the page "/boards" with the session
     Then the response contains "Loading..."

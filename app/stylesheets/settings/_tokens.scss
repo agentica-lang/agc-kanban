@@ -1,5 +1,8 @@
-// Colors, spacing and radius as custom properties: light by default, dark from the system setting.
-:root {
+// Colors, spacing and radius as custom properties. The theme follows the system setting unless <html> has a
+// `data-theme` ("light" or "dark"): the inline script of the layout sets it from the saved choice before the first
+// paint, and the theme button changes it (theme.js).
+@mixin light {
+  color-scheme: light;
   --bg: #f4f5f7;
   --panel: #e9ebef;
   --card: #fff;
@@ -9,24 +12,59 @@
   --accent: #3b6df0;
   --warn: #b54708;
   --flash: #fff3b0;
+  --thumb: #b4bbc7;
+}
+
+@mixin dark {
+  color-scheme: dark;
+  --bg: #12151b;
+  --panel: #1b2029;
+  --card: #232a36;
+  --text: #e6e9ef;
+  --muted: #98a2b3;
+  --line: #313949;
+  --accent: #7c9cff;
+  --warn: #f79009;
+  --flash: #4d4416;
+  --thumb: #4b566b;
+}
+
+:root {
+  @include light;
   --gap: 0.75rem;
   --radius: 8px;
   --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #12151b;
-    --panel: #1b2029;
-    --card: #232a36;
-    --text: #e6e9ef;
-    --muted: #98a2b3;
-    --line: #313949;
-    --accent: #7c9cff;
-    --warn: #f79009;
-    --flash: #4d4416;
-  }
+  :root:not([data-theme="light"]) { @include dark; }
 }
+
+:root[data-theme="dark"] { @include dark; }
 
 // Below this width the columns take most of the screen and the drawer covers the board.
 $narrow: 700px;
+
+// A thin scrollbar in the theme colors, hidden until the area scrolls (the class `scrolling`, which scrollbars.js
+// sets and takes off 1.5 s after the last scroll) or, with `$hover`, while the pointer is over the area. Only with a
+// mouse on a wide screen: touch screens and phones keep their native overlay scrollbars. Firefox takes the standard
+// properties; Chromium and Safari take `::-webkit-scrollbar`, which Chromium ignores once the standard ones are set,
+// so those go only where the pseudo-element is unknown.
+@mixin thin-scroll($hover: true) {
+  @media (hover: hover) and (pointer: fine) and (min-width: $narrow + 1) {
+    @supports not selector(::-webkit-scrollbar) {
+      scrollbar-width: thin;
+      scrollbar-color: transparent transparent;
+
+      &.scrolling { scrollbar-color: var(--thumb) transparent; }
+      @if $hover { &:hover { scrollbar-color: var(--thumb) transparent; } }
+    }
+
+    &::-webkit-scrollbar { width: 6px; height: 6px; }
+    &::-webkit-scrollbar-track, &::-webkit-scrollbar-corner { background: transparent; }
+    &::-webkit-scrollbar-thumb { background: transparent; border-radius: 3px; }
+    &.scrolling::-webkit-scrollbar-thumb { background: var(--thumb); }
+    @if $hover { &:hover::-webkit-scrollbar-thumb { background: var(--thumb); } }
+    &::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+  }
+}

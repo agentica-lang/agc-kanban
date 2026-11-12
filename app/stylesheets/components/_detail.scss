@@ -1,6 +1,11 @@
+@use "../settings/tokens";
+
 // The card detail panel of the drawer, and the Markdown of bodies and comments.
+// The one column may shrink below its content, so a long line of code scrolls in its block instead of widening the
+// drawer.
 .detail {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--gap);
   font-size: 0.875rem;
   overflow-wrap: anywhere;
@@ -37,7 +42,7 @@
   ul, ol { padding-left: 1.25rem; }
   h4 { margin: 0.75rem 0 0.25rem; font-size: 0.9rem; }
   code { font-size: 0.85em; padding: 0 0.25rem; border-radius: 4px; background: var(--panel); }
-  pre { padding: 0.5rem; border-radius: 6px; background: var(--panel); overflow-x: auto; }
+  pre { padding: 0.5rem; border-radius: 6px; background: var(--panel); overflow-x: auto; @include tokens.thin-scroll; }
   pre code { padding: 0; background: none; }
   blockquote { padding-left: 0.75rem; border-left: 3px solid var(--line); color: var(--muted); }
 }

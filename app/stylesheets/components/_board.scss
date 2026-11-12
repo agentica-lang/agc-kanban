@@ -21,7 +21,7 @@
   h1 { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 }
 
-// The small Activity button at the top right, next to "Sign out".
+// The small theme and Activity buttons at the top right, next to "Sign out".
 .toggle {
   display: inline-grid;
   place-items: center;
@@ -57,6 +57,9 @@
   overflow-y: hidden;
   overscroll-behavior-x: contain;
   padding: 0 1rem var(--gap);
+
+  // Its hover is the whole page, so the pointer near its bottom edge shows the bar instead (scrollbars.js).
+  @include tokens.thin-scroll($hover: false);
 }
 
 .column {
@@ -94,6 +97,7 @@
   gap: 0.5rem;
   overflow-y: auto;
   padding: 0 var(--gap) var(--gap);
+  @include tokens.thin-scroll;
 }
 
 .drawer {
@@ -128,7 +132,13 @@
 // Shown only where the drawer lies over the board: a tap on it closes the drawer, as Escape does.
 .backdrop { display: none; }
 
-.drawer-body { flex: 1; min-height: 0; overflow-y: auto; padding: 0 1rem 1rem; }
+.drawer-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 1rem 1rem;
+  @include tokens.thin-scroll;
+}
 
 // A phone: one column fills most of the width and a swipe snaps to the next; the drawer lies over the board.
 @media (max-width: tokens.$narrow) {

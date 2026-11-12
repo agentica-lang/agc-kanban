@@ -31,7 +31,9 @@ def form(note: String) -> String
 end
 
 # `content` is markup of this file (the form), never a value of a client; `title` and `slug` are escaped. A view of
-# SCRIPTED_VIEWS gets `#app`, with the text that shows until the script mounts.
+# SCRIPTED_VIEWS gets `#app`, with the text that shows until the script mounts. The inline script, before the
+# stylesheet, applies the saved theme (the key of app/javascript/theme.js) so a dark page never paints light first; the
+# server sends no Content-Security-Policy, so it runs. A value other than "light" or "dark" leaves the system setting.
 def layout(title: String, view: String, slug: String, content: String) -> String
   <<~EAG
     <%@ escape &Bond.escape %>
@@ -41,6 +43,7 @@ def layout(title: String, view: String, slug: String, content: String) -> String
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width, initial-scale=1">
       <title><%= title %> - agc-kanban</title>
+      <script>(function () { try { var theme = localStorage.getItem("agc-kanban.theme"); if (theme === "light" || theme === "dark") { document.documentElement.dataset.theme = theme; } } catch (error) {} })();</script>
       <link rel="stylesheet" href="<%= AssetNames.STYLESHEET %>">
       <script defer src="<%= AssetNames.SCRIPT %>"></script>
     </head>
