@@ -101,7 +101,10 @@ argument or from `KANBAN_BOARD`.
 Boards, columns and comments print one tab-separated line each; card lines and
 events use two spaces (`#12  Doing  claude-code  Fix login [api]`), so a card
 line can be read with `cut -d' ' -f1` on the id. `card show` is a short
-multi-line page. `--json` prints the server answer verbatim.
+multi-line page; its `time:` lines give the time in each column
+(`time: Todo 25 min · Doing 2 h 15 min`, then `time: 40 min in Review`, or
+`time: total 2 h 40 min` for a done card). `--json` prints the server answer
+verbatim, with `times` in milliseconds.
 
 ```
 $ kanban card list
@@ -151,7 +154,7 @@ failure.
 export KANBAN_URL=http://172.28.0.10:4580 KANBAN_AGENT=claude-code KANBAN_BOARD=project
 kanban whoami
 kanban card next                    # claims the first ready card and prints it
-kanban card show 12                 # body, deps, comments
+kanban card show 12                 # body, deps, time in each column, comments
 kanban card comment 12 "started"
 kanban card move 12 Doing
 kanban card done 12

@@ -107,3 +107,20 @@ Feature: Cards
     When agent "agent-2" claims the next card
     Then the response status is 404
     And the response contains "NO_READY_CARD"
+
+  Scenario: A card shows the time in each column it went through
+    Given the database server is running
+    When I post a board named "Project" with slug "project" as "agent-1"
+    And I add a card titled "Implement API"
+    And I get card 1
+    Then the response contains "\"stays\":[{\"column_id\":1,\"name\":\"Todo\""
+    And the response contains "\"column\":\"Todo\",\"since\":"
+    When I move card 1 to "Doing"
+    And I move card 1 to "Todo"
+    And agent "agent-1" claims card 1
+    And agent "agent-1" marks card 1 done
+    And I get card 1
+    Then the response contains exactly 1 occurrences of "\"name\":\"Todo\""
+    And the response contains exactly 1 occurrences of "\"name\":\"Doing\""
+    And the response does not contain "\"name\":\"Done\""
+    And the response contains "\"done\":true,\"total_ms\":"

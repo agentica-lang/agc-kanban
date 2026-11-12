@@ -14,6 +14,7 @@ Feature: CLI cards
     Then kanban exits with code 0
     And kanban output contains "Implement-API"
     And kanban output contains "priority: 1"
+    And kanban output contains "time: < 1 min in Todo"
 
   Scenario: Filters select the cards
     Given the database server is running

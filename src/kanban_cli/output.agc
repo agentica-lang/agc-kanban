@@ -1,4 +1,5 @@
 import HTTP from "std/http"
+import Times from "../kanban/times"
 
 LOST_CODES = ["CLAIMED", "BLOCKED", "DONE"]
 
@@ -100,9 +101,11 @@ struct CardDetail
   done: Bool
 end
 
+# `times` is none from a server older than the time in each column.
 struct DetailAnswer
   card: CardDetail
   comments: List[CommentLine]
+  times: Optional[Times.Times]
 end
 
 struct CommentAnswer
@@ -260,6 +263,12 @@ export def print_card_detail(response: HttpResponse) -> Void
 
   if card.worktree.some?
     puts("worktree: #{card.worktree.unwrap!}")
+  end
+
+  if detail.times.some?
+    for line in Times.lines(detail.times.unwrap!)
+      puts("time: #{line}")
+    end
   end
 
   if not card.body.empty?

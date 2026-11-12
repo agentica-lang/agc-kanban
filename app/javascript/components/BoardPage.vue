@@ -1,15 +1,32 @@
 <script setup>
-import { computed } from "vue";
+import { computed, onBeforeUnmount, provide, watch } from "vue";
 import { useBoard } from "../board_store.js";
+import { useCard } from "../card_store.js";
 import { useDrawer } from "../drawer.js";
+import CardPanel from "./CardPanel.vue";
 import Column from "./Column.vue";
 import Drawer from "./Drawer.vue";
 import Feed from "./Feed.vue";
 
 var props = defineProps({ slug: String });
-var state = useBoard(props.slug);
 var drawer = useDrawer();
 var panel = drawer.panel;
+var card = useCard();
+var state = useBoard(props.slug, card.changed);
+
+watch(drawer.card, card.show, { immediate: true });
+// A card on the board opens its detail; the open one is marked.
+provide("openCard", drawer.showCard);
+provide("openCardId", drawer.card);
+
+// Escape closes the panel that is open.
+function onKey(event) {
+  if (event.key === "Escape" && panel.value !== "") {
+    drawer.close();
+  }
+}
+document.addEventListener("keydown", onKey);
+onBeforeUnmount(function () { document.removeEventListener("keydown", onKey); });
 
 // What a card shows that depends on the others: it is blocked while a dependency sits in a column that is not done.
 var done = computed(function () {
@@ -48,7 +65,9 @@ var columns = computed(function () {
     <header class="top">
       <a href="/boards">Boards</a>
       <h1>{{ state.board.name }}</h1>
-      <button type="button" class="toggle" :aria-pressed="panel === 'activity'" @click="drawer.toggle('activity')">Activity</button>
+      <button type="button" class="toggle" aria-label="Activity" title="Activity" aria-controls="drawer" :aria-expanded="panel === 'activity'" @click="drawer.toggleActivity()">
+        <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M2 3h1.5v1.5H2zM5 3h9v1.5H5zM2 7.25h1.5v1.5H2zM5 7.25h9v1.5H5zM2 11.5h1.5V13H2zM5 11.5h9V13H5z" fill="currentColor" /></svg>
+      </button>
     </header>
     <p v-if="state.error" class="banner">Could not refresh the board: {{ state.error }}</p>
     <div class="board-body">
@@ -58,6 +77,9 @@ var columns = computed(function () {
       </main>
       <Drawer v-if="panel === 'activity'" title="Activity" @close="drawer.close()">
         <Feed :state="state" />
+      </Drawer>
+      <Drawer v-else-if="panel === 'card'" :title="'Card #' + drawer.card.value" @close="drawer.close()">
+        <CardPanel :state="card" @open="drawer.showCard" />
       </Drawer>
     </div>
   </div>
