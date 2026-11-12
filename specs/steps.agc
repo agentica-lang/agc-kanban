@@ -17,6 +17,9 @@ def main() -> Void
     BDD.step("I get card {int}", &get_card),
     BDD.step("agent {string} claims card {int}", &claim_card),
     BDD.step("eight agents race to claim card {int}", &race_claims),
+    BDD.step("I add eight cards", &add_eight_cards),
+    BDD.step("eight agents race to claim the next card", &race_next),
+    BDD.step("each agent claims a different card", &assert_distinct_claims),
     BDD.step("one agent wins and seven receive CLAIMED", &assert_race),
     BDD.step("I list project cards", &list_cards),
     BDD.step("I add the column {string} at position {int}", &add_column),
@@ -325,4 +328,47 @@ def assert_race(ctx: BDD.Context, _args: List[String]) -> BDD.Context
   wins = answers.select do |reply| reply.status == 200 end
   losses = answers.select do |reply| reply.status == 409 and reply.body.include?("CLAIMED") end
   BDD.assert(ctx, wins.size == 1 and losses.size == 7, "unexpected race results: #{JSON.encode(JSON.from(answers))}")
+end
+
+def add_eight_cards(ctx: BDD.Context, _args: List[String]) -> BDD.Context
+  current = ctx
+  for index in 1..8
+    current = api_request(
+      current,
+      "POST",
+      "/api/boards/project/cards",
+      JSON.encode(JSON.from({"title": "Card #{index}"})),
+    )
+
+    current = BDD.assert(current, JSON.int(BDD.get(current, "status").unwrap!).unwrap! == 201, "card creation failed")
+  end
+
+  current
+end
+
+def race_next(ctx: BDD.Context, _args: List[String]) -> BDD.Context
+  port = JSON.int(BDD.get(ctx, "port").unwrap!).unwrap!
+  url = "http://127.0.0.1:#{port}/api/boards/project/claim-next"
+  agents = ["agent-1", "agent-2", "agent-3", "agent-4", "agent-5", "agent-6", "agent-7", "agent-8"]
+  replies = Task.map(agents, 8, 30000) do |agent| race_claim(url, agent) end
+  answers: List[RaceReply] = []
+  for reply in replies
+    answers = answers.push(reply.unwrap!)
+  end
+
+  BDD.set(ctx, "race", JSON.from(answers))
+end
+
+def assert_distinct_claims(ctx: BDD.Context, _args: List[String]) -> BDD.Context
+  answers = JSON.decode(BDD.get(ctx, "race").unwrap!, List[RaceReply]).unwrap!
+  ids: Set[Int] = Set.new([])
+  for answer in answers
+    _ = BDD.assert(ctx, answer.status == 200, "claim next failed: #{answer.body}")
+    body = JSON.parse(answer.body).unwrap!
+    card = JSON.get(body, "card").unwrap!
+    id = JSON.int(JSON.get(card, "id").unwrap!).unwrap!
+    ids = ids.add(id)
+  end
+
+  BDD.assert(ctx, ids.size == 8, "claim next returned duplicate cards")
 end

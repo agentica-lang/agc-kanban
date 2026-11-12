@@ -18,6 +18,11 @@ struct CardsAnswer
   cards: List[Cards.Card]
 end
 
+struct ClaimNext
+  column: Optional[String]
+  label: Optional[String]
+end
+
 struct CreateCard
   title: String
   body: Optional[String]
@@ -89,6 +94,7 @@ export def build(key: String, pool: Optional[Database.Pool] = none, lease_minute
     |> Bond.get("/api/boards") do |conn| list_boards(conn, pool) end
     |> Bond.post("/api/boards") do |conn| create_board(conn, pool) end
     |> Bond.get("/api/boards/:board") do |conn| show_board(conn, pool) end
+    |> Bond.post("/api/boards/:board/claim-next") do |conn| claim_next(conn, pool, lease_minutes) end
     |> Bond.get("/api/boards/:board/cards") do |conn| list_cards(conn, pool) end
     |> Bond.post("/api/boards/:board/cards") do |conn| create_card(conn, pool) end
     |> Bond.post("/api/cards/:id/claim") do |conn| claim_card(conn, pool, lease_minutes) end
@@ -179,6 +185,7 @@ def failure(conn: Bond.Conn, message: String) -> Bond.Conn
 
   return reject(conn, 409, "DONE", "card is done") if message.start_with?("DONE:")
   return reject(conn, 409, "CONFLICT", message) if message.start_with?("CONFLICT:")
+  return reject(conn, 404, "NO_READY_CARD", "no ready card") if message.start_with?("NO_READY_CARD:")
   return reject(conn, 404, "NOT_FOUND", message) if message.start_with?("NOT_FOUND:")
   return reject(conn, 503, "BUSY", "database busy") if Database.busy?(message)
 
@@ -367,6 +374,30 @@ def claim_card(conn: Bond.Conn, pool: Optional[Database.Pool], lease_minutes: In
 
   actor = Bond.request_header(conn, "X-Kanban-Agent").unwrap_or("")
   result = Claims.claim(pool.unwrap!, id.unwrap!, actor, lease_minutes)
+  return ok(failure(conn, result.message)) if not result.ok?
+
+  ok(Bond.json_as(conn, 200, CardAnswer.codec, CardAnswer(card: result.unwrap!)))
+end
+
+def claim_next(conn: Bond.Conn, pool: Optional[Database.Pool], lease_minutes: Int) -> Result[Bond.Conn]
+  return ok(reject(conn, 503, "BUSY", "database unavailable")) if not pool.some?
+
+  body = Bond.body_text(conn)
+  return ok(reject(conn, 400, "INVALID", "invalid body", some("body"))) if not body.ok?
+
+  decoded = JSON.decode(body.unwrap!, ClaimNext)
+  return ok(reject(conn, 400, "INVALID", "invalid body", some("body"))) if not decoded.ok?
+
+  data = decoded.unwrap!
+  input = Claims.Next(
+    board: Bond.param(conn, "board").unwrap_or(""),
+    column: data.column,
+    label: data.label,
+    actor: Bond.request_header(conn, "X-Kanban-Agent").unwrap_or(""),
+    lease_minutes: lease_minutes,
+  )
+
+  result = Claims.claim_next(pool.unwrap!, input)
   return ok(failure(conn, result.message)) if not result.ok?
 
   ok(Bond.json_as(conn, 200, CardAnswer.codec, CardAnswer(card: result.unwrap!)))

@@ -3,6 +3,14 @@ import Regex from "std/regex"
 import Cards from "cards"
 import Database from "repo/database"
 
+export struct Next
+  board: String
+  column: Optional[String]
+  label: Optional[String]
+  actor: String
+  lease_minutes: Int
+end
+
 struct Destination
   column_id: Int
   position: Int
@@ -14,6 +22,44 @@ export def claim(pool: Database.Pool, id: Int, actor: String, lease_minutes: Int
   return error("INVALID:lease") if lease_minutes < 0 or lease_minutes > 1000000000
 
   Database.with_connection(pool) do |conn| Db.transaction(conn) do |tx| acquire(tx, id, actor, lease_minutes) end end
+end
+
+export def claim_next(pool: Database.Pool, input: Next) -> Result[Cards.Card]
+  return error("INVALID:board") if input.board.empty?
+  return error("INVALID:agent") if not Regex.match?(input.actor, /^[A-Za-z0-9._@\/-]{1,64}$/)
+  return error("INVALID:lease") if input.lease_minutes < 0 or input.lease_minutes > 1000000000
+
+  Database.with_connection(pool) do |conn| Db.transaction(conn) do |tx| next_open(tx, input) end end
+end
+
+def next_open(conn: Db.Connection, input: Next) -> Result[Cards.Card]
+  boards = try Db.query(
+    conn,
+    "select id from boards where slug = ? or cast(id as text) = ? order by case when slug = ? then 0 else 1 end limit 1",
+    [Db.Value.Text(input.board), Db.Value.Text(input.board), Db.Value.Text(input.board)],
+  )
+
+  return error("NOT_FOUND:board") if boards.empty?
+
+  column = text_value(input.column)
+  label = text_value(input.label)
+  now = Time.now_ms()
+  candidates = try Db.query(
+    conn,
+    "select c.id from cards c join columns col on col.id = c.column_id where c.board_id = ? and c.archived_at is null and col.done = 0 and (c.claimed_by is null or c.lease_until <= ?) and not exists (select 1 from card_deps d join cards dep on dep.id = d.depends_on_id join columns dc on dc.id = dep.column_id where d.card_id = c.id and dc.done = 0) and (? is null or col.name = ? or cast(col.id as text) = ?) and (? is null or exists (select 1 from json_each(c.labels) j where j.value = ?)) order by c.priority, col.position, c.position, c.id limit 1",
+    [Db.Value.Int(number(boards[0], "id")), Db.Value.Int(now), column, column, column, label, label],
+  )
+
+  return error("NO_READY_CARD:board") if candidates.empty?
+
+  acquire(conn, number(candidates[0], "id"), input.actor, input.lease_minutes)
+end
+
+def text_value(value: Optional[String]) -> Db.Value
+  case value
+    none -> Db.Value.Null
+    some(text) -> Db.Value.Text(text)
+  end
 end
 
 def acquire(conn: Db.Connection, id: Int, actor: String, lease_minutes: Int) -> Result[Cards.Card]

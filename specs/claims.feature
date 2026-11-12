@@ -40,3 +40,11 @@ Feature: Card claims
       """
       invalid KANBAN_LEASE_MINUTES
       """
+
+  Scenario: Eight agents claim eight different ready cards
+    Given the database server is running
+    When I post a board named "Project" with slug "project" as "agent-1"
+    Then the response status is 201
+    When I add eight cards
+    And eight agents race to claim the next card
+    Then each agent claims a different card
