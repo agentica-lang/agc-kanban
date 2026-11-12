@@ -292,9 +292,11 @@ def update_open(conn: Db.Connection, input: Update) -> Result[Card]
   priority = input.priority.unwrap_or(card.priority)
   links = merged(card.links.select do |url| not input.unlink.include?(url) end, input.link)
   return error("INVALID:links") if links.size > LINKS_MAX
-  return ok(card) if links_only?(input) and links == card.links
+  # The holder's update renews the lease, so it is a write even when the links come out the same.
+  renews = active and holder.unwrap! == input.actor and input.lease_minutes > 0
+  return ok(card) if links_only?(input, renews) and links == card.links
   lease: Db.Value = nullable_number(card.lease_until)
-  if active and holder.unwrap! == input.actor and input.lease_minutes > 0
+  if renews
     lease = Db.Value.Int(now + input.lease_minutes * 60000)
   end
 
@@ -342,9 +344,11 @@ def valid_links?(links: List[String]) -> Bool
   end
 end
 
-# Only links were asked for: the update is a no-op when they come out the same.
-def links_only?(input: Update) -> Bool
+# Only links were asked for: the update is a no-op when they come out the same. A lease renewal (`renews`) is an ask
+# of its own, so it is not links only. `force` is not: it only skips the CLAIMED check and stores nothing.
+def links_only?(input: Update, renews: Bool) -> Bool
   others = [
+    renews,
     input.title.some?,
     input.body.some?,
     input.labels.some?,

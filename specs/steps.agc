@@ -13,6 +13,7 @@ def main() -> Void
     [
       BDD.step("the test server is running", &start_server),
       BDD.step("the database server is running", &start_database_server),
+      BDD.step("the database server is running with leases of {int} minutes", &start_leased_database_server),
       BDD.step("a database server with a short busy timeout is running", &start_busy_database_server),
       BDD.step("I post a board while the database is locked", &post_board_locked),
       BDD.step("I post a board named {string} with slug {string} as {string}", &post_board),
@@ -22,12 +23,15 @@ def main() -> Void
       BDD.step("I add a card titled {string} with the link {string}", &add_linked_card),
       BDD.step("agent {string} links card {int} to {string}", &link_card),
       BDD.step("agent {string} unlinks card {int} from {string}", &unlink_card),
+      BDD.step("agent {string} forcibly links card {int} to {string}", &force_link_card),
       BDD.step("agent {string} links card {int} to {int} URLs", &link_many),
       BDD.step("agent {string} unlinks {int} URLs from card {int}", &unlink_many),
       BDD.step("a server older than links is running", &start_before_links),
       BDD.step("I add a card titled {string} with {int} links", &add_card_many_links),
+      BDD.step("I add a card titled {string} with {int} copies of the link {string}", &add_card_copies),
       BDD.step("agent {string} unlinks {string} and links {string} on card {int}", &swap_link),
       BDD.step("agent {string} retitles card {int} to {string} and links {string}", &retitle_and_link),
+      BDD.step("agent {string} replaces the {int} links of card {int} with {int} others", &replace_links),
       BDD.step("agent {string} retitles card {int} to {string}", &retitle_card),
       BDD.step("agent {string} forces a new title on card {int} to {string}", &force_retitle_card),
       BDD.step("agent {string} comments on card {int} with {string}", &comment_card),
@@ -203,11 +207,16 @@ def fixture_home(ctx: BDD.Context, args: List[String]) -> BDD.Context
   BDD.given_env(ctx, "HOME", home)
 end
 
-def start_database_server(ctx: BDD.Context, _args: List[String]) -> BDD.Context
+# The lease is always set here, never read from the shell that runs the specs.
+def start_database_server(ctx: BDD.Context, _args: List[String]) -> BDD.Context = start_database(ctx, "0")
+
+def start_leased_database_server(ctx: BDD.Context, args: List[String]) -> BDD.Context = start_database(ctx, args[0])
+
+def start_database(ctx: BDD.Context, lease: String) -> BDD.Context
   home = System.env("HOME").unwrap!
   Dir.mkdir("#{home}/.cache").unwrap!
   dir = "#{home}/.cache/kanban-bdd-#{System.pid()}-#{Random.int(0, 999_999)}"
-  configured = BDD.given_env(ctx, "KANBAN_DATA_DIR", dir)
+  configured = BDD.given_env(BDD.given_env(ctx, "KANBAN_DATA_DIR", dir), "KANBAN_LEASE_MINUTES", lease)
   started = BDD.given_program(configured, "fixtures/database_server.agc")
   hooked = BDD.after(started) do |last| cleanup_database(last, dir) end
   port = BDD.read_line(hooked, 30000).unwrap!.to_i!
@@ -331,6 +340,11 @@ def link_card(ctx: BDD.Context, args: List[String]) -> BDD.Context
   api_request_as(ctx, args[0], "PATCH", "/api/cards/#{args[1]}", body)
 end
 
+def force_link_card(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  body = JSON.encode(JSON.object({"link": JSON.from([args[2]]), "force": JSON.from(true)}))
+  api_request_as(ctx, args[0], "PATCH", "/api/cards/#{args[1]}", body)
+end
+
 def unlink_card(ctx: BDD.Context, args: List[String]) -> BDD.Context
   body = JSON.encode(JSON.object({"unlink": JSON.from([args[2]])}))
   api_request_as(ctx, args[0], "PATCH", "/api/cards/#{args[1]}", body)
@@ -353,9 +367,22 @@ def add_card_many_links(ctx: BDD.Context, args: List[String]) -> BDD.Context
   api_request(ctx, "POST", "/api/boards/project/cards", body)
 end
 
+def add_card_copies(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  copies = (1..args[1].to_i!).map do |_n| args[2] end
+  body = JSON.encode(JSON.object({"title": JSON.from(args[0]), "links": JSON.from(copies)}))
+  api_request(ctx, "POST", "/api/boards/project/cards", body)
+end
+
 def swap_link(ctx: BDD.Context, args: List[String]) -> BDD.Context
   body = JSON.encode(JSON.object({"unlink": JSON.from([args[1]]), "link": JSON.from([args[2]])}))
   api_request_as(ctx, args[0], "PATCH", "/api/cards/#{args[3]}", body)
+end
+
+# Unlinks the numbered pull requests and links as many numbered issues in one request.
+def replace_links(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  others = (1..args[3].to_i!).map do |n| "https://github.com/o/r/issues/#{n}" end
+  body = JSON.encode(JSON.object({"unlink": JSON.from(numbered_urls(args[1].to_i!)), "link": JSON.from(others)}))
+  api_request_as(ctx, args[0], "PATCH", "/api/cards/#{args[2]}", body)
 end
 
 def retitle_and_link(ctx: BDD.Context, args: List[String]) -> BDD.Context

@@ -130,6 +130,9 @@ Feature: Card links
     And I add a card titled "Linked" with 51 links
     Then the response status is 400
     And the response contains "\"field\":\"links\""
+    When I add a card titled "Linked" with 51 copies of the link "https://github.com/o/r/pull/7"
+    Then the response status is 400
+    And the response contains "\"field\":\"links\""
     When I add a card titled "Linked"
     And agent "agent-1" links card 1 to 50 URLs
     And agent "agent-1" unlinks "https://github.com/o/r/pull/1" and links "https://github.com/o/r/issues/1" on card 1
@@ -137,6 +140,31 @@ Feature: Card links
     When agent "agent-1" links card 1 to 51 URLs
     Then the response status is 400
     And the response contains "\"field\":\"links\""
+
+  Scenario: One request can replace all 50 links of a full card
+    Given the database server is running
+    When I post a board named "Project" with slug "project" as "agent-1"
+    And I add a card titled "Linked"
+    And agent "agent-1" links card 1 to 50 URLs
+    And agent "agent-1" replaces the 50 links of card 1 with 50 others
+    Then the response status is 200
+    And the response contains "https://github.com/o/r/issues/50"
+    And the response does not contain "https://github.com/o/r/pull/1\""
+
+  Scenario: The holder's lease is renewed by an update whose links change nothing, a forced one writes nothing
+    Given the database server is running with leases of 60 minutes
+    When I post a board named "Project" with slug "project" as "agent-1"
+    And I add a card titled "Free" with the link "https://github.com/o/r/pull/7"
+    And I add a card titled "Held" with the link "https://github.com/o/r/pull/7"
+    And agent "agent-1" claims card 2
+    And agent "agent-1" links card 2 to "https://github.com/o/r/pull/7"
+    Then the response status is 200
+    And the response contains "\"version\":3"
+    When agent "agent-1" links card 1 to "https://github.com/o/r/pull/7"
+    Then the response contains "\"version\":1"
+    When agent "agent-2" forcibly links card 2 to "https://github.com/o/r/pull/7"
+    Then the response status is 200
+    And the response contains "\"version\":3"
 
   Scenario: A link that changes nothing still goes with a changed field
     Given the database server is running
