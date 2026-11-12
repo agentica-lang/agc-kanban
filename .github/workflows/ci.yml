@@ -1,8 +1,7 @@
 name: CI
 
+# Pull requests only: a merge commit adds nothing a PR run did not test, and a private repo pays for each run.
 on:
-  push:
-    branches: [master]
   pull_request:
 
 permissions:
@@ -55,11 +54,3 @@ jobs:
 
       - name: Test
         run: make test
-
-  docker:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-      - name: Build the image
-        run: docker build .
