@@ -20,6 +20,8 @@ BOARD_CHANNEL = "BoardChannel"
 LAST = "last"
 BATCH = 100
 TICK_MS = 1_000
+# A crash on the same event this many times in a row is a poison event: the publisher goes on after it.
+MAX_RESTARTS = 5
 
 ## What the writes and the publisher share: the nudge channel (one place, a nudge while one waits is enough).
 export struct Cable
@@ -74,20 +76,49 @@ def board_subscribed(session: Channels.Session, params: Json) -> Result[Channels
   ok(Channels.Subscription(streams: ["board:#{board}"]))
 end
 
-# Runs the publisher and runs it again after a crash (a runtime error in a task ends only that task).
+# Runs the publisher and runs it again after a crash (a runtime error in a task ends only that task). A crash that
+# repeats with the cursor at the same place means one event always fails: after MAX_RESTARTS the cursor moves past it,
+# so the live feed does not stay stuck forever. The skipped event stays in the journal, and a client sees it on reload.
 def supervise(job: Publisher) -> Void
+  failures = 0
+  stuck_at = job.cursor.get(LAST).unwrap_or(0)
   while not job.wake.closed?
     outcome = Task.await(Task.spawn(&publish, job))
     if not outcome.ok?
       IO.warn("kanban: the live publisher stopped, starting it again: #{outcome.message}")
+      at = job.cursor.get(LAST).unwrap_or(0)
+      if at == stuck_at
+        failures += 1
+      else
+        failures = 1
+        stuck_at = at
+      end
+
+      if failures >= MAX_RESTARTS
+        skip_poison(job)
+        failures = 0
+      end
+
       Task.sleep(TICK_MS)
     end
   end
 end
 
-# The live broadcast starts at the newest event, so that history is not replayed. A failed read leaves the
-# cursor unset:
-# replaying the journal from 0 would flood the clients.
+# Moves the cursor over the next event, the one that the publisher cannot handle.
+def skip_poison(job: Publisher) -> Void
+  cursor = job.cursor.get(LAST)
+  return if not cursor.ok?
+
+  next_event = Events.published_after(job.pool, cursor.unwrap!, 1)
+  return if not next_event.ok? or next_event.unwrap!.empty?
+
+  bad = next_event.unwrap![0].event.id
+  IO.warn("kanban: skipping the event #{bad} after #{MAX_RESTARTS} crashes of the live publisher")
+  job.cursor.put(LAST, bad)
+end
+
+# The live broadcast starts at the newest event, so that history is not replayed. A failed read leaves the cursor
+# unset: replaying the journal from 0 would flood the clients.
 def seeded?(job: Publisher) -> Bool
   return true if job.cursor.get(LAST).ok?
 
@@ -124,7 +155,8 @@ def flush(job: Publisher) -> Void
   end
 
   for item in found.unwrap!
-    # A failed broadcast is logged and dropped: the journal still has the event.
+    # A failed broadcast is logged and dropped, and the cursor moves on: a client can miss that event in its feed until
+    # it reloads. The journal still has it, and the board itself is fetched again after each event.
     result = Channels.broadcast_json(job.hub, "board:#{item.slug}", payload(item.event))
     if not result.ok?
       IO.warn("kanban: broadcast failed: #{result.message}")

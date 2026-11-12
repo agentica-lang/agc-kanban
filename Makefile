@@ -33,6 +33,11 @@ up:
 down:
 	docker compose down
 # The built files (public/assets/ and src/kanban_web/asset_names.agc) are not in git: run, check and test build them.
-assets:
+# The stamp makes the build run again only when its inputs change, or when the built files are gone.
+ASSET_INPUTS = $(shell find app -type f) tools/assets.mjs pnpm-lock.yaml package.json
+assets: node_modules/.assets-stamp
+node_modules/.assets-stamp: $(ASSET_INPUTS) $(if $(wildcard src/kanban_web/asset_names.agc),,FORCE)
 	corepack pnpm install --frozen-lockfile
 	node tools/assets.mjs
+	touch $@
+FORCE:

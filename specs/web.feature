@@ -37,6 +37,16 @@ Feature: The web pages
     When I get the page "/api/auth-check" with the session
     Then the response status is 200
 
+  Scenario: A board opened by its number goes to its slug page
+    Given the database server is running
+    When I post a board named "Project" with slug "project" as "agent-1"
+    And I sign in with the key "01234567890123456789012345678901"
+    And I get the page "/boards/1" with the session
+    Then the response status is 302
+    And the response redirects to "/boards/project"
+    When I get the page "/boards/project" with the session
+    Then the response status is 200
+
   Scenario: The built assets are served for a year
     Given the test server is running
     When I get the built stylesheet

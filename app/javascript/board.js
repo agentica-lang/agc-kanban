@@ -3,6 +3,7 @@ import { subscribe } from "./cable.js";
 import { render } from "./render.js";
 
 var REFETCH_MS = 80; // a burst of events (a claim and a move) is one fetch
+var RETRY_MS = 2000; // the pause before the one retry of a failed feed fetch
 var PAGE = 30; // events shown at first, and loaded by each "Ver más"
 var NEWEST = Number.MAX_SAFE_INTEGER; // `before` of the newest page
 
@@ -36,14 +37,23 @@ export function startBoard(root, slug) {
     state.feed = Object.keys(byId).map(function (id) { return byId[id]; }).sort(function (a, b) { return b.id - a.id; });
   }
 
+  function showError(error) {
+    root.replaceChildren(h("main", null, h("h1", null, "Board " + slug), h("p", { class: "empty" }, error.message)));
+  }
+
   function load() {
     timer = null;
     return getJSON("/api/boards/" + encodeURIComponent(slug)).then(function (snapshot) {
       state.board = snapshot.board;
       state.cards = snapshot.cards;
       draw();
-    }, function (error) {
-      root.replaceChildren(h("main", null, h("h1", null, "Board " + slug), h("p", { class: "empty" }, error.message)));
+    }, showError);
+  }
+
+  // Runs `task` again once, after a pause, when it fails: a blip of the network must not leave a hole in the feed.
+  function retried(task) {
+    return task().catch(function () {
+      return new Promise(function (resolve) { setTimeout(resolve, RETRY_MS); }).then(task);
     });
   }
 
@@ -56,12 +66,13 @@ export function startBoard(root, slug) {
   }
 
   function loadMore() {
-    loadOlder(oldest()).then(draw);
+    retried(function () { return loadOlder(oldest()); }).then(draw, function () {});
   }
 
-  // The events after `last`, a page at a time, until a short page.
+  // The events after `last`, a page at a time, until a short page. A page is merged only when it arrived, so `last`
+  // (the newest event seen) stays where it was until a fetch succeeds, and the next confirmation asks again from it.
   function catchUp(last) {
-    return getJSON(events + PAGE + "&after=" + last).then(function (answer) {
+    return retried(function () { return getJSON(events + PAGE + "&after=" + last); }).then(function (answer) {
       merge(answer.events);
       if (answer.events.length === PAGE) {
         return catchUp(answer.last_event_id);
@@ -84,14 +95,12 @@ export function startBoard(root, slug) {
   function onSubscribed() {
     var last = newest();
     load();
-    if (last > 0) {
-      catchUp(last).then(draw);
-    }
+    catchUp(last).then(draw, function () {});
   }
 
   loadOlder(NEWEST).then(function () {
     return load();
   }).then(function () {
     subscribe({ channel: "BoardChannel", board: slug }, onEvent, onSubscribed);
-  });
+  }, showError);
 }

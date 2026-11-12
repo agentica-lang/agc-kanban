@@ -47,7 +47,11 @@ export function subscribe(params, onMessage, onSubscribed) {
 
   setInterval(function () {
     if (socket && lastPing && Date.now() - lastPing > STALE_MS) {
-      socket.close();
+      // Reconnect now: the close event of a dead socket can take minutes. `onclose` ignores the old socket.
+      var dead = socket;
+      socket = null;
+      dead.close();
+      open();
     }
   }, 3000);
 

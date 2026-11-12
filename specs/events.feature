@@ -42,6 +42,26 @@ Feature: Board events
     When I get board events for "project" with query "before=1"
     Then the response contains "\"events\":[]"
 
+  Scenario: A backwards page never shows the events of another board
+    Given the database server is running
+    When I post a board named "Project" with slug "project" as "agent-1"
+    And I post a board named "Other" with slug "other" as "agent-2"
+    When I get board events for "other" with query "before=100"
+    Then the response status is 200
+    And the response contains "agent-2"
+    And the response does not contain "agent-1"
+
+  Scenario: A backwards page can be limited to one card
+    Given the database server is running
+    When I post a board named "Project" with slug "project" as "agent-1"
+    And I add a card titled "First"
+    And I add a card titled "Second"
+    When I get board events for "project" with query "before=100&card=1"
+    Then the response status is 200
+    And the response contains "\"id\":2,\"kind\""
+    And the response does not contain "\"id\":3,\"kind\""
+    And the response does not contain "\"id\":1,\"kind\""
+
   Scenario Outline: A bad backwards cursor is rejected
     Given the database server is running
     When I post a board named "Project" with slug "project" as "agent-1"
