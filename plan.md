@@ -150,10 +150,14 @@ src/kanban/            the domain, no HTTP: boards.agc, columns.agc, cards.agc,
                        config.agc, codes.agc (error codes)
 src/kanban/repo/       database.agc (migrate, pool, with_connection, busy?),
                        migrations.agc, migrations/m0001_*.agc ..., rows.agc
-src/kanban_web/        app.agc (start), routes.agc, auth.agc (apikey filter,
-                       /login, session), api.agc (JSON handlers), cable.agc
-                       (channels and broadcasts), views.agc (EAG page shell),
-                       asset_names.agc (written by make assets)
+src/kanban_web/        app.agc (build: the filter and the router), routes.agc
+                       (paths), router.agc (the route table), auth.agc (apikey
+                       filter, /login, session), failure.agc (domain error to
+                       HTTP), params.agc (body and query), answers.agc (shared
+                       envelopes), health.agc, controllers/ (one module per
+                       resource), cable.agc (channels and broadcasts),
+                       views.agc (EAG page shell), asset_names.agc (written by
+                       make assets)
 src/kanban_cli/        config.agc (env and file), client.agc (HTTP calls),
                        commands.agc (option_parser specs), output.agc (text
                        and --json), main flow
