@@ -3,6 +3,7 @@ import Regex from "std/regex"
 import Auth from "../auth"
 import Boards from "../../kanban/boards"
 import Database from "../../kanban/repo/database"
+import Overview from "../../kanban/overview"
 import Views from "../views"
 
 export def root(conn: Bond.Conn) -> Result[Bond.Conn] = ok(Bond.redirect(conn, "/boards"))
@@ -25,7 +26,16 @@ end
 ## login.
 export def logout(conn: Bond.Conn) -> Result[Bond.Conn] = ok(Bond.redirect(Bond.clear_session(conn), "/login", 303))
 
-export def boards(conn: Bond.Conn) -> Result[Bond.Conn] = ok(Bond.html(conn, 200, Views.boards()))
+## The home page: every board with its counts. The page is drawn here, in one read of the store.
+export def boards(conn: Bond.Conn, pool: Optional[Database.Pool]) -> Result[Bond.Conn]
+  return ok(Bond.html(conn, 503, Views.boards_unavailable())) if not pool.some?
+
+  now = Time.now_ms()
+  items = Overview.list(pool.unwrap!, now)
+  return ok(Bond.html(conn, 503, Views.boards_unavailable())) if not items.ok?
+
+  ok(Bond.html(conn, 200, Views.boards(items.unwrap!, now)))
+end
 
 ## The page of a board. A board opened by its number goes to its slug URL, because the live events are broadcast to
 ## `board:SLUG` and the script subscribes with what the URL says.
