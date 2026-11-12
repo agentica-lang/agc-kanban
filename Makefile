@@ -1,5 +1,8 @@
 AGENTICA ?= agentica
-JOBS ?= 1
+# Four workers: the GitHub runner has four cores and 8 workers on this box saved only ~3 s more (23 s -> 20 s).
+# Every scenario owns its server (port 0) and data dir (pid + random suffix), so the files can run side by side.
+# JOBS=1 runs them one after another.
+JOBS ?= 4
 
 .PHONY: install run cli install-cli check fmt-check test smoke smoke-docker up down assets FORCE
 install:
