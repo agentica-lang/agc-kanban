@@ -29,7 +29,8 @@ def main() -> Void
     System.exit(1)
   end
 
-  result = Bond.run(App.build(key, some(pool.unwrap!), lease.unwrap!), host, port.unwrap!)
+  assets = System.env("KANBAN_ASSETS_DIR").unwrap_or("public/assets")
+  result = Bond.run(App.build(key, some(pool.unwrap!), lease.unwrap!, assets), host, port.unwrap!)
   Database.close(pool.unwrap!)
   if not result.ok?
     IO.warn(result.message)

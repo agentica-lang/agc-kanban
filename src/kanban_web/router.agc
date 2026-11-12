@@ -8,11 +8,17 @@ import Database from "../kanban/repo/database"
 import Deps from "controllers/deps"
 import Events from "controllers/events"
 import Health from "health"
+import Pages from "controllers/pages"
 import Routes from "routes"
 
-export def install(app: Bond.App, pool: Optional[Database.Pool], lease_minutes: Int) -> Bond.App
+export def install(app: Bond.App, pool: Optional[Database.Pool], lease_minutes: Int, key: String) -> Bond.App
   (
     app
+    |> Bond.get(Routes.ROOT, &Pages.root)
+    |> Bond.get(Routes.LOGIN, &Pages.login_form)
+    |> Bond.post(Routes.LOGIN) do |conn| Pages.login(conn, key) end
+    |> Bond.get(Routes.BOARDS_PAGE, &Pages.boards)
+    |> Bond.get(Routes.BOARD_PAGE, &Pages.board)
     |> Bond.get(Routes.HEALTH) do |conn| Health.health(conn) end
     |> Bond.get(Routes.AUTH_CHECK) do |conn| Health.auth_check(conn) end
     |> Bond.get(Routes.BOARDS) do |conn| Boards.index(conn, pool) end

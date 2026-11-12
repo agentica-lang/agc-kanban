@@ -16,6 +16,12 @@ export struct Page
   last_event_id: Int
 end
 
+## An event with the slug of its board, which names the stream that the live web broadcasts it on.
+export struct Published
+  event: Event
+  slug: String
+end
+
 export def list(pool: Database.Pool, board: String, after: Int, card: Optional[Int], limit: Int) -> Result[Page]
   return error("INVALID:board") if board.empty?
   return error("INVALID:after") if after < 0
@@ -23,6 +29,32 @@ export def list(pool: Database.Pool, board: String, after: Int, card: Optional[I
   return error("INVALID:limit") if limit < 1 or limit > 1000
 
   Database.with_connection(pool) do |conn| Db.transaction(conn) do |tx| read(tx, board, after, card, limit) end end
+end
+
+## The id of the newest event, 0 for none: where the live broadcast starts, so that history is not replayed.
+export def latest_id(pool: Database.Pool) -> Result[Int]
+  Database.with_connection(pool) do |conn|
+    rows = try Db.query(conn, "select coalesce(max(id), 0) as id from events", [])
+    ok(int_of(rows[0], "id"))
+  end
+end
+
+## At most `limit` events after `last`, oldest first, for any board.
+export def published_after(pool: Database.Pool, last: Int, limit: Int) -> Result[List[Published]]
+  Database.with_connection(pool) do |conn|
+    rows = try Db.query(
+      conn,
+      "select e.id, e.board_id, e.card_id, e.kind, e.actor, e.data, e.created_at, b.slug from events e join boards b on b.id = e.board_id where e.id > ? order by e.id limit ?",
+      [Db.Value.Int(last), Db.Value.Int(limit)],
+    )
+
+    published: List[Published] = []
+    for row in rows
+      published = published.push(Published(event: try event(row), slug: text_of(row, "slug")))
+    end
+
+    ok(published)
+  end
 end
 
 def read(conn: Db.Connection, board: String, after: Int, card: Optional[Int], limit: Int) -> Result[Page]
