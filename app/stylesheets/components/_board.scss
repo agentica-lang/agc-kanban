@@ -37,6 +37,50 @@
   &[aria-expanded="true"] { background: var(--panel); color: var(--text); }
 }
 
+// The Filters button: on a wide screen the word and the count ("Filters · 2"); on a phone a funnel with the count as a
+// badge, so the board name keeps the room.
+.toggle-filters {
+  position: relative;
+  width: auto;
+  padding: 0 0.5rem;
+  font: inherit;
+  font-size: 0.8rem;
+  white-space: nowrap;
+
+  &.on { color: var(--accent); border-color: var(--accent); }
+  .filters-icon, .badge { display: none; }
+}
+
+.badge {
+  position: absolute;
+  top: -0.375rem;
+  right: -0.375rem;
+  min-width: 1rem;
+  height: 1rem;
+  padding: 0 0.25rem;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--card);
+  font-size: 0.625rem;
+  font-weight: 600;
+  line-height: 1rem;
+  text-align: center;
+}
+
+// A phone: the header buttons are icons (each keeps its name for screen readers and as a tooltip), and the right
+// padding leaves room only for the Sign out icon.
+@media (max-width: tokens.$narrow) {
+  .top { gap: 0.5rem; padding-right: 3.25rem; }
+  .top h1 { margin-left: 0.25rem; }
+  .toggle-filters {
+    width: 1.75rem;
+    padding: 0;
+
+    .filters-word { display: none; }
+    .filters-icon, .badge { display: block; }
+  }
+}
+
 .banner { flex: none; margin: 0 1rem var(--gap); color: var(--warn); }
 
 // The drawer is positioned against this box on a narrow screen.
@@ -117,6 +161,8 @@
   padding: 0 0.5rem 0 1rem;
 
   h2 { font-size: 0.8rem; text-transform: uppercase; color: var(--muted); }
+  // The title takes the focus when the filters open (Drawer.vue), only as a start point: no ring.
+  h2:focus { outline: none; }
 }
 
 .drawer-close {

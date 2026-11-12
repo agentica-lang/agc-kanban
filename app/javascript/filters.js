@@ -44,6 +44,31 @@ export function search(current, filters) {
   return parts.length > 0 ? "?" + parts.join("&") : "";
 }
 
+// How many filters are on, for the Filters button: each label, the agent and ready count one.
+export function count(filters) {
+  return filters.labels.length + (filters.claimer !== "" ? 1 : 0) + (filters.ready ? 1 : 0);
+}
+
+// The filters that are on, as the chips above the board show them: ready, the agent, then the labels in their order.
+export function activeChips(filters) {
+  var chips = [];
+  if (filters.ready) {
+    chips.push({ kind: "ready", name: "", text: "Ready" });
+  }
+  if (filters.claimer !== "") {
+    chips.push({ kind: "claimer", name: filters.claimer, text: "Agent: " + filters.claimer });
+  }
+  filters.labels.forEach(function (label) {
+    chips.push({ kind: "label", name: label, text: label });
+  });
+  return chips;
+}
+
+// The query of the link of card `id`: the card and the filters, so a new tab opens the same view.
+export function cardSearch(filters, id) {
+  return search("?card=" + id, filters);
+}
+
 export function active(filters) {
   return filters.labels.length > 0 || filters.claimer !== "" || filters.ready;
 }

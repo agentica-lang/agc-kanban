@@ -1,15 +1,16 @@
 <script setup>
-import { computed, onBeforeUnmount, provide, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, provide, ref, watch } from "vue";
 import { useBoard } from "../board_store.js";
 import { useCard } from "../card_store.js";
 import { useDrawer } from "../drawer.js";
 import { useFilters } from "../filter_store.js";
-import { active, matches } from "../filters.js";
+import { active, count, matches } from "../filters.js";
 import { useTheme } from "../theme.js";
 import CardPanel from "./CardPanel.vue";
 import Column from "./Column.vue";
 import Drawer from "./Drawer.vue";
 import FilterBar from "./FilterBar.vue";
+import FilterPanel from "./FilterPanel.vue";
 import Feed from "./Feed.vue";
 
 var props = defineProps({ slug: String });
@@ -32,6 +33,15 @@ provide("openCardId", drawer.card);
 // opens even when it is hidden. A hidden card still counts for the blocked marks below.
 var filter = useFilters();
 provide("filter", filter);
+
+// When the filters panel closes (Escape, ✕, the button, a tap beside it), the focus goes back to the Filters button
+// instead of the page.
+var filtersButton = ref(null);
+watch(panel, function (now, before) {
+  if (before === "filters" && now === "") {
+    nextTick(function () { filtersButton.value.focus(); });
+  }
+});
 
 // Escape closes the panel that is open.
 function onKey(event) {
@@ -73,6 +83,10 @@ var shown = computed(function () {
   return columns.value.reduce(function (sum, entry) { return sum + entry.cards.length; }, 0);
 });
 var filtering = computed(function () { return active(filter.filters.value); });
+// The Filters button says how many are on: "Filters · 2".
+var filterCount = computed(function () { return count(filter.filters.value); });
+// A phone shows only the funnel and a badge, so the name says the count too.
+var filtersLabel = computed(function () { return filterCount.value ? "Filters · " + filterCount.value : "Filters"; });
 </script>
 
 <template>
@@ -89,12 +103,17 @@ var filtering = computed(function () { return active(filter.filters.value); });
         <svg v-if="theme.theme.value === 'dark'" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><circle cx="8" cy="8" r="3" fill="currentColor" /><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41M3.05 12.95l1.41-1.41M11.54 4.46l1.41-1.41" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" /></svg>
         <svg v-else viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M13.5 10.2A6 6 0 0 1 5.8 2.5a6 6 0 1 0 7.7 7.7z" fill="currentColor" /></svg>
       </button>
+      <button ref="filtersButton" type="button" class="toggle toggle-filters" :aria-label="filtersLabel" :title="filtersLabel" aria-controls="drawer" :aria-expanded="panel === 'filters'" :class="{ on: filterCount > 0 }" @click="drawer.toggleFilters()">
+        <svg class="filters-icon" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M2 3h12l-4.5 5.5V13l-3-1.5v-3z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" /></svg>
+        <span class="filters-word">{{ filtersLabel }}</span>
+        <span v-if="filterCount" class="badge" aria-hidden="true">{{ filterCount }}</span>
+      </button>
       <button type="button" class="toggle" aria-label="Activity" title="Activity" aria-controls="drawer" :aria-expanded="panel === 'activity'" @click="drawer.toggleActivity()">
         <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M2 3h1.5v1.5H2zM5 3h9v1.5H5zM2 7.25h1.5v1.5H2zM5 7.25h9v1.5H5zM2 11.5h1.5V13H2zM5 11.5h9V13H5z" fill="currentColor" /></svg>
       </button>
     </header>
     <p v-if="state.error" class="banner">Could not refresh the board: {{ state.error }}</p>
-    <FilterBar :store="filter" :cards="state.cards" :shown="shown" />
+    <FilterBar :store="filter" :shown="shown" />
     <div class="board-body">
       <main class="board">
         <Column v-for="entry in columns" :key="entry.column.id" :column="entry.column" :cards="entry.cards" :total="entry.total" :filtering="filtering" :blocked="blocked" :flash="state.flash" />
@@ -103,6 +122,9 @@ var filtering = computed(function () { return active(filter.filters.value); });
       <div v-if="panel !== ''" class="backdrop" aria-hidden="true" @click="drawer.close()"></div>
       <Drawer v-if="panel === 'activity'" title="Activity" @close="drawer.close()">
         <Feed :state="state" />
+      </Drawer>
+      <Drawer v-else-if="panel === 'filters'" title="Filters" focus @close="drawer.close()">
+        <FilterPanel :store="filter" :cards="state.cards" />
       </Drawer>
       <Drawer v-else-if="panel === 'card'" :title="'Card #' + drawer.card.value" @close="drawer.close()">
         <CardPanel :state="card" :slug="slug" @open="drawer.showCard" />

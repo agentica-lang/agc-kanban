@@ -1,12 +1,19 @@
 <script setup>
 import { computed, inject, onBeforeUnmount, ref } from "vue";
 import { GROUPS, byDay, entry, relative } from "../feed.js";
+import { cardSearch } from "../filters.js";
 
 var TICK_MS = 30000; // how often "5 min ago" is worked out again
 
 // The activity of the board as sentences, by day, newest first. An entry of a card opens it in the drawer.
 var props = defineProps({ state: Object });
 var openCard = inject("openCard");
+// The board filters, so the link of an entry opens the same view in a new tab.
+var boardFilter = inject("filter");
+
+function cardHref(id) {
+  return cardSearch(boardFilter.filters.value, id);
+}
 var now = ref(Date.now());
 var tick = setInterval(function () { now.value = Date.now(); }, TICK_MS);
 onBeforeUnmount(function () { clearInterval(tick); });
@@ -76,7 +83,7 @@ function onClick(event, card) {
       <ul>
         <li v-for="item in one.entries" :key="item.id" :class="['kind-' + item.group, { 'to-done': item.toDone }]">
           <span class="mark" aria-hidden="true"></span>
-          <a v-if="item.card !== null" class="entry" :href="'?card=' + item.card" @click="onClick($event, item.card)">
+          <a v-if="item.card !== null" class="entry" :href="cardHref(item.card)" @click="onClick($event, item.card)">
             <span class="sentence">
               <b>{{ item.actor }}</b> {{ item.verb }} <b class="ref">#{{ item.card }}</b> <span v-if="item.title" class="title">{{ item.title }}</span>
               <template v-if="item.reordered"> in {{ item.to }}</template>
