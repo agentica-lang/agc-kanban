@@ -42,7 +42,7 @@ watch(function () { return props.flash; }, function (count) {
   <!-- The card is a box with a stretched title link (the whole card opens it) and real buttons above the link for the
        agent and the labels, so no control sits inside another. -->
   <div class="card" :class="['priority-' + card.priority, { changed: flashing, 'card-done': card.done, open: open }]">
-    <a class="title" :href="href" :aria-current="open ? 'true' : null" @click="onClick"><span class="id">#{{ card.id }}</span> {{ card.title }}</a>
+    <a class="title" :href="href" :data-card="card.id" :aria-current="open ? 'true' : null" @click="onClick"><span class="id">#{{ card.id }}</span> {{ card.title }}</a>
     <div class="meta">
       <button v-if="card.claimed_by" type="button" class="claimer pick" :aria-pressed="filter.filters.value.claimer === card.claimed_by" :title="'Filter by ' + card.claimed_by" :style="'--hue:' + hue(card.claimed_by)" @click="filter.claimer(card.claimed_by)">{{ card.claimed_by }}</button>
       <span v-if="blocked" class="blocked">blocked by {{ card.depends_on.map(function (id) { return "#" + id; }).join(" ") }}</span>

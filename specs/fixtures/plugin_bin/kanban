@@ -1,0 +1,3 @@
+#!/bin/sh
+# The hook runs `kanban`; the specs put this stub first on PATH so the hook drives the CLI source.
+exec agentica cli.agc "$@"

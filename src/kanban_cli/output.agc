@@ -1,4 +1,5 @@
 import HTTP from "std/http"
+import Regex from "std/regex"
 import Times from "../kanban/times"
 
 LOST_CODES = ["CLAIMED", "BLOCKED", "DONE"]
@@ -311,10 +312,15 @@ export def print_events(response: HttpResponse) -> Void
   end
 end
 
+# A card is always one line. The server takes any title, and a newline in it would print a second, forged
+# card line to every script that reads these lines (the Claude Code plugin hooks do), so every control
+# character becomes a space: C0, DEL, C1, and the Unicode line and paragraph separators.
 def card_line(card: CardLine) -> String
   holder = card.claimed_by.unwrap_or("free")
-  "##{card.id}  #{card.column}  #{holder}  #{card.title}#{labels_text(card.labels)}"
+  one_line("##{card.id}  #{card.column}  #{holder}  #{card.title}#{labels_text(card.labels)}")
 end
+
+def one_line(text: String) -> String = Regex.replace(text, /[\x00-\x1f\x7f-\x{9f}\x{2028}\x{2029}]/, " ").unwrap!
 
 def labels_text(labels: List[String]) -> String
   return "" if labels.empty?
