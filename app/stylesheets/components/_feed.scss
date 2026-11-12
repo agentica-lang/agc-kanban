@@ -1,8 +1,7 @@
+// The feed is the activity panel of the drawer.
 .feed {
-  padding: 0 1rem 1rem;
   font-size: 0.8rem;
 
-  h2 { font-size: 0.8rem; text-transform: uppercase; color: var(--muted); }
   ul { list-style: none; padding: 0; margin: 0; }
   li { padding: 0.125rem 0; }
   .actor { color: var(--muted); }

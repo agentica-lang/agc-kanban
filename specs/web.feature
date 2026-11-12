@@ -41,6 +41,8 @@ Feature: The web pages
     Then the response status is 200
     And the page names the built stylesheet and script
     And the response contains "Loading..."
+    When I get the page "/boards" with the session
+    Then the response contains "Loading..."
     When I get the page "/api/auth-check" with the session
     Then the response status is 200
 
