@@ -36,7 +36,11 @@ MAX_FAILURES = 5
 # The address of the publisher: a restart gives a new actor a new address, so the writes look it up on each nudge.
 NAMES: ATS[String, Address[Msg]] = ATS.new()
 
+# `Start` gives the actor its context. `init` takes no argument and there are no closures in this version, so the
+# register block of the child, which runs for each new actor (a restart too), sends `Start` first. Until then the
+# state is `none` and the other messages do nothing. The cursor cell inside the context is shared by all the actors.
 enum Msg
+  Start(Publisher)
   Nudge
   Tick
 end
@@ -62,8 +66,14 @@ export def start(pool: Optional[Database.Pool]) -> Cable
   if pool.some?
     cursor: ATS[String, Int] = ATS.new()
     job = Publisher(pool: pool.unwrap!, hub: hub, cursor: cursor, bad: 0, failures: 0)
-    behaviour: Actor.Behaviour[Publisher, Msg] = Actor.Behaviour(init: -> { seeded(job) }, handle: &handle)
-    child = Supervisor.child(PUBLISHER, behaviour) do |address| NAMES.put(PUBLISHER, address) end
+    # One try here, so that a write that follows the start is seen; the actor retries while the read fails.
+    _ = seeded(job)
+    behaviour: Actor.Behaviour[Optional[Publisher], Msg] = Actor.Behaviour(init: &idle, handle: &handle)
+    child = Supervisor.child(PUBLISHER, behaviour) do |address|
+      _ = Actor.cast(address, Msg.Start(job))
+      NAMES.put(PUBLISHER, address)
+    end
+
     _ = Supervisor.start([child])
     _ = Task.spawn(&ticker)
   end
@@ -112,8 +122,20 @@ def cast(message: Msg) -> Void
   end
 end
 
-def handle(job: Publisher, _message: Msg) -> Actor.Step[Publisher]
-  Actor.continue(flush(seeded(job)))
+def idle() -> Optional[Publisher] = none
+
+def handle(state: Optional[Publisher], message: Msg) -> Actor.Step[Optional[Publisher]]
+  case message
+    Msg.Start(job) -> Actor.continue(some(flush(seeded(job))))
+    Msg.Nudge -> Actor.continue(step(state))
+    Msg.Tick -> Actor.continue(step(state))
+  end
+end
+
+def step(state: Optional[Publisher]) -> Optional[Publisher]
+  return none if not state.some?
+
+  some(flush(seeded(state.unwrap!)))
 end
 
 # The live broadcast starts at the newest event, so that history is not replayed. A failed read leaves the cursor
@@ -145,7 +167,7 @@ def flush(job: Publisher) -> Publisher
 
   state = job
   for item in found.unwrap!
-    outcome = Task.await(Task.spawn(&send, state.hub, item))
+    outcome = Task.await(Task.spawn do send(job.hub, item) end)
     if outcome.ok?
       state.cursor.put(LAST, item.event.id)
       state = state.with(bad: 0, failures: 0)
@@ -153,9 +175,7 @@ def flush(job: Publisher) -> Publisher
       id = item.event.id
       failures = Restarts.next_failures(state.bad, state.failures, id)
       IO.warn("kanban: the live send of the event #{id} failed (#{failures}): #{outcome.message}")
-      if failures < MAX_FAILURES
-        return state.with(bad: id, failures: failures)
-      end
+      return state.with(bad: id, failures: failures) if failures < MAX_FAILURES
 
       IO.warn("kanban: skipping the event #{id}; a client sees it on reload")
       state.cursor.put(LAST, id)
