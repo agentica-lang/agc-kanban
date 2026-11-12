@@ -221,9 +221,9 @@ def update_open(conn: Db.Connection, input: Update) -> Result[Boards.Column]
     _ = try Db.execute(conn, "update columns set done = 0 where board_id = ? and done = 1", [Db.Value.Int(board_id)])
   end
 
-  wip = nullable(input.wip_limit)
-  if input.wip_limit.none?
-    wip = nullable(current.wip_limit)
+  wip = case input.wip_limit
+    some(value) -> Db.Value.Int(value)
+    none -> nullable(current.wip_limit)
   end
 
   _ = try Db.execute(

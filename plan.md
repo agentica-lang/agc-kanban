@@ -576,28 +576,30 @@ talks to a running server.
 
 ### Phase 1: server core, API and storage
 
-- [ ] Features first, one per area: `boards.feature`, `columns.feature`,
+- [x] Features first, one per area: `boards.feature`, `columns.feature`,
       `cards.feature`, `claims.feature`, `deps.feature`, `comments.feature`,
-      `events.feature`, `auth.feature`. Steps call the API with `std/http`
-      against the server fixture and assert the status and `error.code`.
+      `events.feature`, `auth.feature`, plus `busy.feature`. Steps call the
+      API with `std/http` against the server fixture and assert the status
+      and `error.code`.
 - [x] Migrations with `Migrate.up`, one file each, as agentica-db's layout:
       `m0001_boards`, `m0002_columns`, `m0003_cards`, `m0004_card_deps`,
       `m0005_comments`, `m0006_events`. `migrations.agc` lists them.
 - [x] `test/migrations_test.agc`: versions go 1 to N, with one migration per version.
-- [ ] `repo/database.agc`: migrate at start, `DbPool` for requests,
+- [x] `repo/database.agc`: migrate at start, `DbPool` for requests,
       `busy?` that maps to 503 `BUSY`.
-- [ ] Domain modules in `src/kanban/`. Each write: one `Db.transaction`,
-      the change, the event row; return the event.
-- [ ] The conditional-update claim, `claim-next`, release, move, done,
+- [x] Domain modules in `src/kanban/`. Each write: one `Db.transaction`,
+      the change, the event row; return the event. Column update/removal
+      and card update keep the same shape.
+- [x] The conditional-update claim, `claim-next`, release, move, done,
       and the rules of "who may change a card".
-- [ ] Dependency add with the recursive-CTE cycle check; `ready` as one
+- [x] Dependency add with the recursive-CTE cycle check; `ready` as one
       SQL query.
-- [ ] The `apikey` filter (constant-time compare) and `X-Kanban-Agent`
+- [x] The `apikey` filter (constant-time compare) and `X-Kanban-Agent`
       validation.
-- [ ] Race scenario: 8 tasks claim the same card at once through HTTP;
+- [x] Race scenario: 8 tasks claim the same card at once through HTTP;
       exactly one gets 200, seven get `CLAIMED`. And: 8 tasks call
       `claim-next` on a board with 8 ready cards; each gets a different card.
-- [ ] One property test with `prop` (agentica-lang/packages): a random
+- [x] One property test with `prop` (agentica-lang/packages): a random
       sequence of add, claim, release, move, done and dep commands by 3
       agents keeps the invariants (one claimer at most, a claimed card is
       never in the done column, no claim of a blocked card, no dependency
@@ -710,15 +712,17 @@ Storage is decided: agentica-db with SQLite.
    - Recommendation: a) in v1, b) in phase 5. Writes from the web need CSRF
      protection and a UI; viewing is the goal. The owner can use the CLI
      meanwhile.
-4. **Claim expiry.**
+4. **Claim expiry.** Decided: configurable, with b) implemented and a)
+   as the default.
    - a) No expiry: a claim lasts until release or done; the owner or the
      orchestrator uses `release --force`. The web shows the claim's age.
-   - b) A lease (for example 30 minutes) that any write by the claimer
-     renews; an expired card is ready again.
-   - Recommendation: a) until the trial in phase 4 says otherwise. Leases
-     add a heartbeat rule that agents must follow, and an agent that thinks
-     for 40 minutes would lose its card. The schema has `lease_until` from
-     the start, so b) needs no migration.
+   - b) A lease that any write by the claimer renews; an expired card is
+     ready again.
+   - `KANBAN_LEASE_MINUTES=0` (the default) keeps claims indefinite, so a)
+     holds. A positive value sets `lease_until`; every write of the holder
+     renews it, and a comment by another agent does not. An expired claim
+     is treated as free. The schema had `lease_until` from the start, so
+     this needed no migration.
 5. **Card ids.**
    - a) One global number (`#12`), as now.
    - b) A per-board number (`auth-12`), as Beads' prefixed ids.
