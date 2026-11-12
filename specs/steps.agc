@@ -16,6 +16,7 @@ def main() -> Void
     BDD.step("I add a card titled {string}", &add_card),
     BDD.step("agent {string} retitles card {int} to {string}", &retitle_card),
     BDD.step("agent {string} forces a new title on card {int} to {string}", &force_retitle_card),
+    BDD.step("agent {string} comments on card {int} with {string}", &comment_card),
     BDD.step("I get card {int}", &get_card),
     BDD.step("I make card {int} depend on card {int}", &add_dependency),
     BDD.step("I remove the dependency of card {int} on card {int}", &remove_dependency),
@@ -460,4 +461,9 @@ end
 def force_retitle_card(ctx: BDD.Context, args: List[String]) -> BDD.Context
   body = JSON.encode(JSON.object({"title": JSON.from(args[2]), "force": JSON.from(true)}))
   api_request_as(ctx, args[0], "PATCH", "/api/cards/#{args[1]}", body)
+end
+
+def comment_card(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  body = JSON.encode(JSON.from({"body": args[2]}))
+  api_request_as(ctx, args[0], "POST", "/api/cards/#{args[1]}/comments", body)
 end

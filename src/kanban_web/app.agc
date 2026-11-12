@@ -4,6 +4,7 @@ import Boards from "../kanban/boards"
 import Cards from "../kanban/cards"
 import Claims from "../kanban/claims"
 import Columns from "../kanban/columns"
+import Comments from "../kanban/comments"
 import Deps from "../kanban/deps"
 import Events from "../kanban/events"
 import Snapshots from "../kanban/snapshots"
@@ -61,6 +62,14 @@ struct UpdateCard
   branch: Optional[String]
   worktree: Optional[String]
   force: Optional[Bool]
+end
+
+struct CommentInput
+  body: String
+end
+
+struct CommentAnswer
+  comment: Cards.Comment
 end
 
 struct CardAnswer
@@ -143,6 +152,7 @@ export def build(key: String, pool: Optional[Database.Pool] = none, lease_minute
     |> Bond.post("/api/cards/:id/claim") do |conn| claim_card(conn, pool, lease_minutes) end
     |> Bond.get("/api/cards/:id") do |conn| show_card(conn, pool) end
     |> Bond.patch("/api/cards/:id") do |conn| update_card(conn, pool, lease_minutes) end
+    |> Bond.post("/api/cards/:id/comments") do |conn| add_comment(conn, pool, lease_minutes) end
     |> Bond.post("/api/boards/:board/columns") do |conn| add_column(conn, pool) end
     |> Bond.patch("/api/columns/:id") do |conn| update_column(conn, pool) end
     |> Bond.delete("/api/columns/:id") do |conn| delete_column(conn, pool) end
@@ -643,4 +653,29 @@ def update_card(conn: Bond.Conn, pool: Optional[Database.Pool], lease_minutes: I
   return ok(failure(conn, result.message)) if not result.ok?
 
   ok(Bond.json_as(conn, 200, CardAnswer.codec, CardAnswer(card: result.unwrap!)))
+end
+
+def add_comment(conn: Bond.Conn, pool: Optional[Database.Pool], lease_minutes: Int) -> Result[Bond.Conn]
+  return ok(reject(conn, 503, "BUSY", "database unavailable")) if not pool.some?
+
+  id = Bond.param_int(conn, "id")
+  return ok(reject(conn, 400, "INVALID", "invalid id", some("id"))) if not id.ok?
+
+  body = Bond.body_text(conn)
+  return ok(reject(conn, 400, "INVALID", "invalid body", some("body"))) if not body.ok?
+
+  decoded = JSON.decode(body.unwrap!, CommentInput)
+  return ok(reject(conn, 400, "INVALID", "invalid body", some("body"))) if not decoded.ok?
+
+  input = Comments.Add(
+    card_id: id.unwrap!,
+    body: decoded.unwrap!.body,
+    actor: Bond.request_header(conn, "X-Kanban-Agent").unwrap_or(""),
+    lease_minutes: lease_minutes,
+  )
+
+  result = Comments.add(pool.unwrap!, input)
+  return ok(failure(conn, result.message)) if not result.ok?
+
+  ok(Bond.json_as(conn, 201, CommentAnswer.codec, CommentAnswer(comment: result.unwrap!)))
 end
