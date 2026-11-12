@@ -1,11 +1,17 @@
 <script setup>
+import { computed } from "vue";
 import { Markdown } from "../markdown.js";
 import CardTimes from "./CardTimes.vue";
 
 // The detail of the open card, read-only. A dependency opens that card in the same panel. A card of another board
 // (a dependency, or `?card=` by hand) gets only a link to its board: the live events of this page are not its own.
-defineProps({ state: Object, slug: String });
+var props = defineProps({ state: Object, slug: String });
 defineEmits(["open"]);
+
+// The newest comment first, so a live one shows at the top. The API (and `kanban card show`) keep the oldest first.
+var comments = computed(function () {
+  return props.state.detail.comments.slice().sort(function (a, b) { return b.created_at - a.created_at || b.id - a.id; });
+});
 
 function when(ms) {
   return new Date(ms).toLocaleString();
@@ -55,8 +61,8 @@ function when(ms) {
     </dl>
     <Markdown v-if="state.detail.card.body" :text="state.detail.card.body" />
     <h4 class="comments-title">Comments ({{ state.detail.comments.length }})</h4>
-    <ol class="comments">
-      <li v-for="comment in state.detail.comments" :key="comment.id">
+    <ol class="comments" reversed>
+      <li v-for="comment in comments" :key="comment.id">
         <div class="by"><b>{{ comment.author }}</b> <time :datetime="new Date(comment.created_at).toISOString()">{{ when(comment.created_at) }}</time></div>
         <Markdown :text="comment.body" />
       </li>
