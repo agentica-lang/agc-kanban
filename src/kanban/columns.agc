@@ -1,6 +1,7 @@
 import Db from "pkg/db/db"
 import Regex from "std/regex"
 import Boards from "boards"
+import Cards from "cards"
 import Database from "repo/database"
 
 export struct Add
@@ -89,7 +90,9 @@ def insert(conn: Db.Connection, input: Add) -> Result[Boards.Column]
     )
   end
 
+  affected: List[Int] = []
   if input.done
+    affected = try card_ids_in_done(conn, board_id)
     _ = try Db.execute(
       conn,
       "update cards set done_at = null, updated_at = ?, version = version + 1 where board_id = ? and column_id in (select id from columns where board_id = ? and done = 1)",
@@ -142,6 +145,7 @@ def insert(conn: Db.Connection, input: Add) -> Result[Boards.Column]
     [Db.Value.Int(now), Db.Value.Int(board_id)],
   )
 
+  try emit_cards(conn, board_id, affected, input.actor, now)
   _ = try Db.execute(
     conn,
     "insert into events (board_id, kind, actor, data, created_at) values (?, ?, ?, ?, ?)",
@@ -205,7 +209,13 @@ def update_open(conn: Db.Connection, input: Update) -> Result[Boards.Column]
     try reorder(conn, board_id, ordered, input.id, position)
   end
 
+  affected: List[Int] = []
   if done and not current.done
+    affected = try card_ids_in_done(conn, board_id)
+    for id in try card_ids_in_column(conn, input.id)
+      affected = affected.push(id)
+    end
+
     _ = try Db.execute(
       conn,
       "update cards set done_at = null, updated_at = ?, version = version + 1 where column_id in (select id from columns where board_id = ? and done = 1)",
@@ -238,6 +248,7 @@ def update_open(conn: Db.Connection, input: Update) -> Result[Boards.Column]
     [Db.Value.Int(now), Db.Value.Int(board_id)],
   )
 
+  try emit_cards(conn, board_id, affected, input.actor, now)
   updated = try reload(conn, input.id)
   _ = try Db.execute(
     conn,
@@ -329,6 +340,42 @@ def reorder(conn: Db.Connection, board_id: Int, ordered: List[Db.Row], id: Int, 
       conn,
       "update columns set position = ? where id = ?",
       [Db.Value.Int(index), Db.Value.Int(wanted[index])],
+    )
+  end
+
+  ok()
+end
+
+def card_ids_in_done(conn: Db.Connection, board_id: Int) -> Result[List[Int]]
+  rows = try Db.query(
+    conn,
+    "select id from cards where board_id = ? and column_id in (select id from columns where board_id = ? and done = 1)",
+    [Db.Value.Int(board_id), Db.Value.Int(board_id)],
+  )
+
+  ok(rows.map do |row| int_of(row, "id") end)
+end
+
+def card_ids_in_column(conn: Db.Connection, column_id: Int) -> Result[List[Int]]
+  rows = try Db.query(conn, "select id from cards where column_id = ?", [Db.Value.Int(column_id)])
+  ok(rows.map do |row| int_of(row, "id") end)
+end
+
+# Column writes change cards too, so each affected card gets its own event.
+def emit_cards(conn: Db.Connection, board_id: Int, ids: List[Int], actor: String, now: Int) -> Result[Void]
+  for id in ids
+    card = try Cards.load_at(conn, id, now)
+    _ = try Db.execute(
+      conn,
+      "insert into events (board_id, card_id, kind, actor, data, created_at) values (?, ?, ?, ?, ?, ?)",
+      [
+        Db.Value.Int(board_id),
+        Db.Value.Int(id),
+        Db.Value.Text("card.updated"),
+        Db.Value.Text(actor),
+        Db.Value.Text(JSON.encode(JSON.from(card))),
+        Db.Value.Int(now),
+      ],
     )
   end
 

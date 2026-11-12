@@ -95,24 +95,26 @@ export def show(pool: Database.Pool, id: Int) -> Result[Detail]
   return error("INVALID:id") if id <= 0
 
   Database.with_connection(pool) do |conn|
-    card = try load(conn, id)
-    rows = try Db.query(
-      conn,
-      "select id, card_id, author, body, created_at from comments where card_id = ? order by id",
-      [Db.Value.Int(id)],
-    )
-
-    comments = rows.map do |row|
-      Comment(
-        id: number(row, "id"),
-        card_id: number(row, "card_id"),
-        author: text(row, "author"),
-        body: text(row, "body"),
-        created_at: number(row, "created_at"),
+    Db.transaction(conn) do |tx|
+      card = try load(tx, id)
+      rows = try Db.query(
+        tx,
+        "select id, card_id, author, body, created_at from comments where card_id = ? order by id",
+        [Db.Value.Int(id)],
       )
-    end
 
-    ok(Detail(card: card, comments: comments))
+      comments = rows.map do |row|
+        Comment(
+          id: number(row, "id"),
+          card_id: number(row, "card_id"),
+          author: text(row, "author"),
+          body: text(row, "body"),
+          created_at: number(row, "created_at"),
+        )
+      end
+
+      ok(Detail(card: card, comments: comments))
+    end
   end
 end
 
@@ -188,7 +190,7 @@ export def load_at(conn: Db.Connection, id: Int, now: Int) -> Result[Card]
   rows = try Db.query(
     conn,
     "select c.*, b.slug as board_slug, col.name as column_name, col.done as column_done, case when c.archived_at is null and col.done = 0 and (c.claimed_by is null or c.lease_until <= ?) and not exists (select 1 from card_deps d join cards dep on dep.id = d.depends_on_id join columns dc on dc.id = dep.column_id where d.card_id = c.id and dc.done = 0) then 1 else 0 end as ready from cards c join boards b on b.id = c.board_id join columns col on col.id = c.column_id where c.id = ? and c.archived_at is null",
-    [Db.Value.Int(Time.now_ms()), Db.Value.Int(id)],
+    [Db.Value.Int(now), Db.Value.Int(id)],
   )
 
   return error("NOT_FOUND:card") if rows.empty?

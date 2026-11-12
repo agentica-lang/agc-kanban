@@ -32,7 +32,11 @@ end
 def change(conn: Db.Connection, input: Change, adding: Bool) -> Result[Cards.Card]
   now = Time.now_ms()
   card = try Cards.load_at(conn, input.card_id, now)
-  blocker = try Cards.load_at(conn, input.depends_on, now)
+  blocker: Optional[Cards.Card] = none
+  if adding
+    blocker = some(try Cards.load_at(conn, input.depends_on, now))
+  end
+
   active = card.claimed_by.some? and (not card.lease_until.some? or card.lease_until.unwrap! > now)
   return error("CLAIMED:#{card.claimed_by.unwrap!}") if active and card.claimed_by.unwrap! != input.actor
 
@@ -52,7 +56,7 @@ def change(conn: Db.Connection, input: Change, adding: Bool) -> Result[Cards.Car
     )
 
     return error("CYCLE:dependency") if not cycle.empty?
-    return error("BLOCKED:#{input.depends_on}") if active and not blocker.done
+    return error("BLOCKED:#{input.depends_on}") if active and not blocker.unwrap!.done
 
     _ = try Db.execute(
       conn,
@@ -69,7 +73,16 @@ def change(conn: Db.Connection, input: Change, adding: Bool) -> Result[Cards.Car
     )
   end
 
+  claim: Db.Value = nullable_text(card.claimed_by)
+  claimed_at: Db.Value = nullable_int(card.claimed_at)
   lease: Db.Value = nullable_int(card.lease_until)
+  if card.claimed_by.some? and not active
+    # A lapsed claim is free: drop it, so no claim survives on a now blocked card.
+    claim = Db.Value.Null
+    claimed_at = Db.Value.Null
+    lease = Db.Value.Null
+  end
+
   if active and card.claimed_by.unwrap! == input.actor
     lease = Db.Value.Null
     if input.lease_minutes > 0
@@ -79,8 +92,8 @@ def change(conn: Db.Connection, input: Change, adding: Bool) -> Result[Cards.Car
 
   _ = try Db.execute(
     conn,
-    "update cards set updated_at = ?, version = version + 1, lease_until = ? where id = ?",
-    [Db.Value.Int(now), lease, Db.Value.Int(input.card_id)],
+    "update cards set updated_at = ?, version = version + 1, claimed_by = ?, claimed_at = ?, lease_until = ? where id = ?",
+    [Db.Value.Int(now), claim, claimed_at, lease, Db.Value.Int(input.card_id)],
   )
 
   updated = try Cards.load_at(conn, input.card_id, now)
@@ -110,6 +123,13 @@ def number(row: Db.Row, key: String) -> Int
   case row.get(key, Db.Value.Null)
     Db.Value.Int(value) -> value
     _ -> -1
+  end
+end
+
+def nullable_text(value: Optional[String]) -> Db.Value
+  case value
+    none -> Db.Value.Null
+    some(text) -> Db.Value.Text(text)
   end
 end
 

@@ -46,13 +46,18 @@ def next_open(conn: Db.Connection, input: Next) -> Result[Cards.Card]
   now = Time.now_ms()
   candidates = try Db.query(
     conn,
-    "select c.id from cards c join columns col on col.id = c.column_id where c.board_id = ? and c.archived_at is null and col.done = 0 and (c.claimed_by is null or c.lease_until <= ?) and not exists (select 1 from card_deps d join cards dep on dep.id = d.depends_on_id join columns dc on dc.id = dep.column_id where d.card_id = c.id and dc.done = 0) and (? is null or col.name = ? or cast(col.id as text) = ?) and (? is null or exists (select 1 from json_each(c.labels) j where j.value = ?)) order by c.priority, col.position, c.position, c.id limit 1",
+    "select c.id from cards c join columns col on col.id = c.column_id where c.board_id = ? and c.archived_at is null and col.done = 0 and (c.claimed_by is null or c.lease_until <= ?) and not exists (select 1 from card_deps d join cards dep on dep.id = d.depends_on_id join columns dc on dc.id = dep.column_id where d.card_id = c.id and dc.done = 0) and (? is null or col.name = ? or cast(col.id as text) = ?) and (? is null or exists (select 1 from json_each(c.labels) j where j.value = ?)) order by c.priority, col.position, c.position, c.id limit 8",
     [Db.Value.Int(number(boards[0], "id")), Db.Value.Int(now), column, column, column, label, label],
   )
 
   return error("NO_READY_CARD:board") if candidates.empty?
 
-  acquire(conn, number(candidates[0], "id"), input.actor, input.lease_minutes)
+  for row in candidates
+    claimed = acquire(conn, number(row, "id"), input.actor, input.lease_minutes)
+    return claimed if claimed.ok?
+  end
+
+  error("NO_READY_CARD:board")
 end
 
 def text_value(value: Optional[String]) -> Db.Value

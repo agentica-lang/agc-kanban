@@ -67,6 +67,8 @@ end
 def finish_open(conn: Db.Connection, input: Action) -> Result[Cards.Card]
   now = Time.now_ms()
   card = try Cards.load_at(conn, input.id, now)
+  return error("DONE:card") if card.done
+
   active = card.claimed_by.some? and (not card.lease_until.some? or card.lease_until.unwrap! > now)
   return error("NOT_CLAIMER:card") if not input.force and (not active or card.claimed_by.unwrap! != input.actor)
 

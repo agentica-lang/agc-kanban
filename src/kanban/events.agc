@@ -22,7 +22,7 @@ export def list(pool: Database.Pool, board: String, after: Int, card: Optional[I
   return error("INVALID:card") if card.some? and card.unwrap! <= 0
   return error("INVALID:limit") if limit < 1 or limit > 1000
 
-  Database.with_connection(pool) do |conn| read(conn, board, after, card, limit) end
+  Database.with_connection(pool) do |conn| Db.transaction(conn) do |tx| read(tx, board, after, card, limit) end end
 end
 
 def read(conn: Db.Connection, board: String, after: Int, card: Optional[Int], limit: Int) -> Result[Page]
