@@ -375,8 +375,9 @@ clients agree.
 
 The CLI is `cli.agc`, compiled to `dist/kanban.agcb` by `make cli`.
 `bin/kanban` runs it with `agentica run -- dist/kanban.agcb "$@"`.
-`make install-cli` copies the wrapper to `~/.local/bin/kanban`. Commands and
-flags use `std/option_parser`, one parser per command.
+`make install-cli` symlinks the wrapper into `~/.local/bin/kanban`; the
+wrapper follows the link to find the repo, so it runs the current build.
+Commands and flags use `std/option_parser`, one parser per command.
 
 ### Configuration
 
@@ -439,7 +440,8 @@ no skills installed still learns the rules from the shell alone.
 - `--json`: one JSON document on stdout, the server's answer as is. Errors
   are `{"error": {...}}` on stdout too, so an agent reads one stream.
 - Text errors go to stderr as `kanban: CLAIMED: card 12 is claimed by
-  claude-1`.
+  claude-1`. A usage error prints the code `USAGE`, so it cannot be mistaken
+  for a refusal from the server.
 
 Exit codes:
 
@@ -447,12 +449,13 @@ Exit codes:
 |---|---|
 | 0 | Done. |
 | 1 | The server refused it: `INVALID`, `NOT_FOUND`, `NO_READY_CARD`, `NOT_CLAIMER`, `CYCLE`, `CONFLICT`. |
-| 2 | Bad usage (from `option_parser`), or `KANBAN_AGENT` is missing for a write. |
+| 2 | Bad usage (from `option_parser`), or `KANBAN_AGENT` is missing for a write; the code is `USAGE`. |
 | 3 | No server, `UNAUTHORIZED`, or `BUSY` after 3 tries. |
 | 4 | Lost a race: `CLAIMED`, `BLOCKED` or `DONE`. Pick another card. |
 
-The CLI retries `BUSY` and connection errors 3 times (200 ms, 400 ms,
-800 ms). A claim is safe to retry: claiming a card you hold renews it.
+The CLI retries `BUSY` 3 times (200 ms, 400 ms, 800 ms). A connection failure
+is retried only for `GET`: a write that failed in transport may have arrived,
+and a retry would duplicate it.
 
 ## 6. Live web
 
@@ -623,19 +626,25 @@ and `curl` with the key can run the whole loop by hand.
 
 ### Phase 2: the CLI
 
-- [ ] Features first: `cli_board.feature`, `cli_card.feature`,
+- [x] Features first: `cli_board.feature`, `cli_column.feature`,
+      `cli_card.feature`, `cli_card_flow.feature`, `cli_events.feature`,
       `cli_errors.feature`. Each starts the server fixture, then runs
-      `cli.agc` with `BDD.given_env` (`KANBAN_URL`, `KANBAN_API_KEY`,
-      `KANBAN_AGENT`) and `BDD.given_argument`, and asserts stdout with
-      `I receive a JSON line` and the exit code.
-- [ ] Config order: flags, environment, `config.toml`.
-- [ ] Every command in section 5, with `--json` and text output.
-- [ ] Exit codes 0 to 4 and the `BUSY` retry.
-- [ ] `--body-file` and `-` (stdin) for long text.
-- [ ] `make cli` (compile to `dist/kanban.agcb`), `bin/kanban`,
-      `make install-cli`.
-- [ ] A scenario that runs two CLI processes claiming one card: one exits
+      `cli.agc` in a child process with `KANBAN_URL`, `KANBAN_API_KEY` and
+      `KANBAN_AGENT`, and asserts stdout and the exit code.
+- [x] Config order: flags, environment, `config.toml`.
+- [x] Every command in section 5, with `--json` and text output. Labels and
+      `--depends-on` take a comma-separated list, since a flag cannot repeat.
+- [x] Exit codes 0 to 4 and the `BUSY` retry.
+- [x] `--body-file` and `-` (stdin) for long text.
+- [x] `make cli` (compile to `dist/kanban.agcb`), `bin/kanban`,
+      `make install-cli` (a symlink, so the wrapper still finds the repo).
+- [x] A scenario that runs two CLI processes claiming one card: one exits
       0, the other exits 4.
+- [x] `.agents/skills/kanban-cli/SKILL.md`: how to install the CLI (wrapper,
+      `make cli`, agentica version), the commands and flags with one example
+      each, the config order, the exit codes and the `BUSY` retry. It is the
+      usage skill for the tool, written last in this phase once the surface
+      is stable; the operating rules for agents stay in phase 4.
 
 Done when: every CLI feature passes, and a person can run the full loop
 from a shell with only `bin/kanban`.
@@ -670,7 +679,10 @@ an agent runs CLI commands.
 
 ### Phase 4: the skill and a real trial
 
-- [ ] `skill/agc-kanban/SKILL.md` as in section 7, short.
+- [ ] `skill/agc-kanban/SKILL.md` as in section 7, short: the agent rules
+      (claim before working, comment before a status change, never work a
+      blocked card), separate from the CLI usage skill of phase 2
+      (`.agents/skills/kanban-cli/`).
 - [ ] `kanban prime` prints the same rules; a CLI feature checks that it
       exits 0 and names `card next`.
 - [ ] Install the skill for Claude Code, OpenCode and Codex (each reads a

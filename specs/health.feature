@@ -94,7 +94,7 @@ Feature: Health and API authentication
     Then the program exits with code 2 within 10000 milliseconds
     And stdout includes:
       """
-      "code":"INVALID"
+      "code":"USAGE"
       """
 
   Scenario: Whoami rejects an invalid authentication response
@@ -111,7 +111,7 @@ Feature: Health and API authentication
     Then the program exits with code 2 within 10000 milliseconds
     And stdout includes:
       """
-      "code":"INVALID"
+      "code":"USAGE"
       """
 
     Examples:

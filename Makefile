@@ -1,7 +1,7 @@
 AGENTICA ?= agentica
 JOBS ?= 1
 
-.PHONY: install run cli check fmt-check test smoke smoke-docker up down assets assets-check
+.PHONY: install run cli install-cli check fmt-check test smoke smoke-docker up down assets assets-check
 install:
 	$(AGENTICA) install
 run:
@@ -9,6 +9,9 @@ run:
 cli:
 	mkdir -p dist
 	$(AGENTICA) compile cli.agc -o dist/kanban.agcb
+install-cli: cli
+	mkdir -p "$(HOME)/.local/bin"
+	ln -sf "$(CURDIR)/bin/kanban" "$(HOME)/.local/bin/kanban"
 check:
 	$(AGENTICA) check
 fmt-check:
