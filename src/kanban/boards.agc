@@ -49,6 +49,28 @@ export def list(pool: Database.Pool) -> Result[List[BoardSummary]]
   end
 end
 
+export def get_open(conn: Db.Connection, reference: String) -> Result[Board]
+  return error("INVALID:board") if reference.empty?
+
+  rows = try Db.query(
+    conn,
+    "select id, slug, name, created_at, updated_at from boards where slug = ? or cast(id as text) = ? order by case when slug = ? then 0 else 1 end limit 1",
+    [Db.Value.Text(reference), Db.Value.Text(reference), Db.Value.Text(reference)],
+  )
+
+  return error("NOT_FOUND:board") if rows.empty?
+
+  id = int_of(rows[0], "id")
+  found = try Db.query(
+    conn,
+    "select id, name, position, done, wip_limit from columns where board_id = ? order by position",
+    [Db.Value.Int(id)],
+  )
+
+  columns = found.map do |row| read_column(row) end
+  ok(board(rows[0], columns))
+end
+
 def insert(conn: Db.Connection, name: String, slug: String, actor: String, names: List[String]) -> Result[Board]
   exists = try Db.query(conn, "select id from boards where slug = ?", [Db.Value.Text(slug)])
   return error("CONFLICT:slug") if not exists.empty?
@@ -149,5 +171,20 @@ def summary(row: Db.Row) -> BoardSummary
     name: text_of(row, "name"),
     created_at: int_of(row, "created_at"),
     updated_at: int_of(row, "updated_at"),
+  )
+end
+
+def read_column(row: Db.Row) -> Column
+  wip = case row.get("wip_limit", Db.Value.Null)
+    Db.Value.Int(value) -> some(value)
+    _ -> none
+  end
+
+  Column(
+    id: int_of(row, "id"),
+    name: text_of(row, "name"),
+    position: int_of(row, "position"),
+    done: int_of(row, "done") == 1,
+    wip_limit: wip,
   )
 end

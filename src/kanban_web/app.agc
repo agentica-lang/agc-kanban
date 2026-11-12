@@ -4,6 +4,7 @@ import Boards from "../kanban/boards"
 import Cards from "../kanban/cards"
 import Columns from "../kanban/columns"
 import Events from "../kanban/events"
+import Snapshots from "../kanban/snapshots"
 import Database from "../kanban/repo/database"
 
 struct CreateBoard
@@ -66,6 +67,7 @@ export def build(key: String, pool: Optional[Database.Pool] = none) -> Bond.App
     |> Bond.get("/api/auth-check", &auth_check)
     |> Bond.get("/api/boards") do |conn| list_boards(conn, pool) end
     |> Bond.post("/api/boards") do |conn| create_board(conn, pool) end
+    |> Bond.get("/api/boards/:board") do |conn| show_board(conn, pool) end
     |> Bond.get("/api/boards/:board/cards") do |conn| list_cards(conn, pool) end
     |> Bond.post("/api/boards/:board/cards") do |conn| create_card(conn, pool) end
     |> Bond.get("/api/cards/:id") do |conn| show_card(conn, pool) end
@@ -303,4 +305,13 @@ def query_bool(params: Map[String, List[String]], name: String) -> Result[Option
     some("0") -> ok(some(false))
     _ -> error("invalid boolean")
   end
+end
+
+def show_board(conn: Bond.Conn, pool: Optional[Database.Pool]) -> Result[Bond.Conn]
+  return ok(reject(conn, 503, "BUSY", "database unavailable")) if not pool.some?
+
+  result = Snapshots.get(pool.unwrap!, Bond.param(conn, "board").unwrap_or(""))
+  return ok(failure(conn, result.message)) if not result.ok?
+
+  ok(Bond.json_as(conn, 200, Snapshots.Snapshot.codec, result.unwrap!))
 end

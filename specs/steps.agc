@@ -7,6 +7,7 @@ def main() -> Void
     BDD.step("the database server is running", &start_database_server),
     BDD.step("I post a board named {string} with slug {string} as {string}", &post_board),
     BDD.step("I list boards", &list_boards),
+    BDD.step("I get the project snapshot", &project_snapshot),
     BDD.step("I add a card titled {string}", &add_card),
     BDD.step("I get card {int}", &get_card),
     BDD.step("I list project cards", &list_cards),
@@ -257,4 +258,8 @@ end
 
 def list_cards(ctx: BDD.Context, _args: List[String]) -> BDD.Context
   api_request(ctx, "GET", "/api/boards/project/cards", "")
+end
+
+def project_snapshot(ctx: BDD.Context, _args: List[String]) -> BDD.Context
+  api_request(ctx, "GET", "/api/boards/project", "")
 end

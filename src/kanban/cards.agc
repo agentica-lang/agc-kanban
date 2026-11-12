@@ -109,7 +109,7 @@ export def list(pool: Database.Pool, board: String, filters: Filters) -> Result[
   Database.with_connection(pool) do |conn| Db.transaction(conn) do |tx| list_open(tx, board, filters) end end
 end
 
-def list_open(conn: Db.Connection, board: String, filters: Filters) -> Result[List[Card]]
+export def list_open(conn: Db.Connection, board: String, filters: Filters) -> Result[List[Card]]
   found = try Db.query(
     conn,
     "select id from boards where slug = ? or cast(id as text) = ? order by case when slug = ? then 0 else 1 end limit 1",
