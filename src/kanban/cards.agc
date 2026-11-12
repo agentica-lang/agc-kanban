@@ -3,9 +3,13 @@ import Regex from "std/regex"
 import Database from "repo/database"
 import Times from "times"
 
-# A link is untrusted text shown on the web: http(s) only, a host, and none of the characters that end a URL in HTML or
-# Markdown (space, quotes, angle brackets, backslash and the like), so it stays one plain URL wherever it is printed.
+# A link is untrusted text shown on the web and printed to terminals: http(s) only, a host with no credentials (no `@`
+# before the path), printable ASCII only (an IDN host as punycode, a path percent-encoded) and none of the characters
+# that end a URL in HTML or Markdown (quotes, angle brackets, backslash and the like), so it stays one plain URL
+# wherever it is printed. ASCII only, so LINK_MAX counts bytes. A card holds at most LINKS_MAX links, and an update
+# removes at most LINKS_MAX.
 LINK_MAX = 2048
+LINKS_MAX = 50
 
 export struct Card
   id: Int
@@ -79,8 +83,8 @@ export struct Update
   actor: String
   force: Bool
   lease_minutes: Int
-  # Added after removed, each once and in the order given; adding a link the card has, or removing one it has not, is
-  # no change.
+  # Added after removed, each once and in the order given. Adding a link the card has, or removing one it has not, is
+  # no change: an update of links alone that changes none writes nothing (no version, no event).
   link: List[String] = []
   unlink: List[String] = []
 end
@@ -94,7 +98,7 @@ export def create(pool: Database.Pool, input: Create) -> Result[Card]
     return error("INVALID:labels") if label.strip.empty?
   end
 
-  return error("INVALID:links") if not valid_links?(input.links)
+  return error("INVALID:links") if not valid_links?(input.links) or merged([], input.links).size > LINKS_MAX
 
   for id in input.depends_on
     return error("INVALID:depends_on") if id <= 0
@@ -193,7 +197,7 @@ export def update(pool: Database.Pool, input: Update) -> Result[Card]
 
   return error("INVALID:agent") if not Regex.match?(input.actor, /^[A-Za-z0-9._@\/-]{1,64}$/)
   return error("INVALID:lease") if input.lease_minutes < 0 or input.lease_minutes > 1000000000
-  return error("INVALID:links") if not valid_links?(input.link)
+  return error("INVALID:links") if not valid_links?(input.link) or input.unlink.size > LINKS_MAX
   if input.labels.some?
     for label in input.labels.unwrap!
       return error("INVALID:labels") if label.strip.empty?
@@ -283,6 +287,8 @@ def update_open(conn: Db.Connection, input: Update) -> Result[Card]
   labels = input.labels.unwrap_or(card.labels)
   priority = input.priority.unwrap_or(card.priority)
   links = merged(card.links.select do |url| not input.unlink.include?(url) end, input.link)
+  return error("INVALID:links") if links.size > LINKS_MAX
+  return ok(card) if links_only?(input) and links == card.links
   lease: Db.Value = nullable_number(card.lease_until)
   if active and holder.unwrap! == input.actor and input.lease_minutes > 0
     lease = Db.Value.Int(now + input.lease_minutes * 60000)
@@ -327,9 +333,23 @@ def valid_links?(links: List[String]) -> Bool
   links.all? do |url|
     (
       url.length <= LINK_MAX and
-      Regex.match?(url, /^https?:\/\/[^\s"'<>\\^`{|}\x00-\x1f\x7f\/?#][^\s"'<>\\^`{|}\x00-\x1f\x7f]*$/)
+      Regex.match?(url, /^https?:\/\/[!$-&(-.0-;=A-\[\]_a-z~]+([\/?#][!#-&(-;=?-\[\]_a-z~]*)?$/)
     )
   end
+end
+
+# Only links were asked for: the update is a no-op when they come out the same.
+def links_only?(input: Update) -> Bool
+  others = [
+    input.title.some?,
+    input.body.some?,
+    input.labels.some?,
+    input.priority.some?,
+    input.branch.some?,
+    input.worktree.some?,
+  ]
+
+  not others.any? do |given| given end and not (input.link.empty? and input.unlink.empty?)
 end
 
 # `links` with each of `added` it lacks, in order.
