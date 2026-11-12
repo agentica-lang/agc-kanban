@@ -148,7 +148,7 @@ Feature: Card links
     And the response contains "https://github.com/o/r/issues/50"
     And the response does not contain "https://github.com/o/r/pull/1\""
 
-  Scenario: The holder's lease is renewed by an update whose links change nothing
+  Scenario: The holder's lease is renewed by an update whose links change nothing, a forced one writes nothing
     Given the database server is running with leases of 60 minutes
     When I post a board named "Project" with slug "project" as "agent-1"
     And I add a card titled "Free" with the link "https://github.com/o/r/pull/7"
@@ -159,6 +159,9 @@ Feature: Card links
     And the response contains "\"version\":3"
     When agent "agent-1" links card 1 to "https://github.com/o/r/pull/7"
     Then the response contains "\"version\":1"
+    When agent "agent-2" forcibly links card 2 to "https://github.com/o/r/pull/7"
+    Then the response status is 200
+    And the response contains "\"version\":3"
 
   Scenario: A link that changes nothing still goes with a changed field
     Given the database server is running

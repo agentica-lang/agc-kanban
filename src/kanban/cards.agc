@@ -344,11 +344,10 @@ def valid_links?(links: List[String]) -> Bool
   end
 end
 
-# Only links were asked for: the update is a no-op when they come out the same. A forced update and a lease renewal
-# (`renews`) are asks of their own, so they are not links only.
+# Only links were asked for: the update is a no-op when they come out the same. A lease renewal (`renews`) is an ask
+# of its own, so it is not links only. `force` is not: it only skips the CLAIMED check and stores nothing.
 def links_only?(input: Update, renews: Bool) -> Bool
   others = [
-    input.force,
     renews,
     input.title.some?,
     input.body.some?,
