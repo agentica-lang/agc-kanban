@@ -59,7 +59,7 @@ kanban prime                           # the agent rules, ready for a prompt
 
 kanban board list
 kanban board create "Project" --columns "Todo,Doing,Done"   # last column is the done one
-kanban board create "Project" --slug project   # slug defaults to KANBAN_BOARD
+kanban board create "Project" --slug project   # slug: --slug, else KANBAN_BOARD, else the name
 # without --columns: Todo, Doing, Review, Done
 kanban board show [BOARD]
 
@@ -126,6 +126,16 @@ $ kanban card claim 12
 kanban: CLAIMED: card 12 is claimed by claude-1
 $ kanban card claim 14
 kanban: BLOCKED: card is blocked by #10, #11
+$ kanban bogus
+kanban: USAGE: unknown command bogus
+```
+
+With `--json` the same error is the server document on stdout, every field
+included, and stderr stays empty:
+
+```
+$ kanban card claim 12 --json
+{"error":{"code":"CLAIMED","message":"card is claimed","card_id":12,"claimed_by":"claude-1"}}
 ```
 
 The client retries a `503` after 200, 400 and 800 ms and then exits 3, so a
