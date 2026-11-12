@@ -131,7 +131,14 @@ export function useBoard(slug, listener) {
   }
 
   function onEvent(message) {
-    merge([{ id: message.event_id, kind: message.type, card_id: message.card_id, actor: message.actor }]);
+    merge([{
+      id: message.event_id,
+      kind: message.type,
+      card_id: message.card_id,
+      actor: message.actor,
+      data: message.data,
+      created_at: message.at,
+    }]);
     if (message.card_id !== null) {
       flash(message.card_id);
       listener(message.card_id);
