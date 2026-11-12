@@ -11,7 +11,7 @@ Feature: CLI failures
     Then the response status is 201
     When I run kanban without an agent "card add First --board project"
     Then kanban exits with code 2
-    And kanban output contains "INVALID"
+    And kanban output contains "USAGE"
 
   Scenario: An unknown board is not found
     Given the database server is running
@@ -30,6 +30,7 @@ Feature: CLI failures
     When I run kanban "card claim 1 --board project"
     Then kanban exits with code 4
     And kanban output contains "CLAIMED"
+    And kanban stderr contains "card 1 is claimed by agent-2"
 
   Scenario: Two agents claiming one card end with one 0 and one 4
     Given the database server is running
@@ -92,6 +93,7 @@ Feature: CLI failures
     When I run kanban "card done 1 --board project"
     Then kanban exits with code 1
     And kanban output contains "NOT_CLAIMER"
+    And kanban stderr contains "does not hold the claim"
     When I run kanban "card done 1 --board project --force"
     Then kanban exits with code 0
 

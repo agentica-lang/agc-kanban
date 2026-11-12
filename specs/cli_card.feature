@@ -67,7 +67,7 @@ Feature: CLI cards
     And kanban output contains "[ui, api]"
     When I run kanban "card update 1 --board project"
     Then kanban exits with code 2
-    And kanban output contains "INVALID"
+    And kanban output contains "USAGE"
 
   Scenario: A missing card is not found
     Given the database server is running

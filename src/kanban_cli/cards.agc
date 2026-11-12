@@ -105,7 +105,7 @@ def list(words: List[String]) -> Result[Void]
   claimed = OP.optional_string(parsed, "claimed-by")
   if OP.flag(parsed, "mine")
     if config.agent.empty?
-      Output.fail(config.json, "INVALID", "--mine needs KANBAN_AGENT or --agent", 2)
+      Output.fail(config.json, "USAGE", "--mine needs KANBAN_AGENT or --agent", 2)
     end
 
     claimed = some(config.agent)
@@ -205,7 +205,7 @@ def update(words: List[String]) -> Result[Void]
   end
 
   if fields.empty?
-    Output.fail(config.json, "INVALID", "nothing to update: pass a field", 2)
+    Output.fail(config.json, "USAGE", "nothing to update: pass a field", 2)
   end
 
   response = Output.expect(

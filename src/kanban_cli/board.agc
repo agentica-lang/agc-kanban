@@ -53,7 +53,7 @@ def create(words: List[String]) -> Result[Void]
   parsed = try OP.parse(parser, words)
   config = try Settings.load(Settings.read_flags(parsed))
   if config.agent.empty?
-    Output.fail(config.json, "INVALID", "KANBAN_AGENT is required for writes", 2)
+    Output.fail(config.json, "USAGE", "KANBAN_AGENT is required for writes", 2)
   end
 
   body = JSON.encode(JSON.object(payload(parsed, config)))
@@ -92,7 +92,7 @@ def show(words: List[String]) -> Result[Void]
   end
 
   if reference.empty?
-    Output.fail(config.json, "INVALID", "board is required: pass BOARD or set KANBAN_BOARD", 2)
+    Output.fail(config.json, "USAGE", "board is required: pass BOARD or set KANBAN_BOARD", 2)
   end
 
   response = Output.expect(Client.get(Client.from(config), "/api/boards/#{reference}"), config.json)

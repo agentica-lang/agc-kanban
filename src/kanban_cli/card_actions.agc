@@ -162,7 +162,7 @@ def comment(words: List[String]) -> Result[Void]
 
   body = try Input.text(text, OP.optional_string(parsed, "file"))
   if body.none?
-    Output.fail(config.json, "INVALID", "a comment needs text or --file", 2)
+    Output.fail(config.json, "USAGE", "a comment needs text or --file", 2)
   end
 
   fields: Map[String, Json] = {"body": JSON.from(body.unwrap!)}

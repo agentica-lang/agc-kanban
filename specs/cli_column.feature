@@ -48,7 +48,7 @@ Feature: CLI columns
     Given the database server is running
     When I run kanban "column add Testing"
     Then kanban exits with code 2
-    And kanban output contains "INVALID"
+    And kanban output contains "USAGE"
 
   Scenario: An unknown column is not found
     Given the database server is running

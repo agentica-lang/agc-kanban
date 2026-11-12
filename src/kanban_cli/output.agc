@@ -11,6 +11,18 @@ struct ErrorOutput
   error: Failure
 end
 
+# A loss carries who holds the card, so the CLI can say it in one line.
+struct ClaimedFailure
+  code: String
+  message: String
+  card_id: Int
+  claimed_by: String
+end
+
+struct ClaimedOutput
+  error: ClaimedFailure
+end
+
 struct BoardLine
   id: Int
   slug: String
@@ -141,10 +153,10 @@ export def refuse(json: Bool, response: HttpResponse) -> Void
   case response.status
     400, 404, 409 ->
       if LOST_CODES.include?(code)
-        fail(json, code, message_of(response), 4)
+        fail(json, code, human_message(code, response), 4)
       end
 
-      fail(json, code, message_of(response), 1)
+      fail(json, code, human_message(code, response), 1)
     401 -> fail(json, "UNAUTHORIZED", "authentication failed", 3)
     503 -> fail(json, "BUSY", "server is busy", 3)
     _ -> fail(json, "UNAVAILABLE", "server returned #{response.status}", 3)
@@ -277,6 +289,45 @@ def error_code(response: HttpResponse) -> Optional[String]
   return none if not decoded.ok?
 
   some(decoded.unwrap!.error.code)
+end
+
+def human_message(code: String, response: HttpResponse) -> String
+  claimed = JSON.decode(body(response), ClaimedOutput)
+  if claimed.ok?
+    failure = claimed.unwrap!.error
+    if failure.card_id > 0 and not failure.claimed_by.empty?
+      return "card #{failure.card_id} is claimed by #{failure.claimed_by}"
+    end
+  end
+
+  detail(code, message_of(response))
+end
+
+# The server answers `CODE:field`; print the field, not the code twice.
+def detail(code: String, message: String) -> String
+  text = message
+  prefix = "#{code}:"
+  if text.start_with?(prefix)
+    text = text.slice(prefix.length, text.length - prefix.length)
+  end
+
+  return "the server refused the request" if text.empty?
+
+  phrase = text.replace("_", " ")
+  case code
+    "NOT_FOUND" -> "#{phrase} not found"
+    "BLOCKED" -> "#{phrase} is blocked"
+    "DONE" -> "#{phrase} is done"
+    "NOT_CLAIMER" -> holder_phrase(phrase)
+    "INVALID" -> "invalid #{phrase}"
+    _ -> phrase
+  end
+end
+
+def holder_phrase(phrase: String) -> String
+  return phrase if phrase.include?(" ")
+
+  "agent does not hold the #{phrase}"
 end
 
 def message_of(response: HttpResponse) -> String

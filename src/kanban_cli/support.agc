@@ -6,7 +6,7 @@ import Settings from "settings"
 
 export def board_of(config: Settings.Config) -> String
   if config.board.empty?
-    Output.fail(config.json, "INVALID", "board is required: pass --board or set KANBAN_BOARD", 2)
+    Output.fail(config.json, "USAGE", "board is required: pass --board or set KANBAN_BOARD", 2)
   end
 
   config.board
@@ -14,7 +14,7 @@ end
 
 export def require_agent(config: Settings.Config) -> Void
   if config.agent.empty?
-    Output.fail(config.json, "INVALID", "KANBAN_AGENT is required for writes", 2)
+    Output.fail(config.json, "USAGE", "KANBAN_AGENT is required for writes", 2)
   end
 end
 

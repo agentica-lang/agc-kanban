@@ -38,4 +38,4 @@ Feature: CLI boards
     Given the database server is running
     When I run kanban "board nope"
     Then kanban exits with code 2
-    And kanban output contains "INVALID"
+    And kanban output contains "USAGE"

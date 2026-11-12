@@ -22,7 +22,7 @@ export def main() -> Void
       return
     end
 
-    Output.fail(Output.json_requested?(words), "INVALID", OP.message(result.message), 2)
+    Output.fail(Output.json_requested?(words), "USAGE", OP.message(result.message), 2)
   end
 end
 
