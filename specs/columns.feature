@@ -61,5 +61,8 @@ Feature: Board columns
     And the response contains "\"done\":true"
     When I mark column 4 as done
     Then the response status is 200
+    When I get the project snapshot
+    Then the response status is 200
+    And the response contains exactly 1 occurrences of "\"done\":true"
     When I get board events for "project" after 1
     Then the response contains "column.updated"

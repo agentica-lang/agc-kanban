@@ -13,6 +13,7 @@ Feature: Card claims
     Then the response status is 409
     And the response contains "CLAIMED"
     And the response contains "agent-1"
+    And the response contains "\"card_id\":1"
     When agent "agent-1" claims card 1
     Then the response status is 200
 

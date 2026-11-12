@@ -111,6 +111,7 @@ end
 struct ClaimedError
   code: String
   message: String
+  card_id: Int
   claimed_by: String
 end
 
@@ -161,7 +162,8 @@ export def build(key: String, pool: Optional[Database.Pool] = none, lease_minute
 end
 
 def authorize(conn: Bond.Conn, key: String) -> Result[Bond.Conn]
-  return ok(conn) if conn.path == "/api/health" or not conn.path.start_with?("/api/")
+  # Public by name, never by prefix: a page added later must opt in explicitly.
+  return ok(conn) if conn.path == "/api/health"
 
   given = Bond.request_header(conn, "apikey").unwrap_or("")
   if not OpenSSL.HMAC.secure_compare(given.bytes, key.bytes)
@@ -222,14 +224,22 @@ def create_board(conn: Bond.Conn, pool: Optional[Database.Pool]) -> Result[Bond.
   ok(Bond.json_as(conn, 201, BoardAnswer.codec, BoardAnswer(board: created.unwrap!)))
 end
 
-def failure(conn: Bond.Conn, message: String) -> Bond.Conn
+def failure(conn: Bond.Conn, message: String, card_id: Optional[Int] = none) -> Bond.Conn
   if message.start_with?("INVALID:")
     return reject(conn, 400, "INVALID", message, some(message.slice(8, message.length - 8)))
   end
 
   if message.start_with?("CLAIMED:")
     holder = message.slice(8, message.length - 8)
-    answer = ClaimedAnswer(error: ClaimedError(code: "CLAIMED", message: "card is claimed", claimed_by: holder))
+    answer = ClaimedAnswer(
+      error: ClaimedError(
+        code: "CLAIMED",
+        message: "card is claimed",
+        card_id: card_id.unwrap_or(0),
+        claimed_by: holder,
+      ),
+    )
+
     return Bond.json_as(conn, 409, ClaimedAnswer.codec, answer).with(halted: true)
   end
 
@@ -432,7 +442,7 @@ def claim_card(conn: Bond.Conn, pool: Optional[Database.Pool], lease_minutes: In
 
   actor = Bond.request_header(conn, "X-Kanban-Agent").unwrap_or("")
   result = Claims.claim(pool.unwrap!, id.unwrap!, actor, lease_minutes)
-  return ok(failure(conn, result.message)) if not result.ok?
+  return ok(failure(conn, result.message, some(id.unwrap!))) if not result.ok?
 
   ok(Bond.json_as(conn, 200, CardAnswer.codec, CardAnswer(card: result.unwrap!)))
 end
@@ -480,7 +490,7 @@ def done_card(conn: Bond.Conn, pool: Optional[Database.Pool]) -> Result[Bond.Con
   )
 
   result = Transitions.finish(pool.unwrap!, input)
-  return ok(failure(conn, result.message)) if not result.ok?
+  return ok(failure(conn, result.message, some(id.unwrap!))) if not result.ok?
 
   ok(Bond.json_as(conn, 200, CardAnswer.codec, CardAnswer(card: result.unwrap!)))
 end
@@ -505,7 +515,7 @@ def release_card(conn: Bond.Conn, pool: Optional[Database.Pool]) -> Result[Bond.
   )
 
   result = Transitions.release(pool.unwrap!, input)
-  return ok(failure(conn, result.message)) if not result.ok?
+  return ok(failure(conn, result.message, some(id.unwrap!))) if not result.ok?
 
   ok(Bond.json_as(conn, 200, CardAnswer.codec, CardAnswer(card: result.unwrap!)))
 end
@@ -532,7 +542,7 @@ def move_card(conn: Bond.Conn, pool: Optional[Database.Pool], lease_minutes: Int
   )
 
   result = Transitions.move(pool.unwrap!, input)
-  return ok(failure(conn, result.message)) if not result.ok?
+  return ok(failure(conn, result.message, some(id.unwrap!))) if not result.ok?
 
   ok(Bond.json_as(conn, 200, CardAnswer.codec, CardAnswer(card: result.unwrap!)))
 end
@@ -557,7 +567,7 @@ def add_dependency(conn: Bond.Conn, pool: Optional[Database.Pool], lease_minutes
   )
 
   result = Deps.add(pool.unwrap!, input)
-  return ok(failure(conn, result.message)) if not result.ok?
+  return ok(failure(conn, result.message, some(id.unwrap!))) if not result.ok?
 
   ok(Bond.json_as(conn, 201, CardAnswer.codec, CardAnswer(card: result.unwrap!)))
 end
@@ -650,7 +660,7 @@ def update_card(conn: Bond.Conn, pool: Optional[Database.Pool], lease_minutes: I
   )
 
   result = Cards.update(pool.unwrap!, input)
-  return ok(failure(conn, result.message)) if not result.ok?
+  return ok(failure(conn, result.message, some(id.unwrap!))) if not result.ok?
 
   ok(Bond.json_as(conn, 200, CardAnswer.codec, CardAnswer(card: result.unwrap!)))
 end

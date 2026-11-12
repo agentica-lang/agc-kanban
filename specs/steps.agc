@@ -41,6 +41,10 @@ def main() -> Void
     BDD.step("I mark column {int} as done", &mark_column_done),
     BDD.step("I get board events for {string} after {int}", &board_events),
     BDD.step("the response contains {string}", &response_contains),
+    BDD.step("the response does not contain {string}", &response_lacks),
+    BDD.step("the response contains exactly {int} occurrences of {string}", &response_occurrences),
+    BDD.step("I list project cards with query {string}", &list_cards_query),
+    BDD.step("agent {string} claims the next card", &claim_next),
     BDD.step("an unrelated server is running", &start_unrelated),
     BDD.step("a server with broken authentication is running", &start_broken),
     BDD.step("a transient server is running", &start_transient),
@@ -160,7 +164,7 @@ end
 def start_database_server(ctx: BDD.Context, _args: List[String]) -> BDD.Context
   home = System.env("HOME").unwrap!
   Dir.mkdir("#{home}/.cache").unwrap!
-  dir = "#{home}/.cache/kanban-bdd-#{System.pid()}"
+  dir = "#{home}/.cache/kanban-bdd-#{System.pid()}-#{Random.int(0, 999_999)}"
   configured = BDD.given_env(ctx, "KANBAN_DATA_DIR", dir)
   started = BDD.given_program(configured, "fixtures/database_server.agc")
   hooked = BDD.after(started) do |last| cleanup_database(last, dir) end
@@ -172,7 +176,7 @@ end
 def start_busy_database_server(ctx: BDD.Context, _args: List[String]) -> BDD.Context
   home = System.env("HOME").unwrap!
   Dir.mkdir("#{home}/.cache").unwrap!
-  dir = "#{home}/.cache/kanban-bdd-busy-#{System.pid()}"
+  dir = "#{home}/.cache/kanban-bdd-busy-#{System.pid()}-#{Random.int(0, 999_999)}"
   configured = BDD.given_env(ctx, "KANBAN_DATA_DIR", dir)
   started = BDD.given_program(configured, "fixtures/busy_database_server.agc")
   hooked = BDD.after(started) do |last| cleanup_database(last, dir) end
@@ -226,7 +230,6 @@ end
 def cleanup_database(ctx: BDD.Context, dir: String) -> Result[Void]
   closed = BDD.when_eof(ctx)
   _ = BDD.then_exit(closed, 0, 30000)
-  try Path.remove("#{dir}/kanban.sqlite3")
   Path.remove(dir)
 end
 
@@ -510,4 +513,23 @@ def post_board_locked(ctx: BDD.Context, _args: List[String]) -> BDD.Context
   _ = Db.execute(conn, "rollback", []).unwrap!
   Db.close(conn)
   answered
+end
+
+def response_lacks(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  body = JSON.string(BDD.get(ctx, "body").unwrap!).unwrap!
+  BDD.assert(ctx, not body.include?(args[0]), "response was #{body}")
+end
+
+def response_occurrences(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  body = JSON.string(BDD.get(ctx, "body").unwrap!).unwrap!
+  found = body.split(args[1]).size - 1
+  BDD.assert(ctx, found == args[0].to_i!, "found #{found} of #{args[1]} in #{body}")
+end
+
+def list_cards_query(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  api_request(ctx, "GET", "/api/boards/project/cards?#{args[0]}", "")
+end
+
+def claim_next(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  api_request_as(ctx, args[0], "POST", "/api/boards/project/claim-next", "{}")
 end

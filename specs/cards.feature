@@ -72,3 +72,38 @@ Feature: Cards
     Then the response contains "Implement API"
     When I get board events for "project" after 2
     Then the response contains "\"events\":[]"
+
+  Scenario: Filters run in SQL and reject a bad boolean
+    Given the database server is running
+    When I post a board named "Project" with slug "project" as "agent-1"
+    Then the response status is 201
+    When I add a card titled "First"
+    Then the response status is 201
+    When I add a card titled "Second"
+    Then the response status is 201
+    When I make card 2 depend on card 1
+    Then the response status is 201
+    When I list project cards with query "ready=1"
+    Then the response status is 200
+    And the response contains "First"
+    And the response does not contain "Second"
+    When I list project cards with query "ready=yes"
+    Then the response status is 400
+    And the response contains "INVALID"
+    When I list project cards with query "done=1"
+    Then the response status is 200
+    And the response does not contain "First"
+
+  Scenario: Claim next with nothing ready is not found
+    Given the database server is running
+    When I post a board named "Project" with slug "project" as "agent-1"
+    Then the response status is 201
+    When I add a card titled "Only"
+    Then the response status is 201
+    When agent "agent-1" claims card 1
+    Then the response status is 200
+    When agent "agent-1" marks card 1 done
+    Then the response status is 200
+    When agent "agent-2" claims the next card
+    Then the response status is 404
+    And the response contains "NO_READY_CARD"

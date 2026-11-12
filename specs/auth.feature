@@ -22,6 +22,19 @@ Feature: API authentication
       | bad agent | 400    | X-Kanban-Agent |
       | agent-1   | 201    | Project        |
 
+  Scenario: An invalid agent names the code and the field
+    Given the database server is running
+    When I create a board named "Project" with key "01234567890123456789012345678901" and agent "bad agent"
+    Then the response status is 400
+    And the response contains "\"code\":\"INVALID\""
+    And the response contains "\"field\":\"X-Kanban-Agent\""
+
+  Scenario: An agent name longer than 64 characters is rejected
+    Given the database server is running
+    When I create a board named "Project" with key "01234567890123456789012345678901" and agent "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    Then the response status is 400
+    And the response contains "INVALID"
+
   Scenario: A wrong key is reported before the agent is validated
     Given the database server is running
     When I create a board named "Project" with key "wrong" and agent "bad agent"
