@@ -82,13 +82,15 @@ def finish_open(conn: Db.Connection, input: Action) -> Result[Cards.Card]
 
   board_id = number(rows[0], "board_id")
   target = number(rows[0], "done_id")
-  positions = try Db.query(
+  # The newest finished card goes on top: make room at position 0 before the card
+  # joins the column, so the shift never touches it and positions stay 0..n-1.
+  _ = try Db.execute(
     conn,
-    "select coalesce(max(position) + 1, 0) as next from cards where column_id = ? and archived_at is null",
-    [Db.Value.Int(target)],
+    "update cards set position = position + 1, version = version + 1, updated_at = ? where column_id = ? and archived_at is null",
+    [Db.Value.Int(now), Db.Value.Int(target)],
   )
 
-  position = number(positions[0], "next")
+  position = 0
   _ = try Db.execute(
     conn,
     "update cards set column_id = ?, position = ?, claimed_by = null, claimed_at = null, lease_until = null, done_at = ?, updated_at = ?, version = version + 1 where id = ?",
@@ -161,7 +163,13 @@ def move_open(conn: Db.Connection, input: Move, release: Bool) -> Result[Cards.C
     [Db.Value.Int(target), Db.Value.Int(input.id)],
   )
 
-  desired = input.position.unwrap_or(number(count[0], "n"))
+  # Into the done column a card goes on top, like finish; any other column appends.
+  fallback = number(count[0], "n")
+  if target_done
+    fallback = 0
+  end
+
+  desired = input.position.unwrap_or(fallback)
   if release and input.column.empty?
     desired = card.position
   end
