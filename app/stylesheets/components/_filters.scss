@@ -55,6 +55,8 @@
 .filters-none { flex: none; margin: 0 1rem var(--gap); }
 
 // A label or an agent on a card is a button that sets the filter.
-.card .pick { font: inherit; line-height: inherit; border: 0; color: inherit; cursor: pointer; }
+// The claimer keeps its white text on its color (_card.scss): only a label takes the card's text color.
+.card .pick { font: inherit; line-height: inherit; border: 0; cursor: pointer; }
+.card .label.pick { color: inherit; }
 .card .label.on { color: var(--card); background: var(--accent); }
 .card .claimer[aria-pressed="true"] { outline: 2px solid var(--accent); outline-offset: 1px; }

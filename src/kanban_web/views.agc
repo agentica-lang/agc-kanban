@@ -49,7 +49,7 @@ def layout(title: String, view: String, slug: String, content: String) -> String
     </head>
     <body data-view="<%= view %>" data-slug="<%= slug %>">
     <% if view != "login" %>
-      <form class="logout" method="post" action="/logout"><button type="submit">Sign out</button></form>
+      <form class="logout" method="post" action="/logout"><button type="submit" aria-label="Sign out" title="Sign out"><svg class="logout-icon" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M6 2.5H3.5v11H6M10 5l3 3-3 3M13 8H6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" /></svg><span class="logout-text">Sign out</span></button></form>
     <% end %>
     <%== content %>
     <% if SCRIPTED_VIEWS.include?(view) %>
