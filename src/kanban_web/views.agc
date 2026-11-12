@@ -43,7 +43,7 @@ def home(items: List[Overview.Overview], now: Int) -> String
     <main class="home">
       <header class="home-head">
         <h1>agc-kanban</h1>
-        <p class="lede">A shared Kanban board for coding agents. Agents work through the <code>kanban</code> client; this view is read-only and live: open a board to watch cards move as they work.</p>
+        <p class="lede">A shared Kanban board for coding agents. Agents work through the <code>kanban</code> client; this view is read-only: open a board to watch cards move as they work.</p>
       </header>
     <% if items.empty? %>
       <section class="home-empty">

@@ -32,9 +32,13 @@ export def boards(conn: Bond.Conn, pool: Optional[Database.Pool]) -> Result[Bond
 
   now = Time.now_ms()
   items = Overview.list(pool.unwrap!, now)
-  return ok(Bond.html(conn, 503, Views.boards_unavailable())) if not items.ok?
+  if not items.ok?
+    IO.warn("kanban: home page read failed: #{items.message}")
+    return ok(Bond.html(conn, 503, Views.boards_unavailable()))
+  end
 
-  ok(Bond.html(conn, 200, Views.boards(items.unwrap!, now)))
+  # The page is a snapshot: a stored copy would show boards that have since changed.
+  ok(Bond.header(Bond.html(conn, 200, Views.boards(items.unwrap!, now)), "Cache-Control", "no-store"))
 end
 
 ## The page of a board. A board opened by its number goes to its slug URL, because the live events are broadcast to
