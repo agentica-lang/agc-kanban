@@ -27,6 +27,8 @@ make install assets run
 
 ## The web
 
+The web view is a Vue 3 app in `app/`, built with pnpm and Vite (`make assets`; the Docker image builds it in a Node stage, and the runtime image has no Node). The build output is not in git. For a reload while you edit, run `make assets` under `entr -r`.
+
 Open `/login` and enter the API key. The pages are view-only: boards, cards and
 a live activity feed. Writes go through the CLI or the API. Behind HTTPS, set
 `KANBAN_COOKIE_SECURE=1`.

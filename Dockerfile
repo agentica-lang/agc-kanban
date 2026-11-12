@@ -11,7 +11,7 @@ RUN corepack enable && pnpm install --frozen-lockfile
 COPY app ./app
 COPY tools/assets.mjs ./tools/assets.mjs
 # The build writes public/assets/ and the file with their names, which stage 2 compiles in.
-RUN mkdir -p src/kanban_web && node tools/assets.mjs
+RUN mkdir -p src/kanban_web && pnpm build
 
 FROM debian:13-slim AS build
 

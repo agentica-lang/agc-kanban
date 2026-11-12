@@ -1,33 +1,40 @@
-// `make assets`: builds the stylesheet (Dart Sass) and the script (esbuild), names each by the first 16 hex digits of
-// the SHA-256 of its bytes (application-DIGEST.css and .js), writes them to public/assets/, removes the files of earlier
-// builds, and writes src/kanban_web/asset_names.agc, the one file that holds the two names. The same sources give the
-// same bytes, so `make assets-check` fails when the build changes a committed file.
+// `make assets` (`pnpm build`): builds the Vue app and its stylesheet with Vite, names each file by the first 16 hex
+// digits of the SHA-256 of its bytes (application-DIGEST.css and .js), writes them to public/assets/, removes the
+// files of earlier builds, and writes src/kanban_web/asset_names.agc, the one file that holds the two names. The same
+// sources give the same bytes. The build runs in memory so that Vite's own file names never reach the folder.
 
 import { createHash } from "node:crypto";
 import { mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import * as esbuild from "esbuild";
-import * as sass from "sass";
+import vue from "@vitejs/plugin-vue";
+import { build } from "vite";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const out = join(root, "public/assets");
 const names = join(root, "src/kanban_web/asset_names.agc");
 
-const css = sass.compile(join(root, "app/stylesheets/application.scss"), { style: "compressed" }).css;
-
-const script = await esbuild.build({
-  entryPoints: [join(root, "app/javascript/application.js")],
-  bundle: true,
-  minify: true,
-  format: "iife",
-  target: "es2017",
-  legalComments: "none",
-  write: false,
-  logLevel: "warning",
+const result = await build({
+  root,
+  configFile: false,
+  logLevel: "warn",
+  plugins: [vue()],
+  define: { __VUE_OPTIONS_API__: false, __VUE_PROD_DEVTOOLS__: false, __VUE_PROD_HYDRATION_MISMATCH_DETAILS__: false },
+  build: {
+    write: false,
+    cssCodeSplit: false,
+    target: "es2020",
+    rollupOptions: {
+      input: join(root, "app/javascript/application.js"),
+      output: { format: "iife" },
+    },
+  },
 });
 
-const built = { css: Buffer.from(css), js: Buffer.from(script.outputFiles[0].contents) };
+const files = (Array.isArray(result) ? result : [result]).flatMap((one) => one.output);
+const script = files.find((file) => file.type === "chunk");
+const sheet = files.find((file) => file.type === "asset" && file.fileName.endsWith(".css"));
+const built = { css: Buffer.from(sheet.source), js: Buffer.from(script.code) };
 
 mkdirSync(out, { recursive: true });
 

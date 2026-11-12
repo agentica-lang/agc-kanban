@@ -1,13 +1,18 @@
 {
   "name": "agc-kanban-assets",
   "private": true,
-  "description": "Build tools of the stylesheet and the script (make assets). Nothing here runs in the server or the specs.",
+  "description": "Build tools of the web view (Vue 3, Vite) and the stylesheet: `pnpm build`, or `make assets`. Nothing here runs in the server or the specs.",
   "packageManager": "pnpm@12.18.0",
   "engines": {
     "node": ">=20"
   },
   "devDependencies": {
-    "esbuild": "0.28.2",
-    "sass": "1.108.0"
+    "@vitejs/plugin-vue": "6.0.10",
+    "sass": "1.108.0",
+    "vite": "8.3.8",
+    "vue": "3.5.45"
+  },
+  "scripts": {
+    "build": "node tools/assets.mjs"
   }
 }

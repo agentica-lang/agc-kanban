@@ -1,31 +1,50 @@
-import { getJSON, h } from "./api.js";
+import { reactive } from "vue";
+import { getJSON } from "./api.js";
 import { subscribe } from "./cable.js";
-import { render } from "./render.js";
 
 var REFETCH_MS = 80; // a burst of events (a claim and a move) is one fetch
 var RETRY_MS = 2000; // the pause before the one retry of a failed feed fetch
-var PAGE = 30; // events shown at first, and loaded by each "Ver más"
+var PAGE = 30; // events shown at first, and loaded by each "Ver m\u00e1s"
 var NEWEST = Number.MAX_SAFE_INTEGER; // `before` of the newest page
+var FLASH_MS = 1700; // a little longer than the CSS flash
 
-// The board page: the snapshot of the API drawn by `render`, fetched again after each event the cable brings and after
-// each confirmed subscription, so a missed broadcast never leaves a wrong board.
+// The one reactive state of the board page: the snapshot of the API (`board`, `cards`) and the feed. It is fetched
+// again after each event the cable brings and after each confirmed subscription, so a missed broadcast never leaves a
+// wrong board. `reconcile` keeps the old object of every card and of the board when it did not change, and the lists are
+// keyed by id, so Vue keeps the DOM node of a card that did not change (the columns and the blocked marks are worked
+// out again on each load, which is cheap) and the scroll, the focus and anything open stay.
 //
 // The feed is the events by id, newest first, with no duplicates (an event can come from the cable and from a fetch).
 // The last PAGE events load first, `before` the oldest shown gives the older ones, and what happened since the newest
 // one seen is read forward with `after`.
-export function startBoard(root, slug) {
+export function useBoard(slug) {
   var events = "/api/boards/" + encodeURIComponent(slug) + "/events?limit=";
-  var state = { board: null, cards: [], feed: [], changed: {}, more: false, loadMore: loadMore };
+  var state = reactive({
+    board: null,
+    cards: [],
+    feed: [],
+    more: false,
+    loading: false,
+    loadError: false,
+    error: "",
+    flash: {},
+    loadMore: loadMore,
+  });
   var timer = null;
+  var requests = 0; // the number of the newest snapshot request: an older answer that comes late is dropped
   var synced = 0; // the newest event id that the feed is known to hold with nothing missing before it
 
-  function draw() {
-    render(root, state);
-    state.changed = {};
+  function same(a, b) {
+    return JSON.stringify(a) === JSON.stringify(b);
   }
 
-  function newest() {
-    return state.feed.length ? state.feed[0].id : 0;
+  function reconcile(snapshot) {
+    var old = {};
+    state.cards.forEach(function (card) { old[card.id] = card; });
+    state.cards = snapshot.cards.map(function (card) { return old[card.id] && same(old[card.id], card) ? old[card.id] : card; });
+    if (!state.board || !same(state.board, snapshot.board)) {
+      state.board = snapshot.board;
+    }
   }
 
   function oldest() {
@@ -38,17 +57,20 @@ export function startBoard(root, slug) {
     state.feed = Object.keys(byId).map(function (id) { return byId[id]; }).sort(function (a, b) { return b.id - a.id; });
   }
 
-  function showError(error) {
-    root.replaceChildren(h("main", null, h("h1", null, "Board " + slug), h("p", { class: "empty" }, error.message)));
-  }
-
+  // A failed refetch keeps the board that is shown and sets `error` (a banner); the next success clears it.
   function load() {
     timer = null;
+    var mine = ++requests;
     return getJSON("/api/boards/" + encodeURIComponent(slug)).then(function (snapshot) {
-      state.board = snapshot.board;
-      state.cards = snapshot.cards;
-      draw();
-    }, showError);
+      if (mine === requests) {
+        state.error = "";
+        reconcile(snapshot);
+      }
+    }, function (error) {
+      if (mine === requests) {
+        state.error = error.message;
+      }
+    });
   }
 
   // Runs `task` again once, after a pause, when it fails: a blip of the network must not leave a hole in the feed.
@@ -72,12 +94,10 @@ export function startBoard(root, slug) {
     }
     state.loading = true;
     state.loadError = false;
-    draw();
     retried(function () { return loadOlder(oldest()); }).catch(function () {
       state.loadError = true;
     }).then(function () {
       state.loading = false;
-      draw();
     });
   }
 
@@ -96,10 +116,21 @@ export function startBoard(root, slug) {
     });
   }
 
+  // A card that an event names flashes once; a counter lets the same card flash again on the next event.
+  function flash(id) {
+    state.flash[id] = (state.flash[id] || 0) + 1;
+    var count = state.flash[id];
+    setTimeout(function () {
+      if (state.flash[id] === count) {
+        delete state.flash[id];
+      }
+    }, FLASH_MS);
+  }
+
   function onEvent(message) {
     merge([{ id: message.event_id, kind: message.type, card_id: message.card_id, actor: message.actor }]);
     if (message.card_id !== null) {
-      state.changed[message.card_id] = true;
+      flash(message.card_id);
     }
     if (timer === null) {
       timer = setTimeout(load, REFETCH_MS);
@@ -107,16 +138,20 @@ export function startBoard(root, slug) {
   }
 
   // Every confirmation, the first too, fetches again: an event that came between the first fetch and the
-  // confirmation was not broadcast to this client. The pages that did arrive are drawn even when a later one fails.
+  // confirmation was not broadcast to this client.
   function onSubscribed() {
     load();
-    catchUp().catch(function () {}).then(draw);
+    catchUp().catch(function () {});
   }
 
   loadOlder(NEWEST).then(function () {
-    synced = newest();
+    synced = state.feed.length ? state.feed[0].id : 0;
     return load();
   }).then(function () {
     subscribe({ channel: "BoardChannel", board: slug }, onEvent, onSubscribed);
-  }, showError);
+  }, function (error) {
+    state.error = error.message;
+  });
+
+  return state;
 }

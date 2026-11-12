@@ -7,6 +7,12 @@ Feature: The web pages
     And the response redirects to "/boards"
     And the response sets the session cookie
 
+  Scenario: The login page has no loading text, because no script draws it
+    Given the test server is running
+    When I get the page "/login"
+    Then the response status is 200
+    And the response does not contain "Loading..."
+
   Scenario: A wrong key does not sign in
     Given the test server is running
     When I sign in with the key "wrong"
@@ -34,6 +40,7 @@ Feature: The web pages
     And I get the page "/boards/project" with the session
     Then the response status is 200
     And the page names the built stylesheet and script
+    And the response contains "Loading..."
     When I get the page "/api/auth-check" with the session
     Then the response status is 200
 
