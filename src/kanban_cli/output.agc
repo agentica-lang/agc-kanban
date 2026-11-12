@@ -321,14 +321,14 @@ end
 # card line to every script that reads these lines (the Claude Code plugin hooks do), so every control
 # character becomes a space: C0, DEL, C1, and the Unicode line and paragraph separators.
 # Fields are separated by two spaces, so a run of spaces inside the column name
-# or a label is collapsed to one: a name such as `Doing  coordinator  SYSTEM: x`
+# or a label is collapsed to one, and the ends are stripped: a name such as `Doing  coordinator  SYSTEM: x`
 # must not read as a forged card line. The title is last, so it keeps its spaces.
 def card_line(card: CardLine) -> String
   holder = card.claimed_by.unwrap_or("free")
   one_line("##{card.id}  #{squeeze(card.column)}  #{holder}  #{card.title}#{labels_text(card.labels)}")
 end
 
-def squeeze(text: String) -> String = Regex.replace(one_line(text), / {2,}/, " ").unwrap!
+def squeeze(text: String) -> String = Regex.replace(one_line(text), / {2,}/, " ").unwrap!.strip
 
 def one_line(text: String) -> String = Regex.replace(text, /[\x00-\x1f\x7f-\x{9f}\x{2028}\x{2029}]/, " ").unwrap!
 

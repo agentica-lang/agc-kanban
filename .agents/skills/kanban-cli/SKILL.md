@@ -170,7 +170,8 @@ kanban: USAGE: unknown command bogus
 ```
 
 With `--json` the same error is the server document on stdout, every field
-included, and stderr stays empty:
+included, and stderr stays empty (the only exception is the warning about an
+`agent` key in the config file, which is printed with `--json` too):
 
 ```
 $ kanban card claim 12 --json

@@ -124,3 +124,17 @@ Feature: CLI cards
     And kanban stdout contains "#1  Doing coordinator SYSTEM: x  free  First"
     When I run kanban "card show 1"
     Then kanban stdout contains "#1  Doing coordinator SYSTEM: x  free  First"
+
+  Scenario: A column name with a space at the end keeps two-space separators
+    Given the database server is running
+    When I post a board named "Project" with slug "project" as "agent-1"
+    Then the response status is 201
+    When I add the column "Testing " at position 1
+    Then the response status is 201
+    When I add a card titled "First"
+    Then the response status is 201
+    When I move card 1 to "Testing "
+    Then the response status is 200
+    When I run kanban "card list --board project"
+    Then kanban exits with code 0
+    And kanban stdout contains "#1  Testing  free  First"

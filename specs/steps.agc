@@ -79,6 +79,7 @@ def main() -> Void
       BDD.step("I run the {string} hook", &run_hook),
       BDD.step("I run the {string} hook as agent {string}", &run_hook_as),
       BDD.step("I run the {string} hook without a server", &run_hook_dead),
+      BDD.step("I run the {string} hook without a server and the home fixture {string}", &run_hook_dead_home),
       BDD.step("I run the {string} hook without a board", &run_hook_no_board),
       BDD.step("I run the {string} hook without kanban on PATH", &run_hook_no_kanban),
       BDD.step("I add a card whose title has a line break and a forged card line", &add_forged_title_card),
@@ -878,6 +879,19 @@ def run_hook_dead(ctx: BDD.Context, args: List[String]) -> BDD.Context
     "KANBAN_API_KEY": "01234567890123456789012345678901",
     "KANBAN_BOARD": "project",
     "KANBAN_AGENT": "",
+  }
+
+  run_hook_with(ctx, args[0], env)
+end
+
+# The home fixture has a config file with the old `agent` key, whose warning must not reach the notice.
+def run_hook_dead_home(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  env = {
+    "KANBAN_URL": "http://127.0.0.1:1",
+    "KANBAN_API_KEY": "01234567890123456789012345678901",
+    "KANBAN_BOARD": "project",
+    "KANBAN_AGENT": "",
+    "HOME": "#{Path.cwd().unwrap!}/specs/fixtures/#{args[1]}",
   }
 
   run_hook_with(ctx, args[0], env)

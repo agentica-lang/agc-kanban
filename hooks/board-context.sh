@@ -71,7 +71,7 @@ if [ "$status" -ne 0 ]; then
   add "agc-kanban: the board could not be read (${reason:-kanban exited with $status}). The URL and the key come from KANBAN_URL and KANBAN_API_KEY or the config file, and \`kanban whoami\` shows what fails. Claims and writes need a working board."
 else
   add "agc-kanban: this project's work queue is a kanban board; the agc-kanban and kanban-cli skills have the rules and the commands."
-  add "Write commands (claim, move, update, comment, release, done) need the agent's own name, from KANBAN_AGENT or --agent; reads do not."
+  add "Every command that writes (and \`card next\`, \`card list --mine\`) needs the agent's own name, from KANBAN_AGENT or --agent; reads do not."
   case $MODE in
     subagent)
       add "A subagent's name comes from its coordinator's brief, and a subagent without one asks its coordinator before any write."
