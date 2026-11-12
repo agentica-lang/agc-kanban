@@ -51,6 +51,9 @@ def main() -> Void
     BDD.step("the home fixture is {string}", &fixture_home),
     BDD.step("a server with an invalid authentication response is running", &start_invalid_auth),
     BDD.step("a server is busy {string}", &start_busy),
+    BDD.step("I run kanban {string}", &run_kanban),
+    BDD.step("kanban exits with code {int}", &kanban_status),
+    BDD.step("kanban output contains {string}", &kanban_output),
     BDD.step("I run whoami with key {string}", &whoami),
     BDD.step("whoami exits with code {int}", &whoami_status),
     BDD.step("I run whoami as JSON with key {string}", &whoami_json),
@@ -532,4 +535,35 @@ end
 
 def claim_next(ctx: BDD.Context, args: List[String]) -> BDD.Context
   api_request_as(ctx, args[0], "POST", "/api/boards/project/claim-next", "{}")
+end
+
+def run_kanban(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  port = JSON.int(BDD.get(ctx, "port").unwrap!).unwrap!
+  process = Process.spawn_captured(
+    "agentica",
+    ["cli.agc"] + args[0].split(" "),
+    Process.Options(
+      env: {
+        "KANBAN_URL": "http://127.0.0.1:#{port}",
+        "KANBAN_API_KEY": "01234567890123456789012345678901",
+        "KANBAN_AGENT": "agent-1",
+      },
+    ),
+  ).unwrap!
+
+  code = Process.wait(process, 30000).unwrap!
+  output = Process.output(process, 30000).unwrap!
+  Process.close(process)
+  stored = BDD.set(ctx, "kanban_exit", JSON.from(code))
+  BDD.set(stored, "kanban_output", JSON.from("#{output.stdout}#{output.stderr}"))
+end
+
+def kanban_status(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  code = JSON.int(BDD.get(ctx, "kanban_exit").unwrap!).unwrap!
+  BDD.assert(ctx, code == args[0].to_i!, "exit was #{code}")
+end
+
+def kanban_output(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  output = JSON.string(BDD.get(ctx, "kanban_output").unwrap!).unwrap!
+  BDD.assert(ctx, output.include?(args[0]), "output was #{output}")
 end

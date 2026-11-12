@@ -628,14 +628,19 @@ and `curl` with the key can run the whole loop by hand.
       `cli.agc` with `BDD.given_env` (`KANBAN_URL`, `KANBAN_API_KEY`,
       `KANBAN_AGENT`) and `BDD.given_argument`, and asserts stdout with
       `I receive a JSON line` and the exit code.
-- [ ] Config order: flags, environment, `config.toml`.
+- [x] Config order: flags, environment, `config.toml`.
 - [ ] Every command in section 5, with `--json` and text output.
 - [ ] Exit codes 0 to 4 and the `BUSY` retry.
 - [ ] `--body-file` and `-` (stdin) for long text.
-- [ ] `make cli` (compile to `dist/kanban.agcb`), `bin/kanban`,
-      `make install-cli`.
+- [x] `make cli` (compile to `dist/kanban.agcb`), `bin/kanban`,
+      `make install-cli` (a symlink, so the wrapper still finds the repo).
 - [ ] A scenario that runs two CLI processes claiming one card: one exits
       0, the other exits 4.
+- [ ] `.agents/skills/kanban-cli/SKILL.md`: how to install the CLI (wrapper,
+      `make cli`, agentica version), the commands and flags with one example
+      each, the config order, the exit codes and the `BUSY` retry. It is the
+      usage skill for the tool, written last in this phase once the surface
+      is stable; the operating rules for agents stay in phase 4.
 
 Done when: every CLI feature passes, and a person can run the full loop
 from a shell with only `bin/kanban`.
@@ -670,7 +675,10 @@ an agent runs CLI commands.
 
 ### Phase 4: the skill and a real trial
 
-- [ ] `skill/agc-kanban/SKILL.md` as in section 7, short.
+- [ ] `skill/agc-kanban/SKILL.md` as in section 7, short: the agent rules
+      (claim before working, comment before a status change, never work a
+      blocked card), separate from the CLI usage skill of phase 2
+      (`.agents/skills/kanban-cli/`).
 - [ ] `kanban prime` prints the same rules; a CLI feature checks that it
       exits 0 and names `card next`.
 - [ ] Install the skill for Claude Code, OpenCode and Codex (each reads a
