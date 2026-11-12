@@ -12,6 +12,7 @@ struct CreateCard
   labels: Optional[List[String]]
   priority: Optional[Int]
   depends_on: Optional[List[Int]]
+  links: Optional[List[String]]
 end
 
 struct UpdateCard
@@ -22,6 +23,8 @@ struct UpdateCard
   branch: Optional[String]
   worktree: Optional[String]
   force: Optional[Bool]
+  link: Optional[List[String]]
+  unlink: Optional[List[String]]
 end
 
 struct CardsAnswer
@@ -47,6 +50,7 @@ export def create(conn: Bond.Conn, pool: Optional[Database.Pool]) -> Result[Bond
     priority: data.priority.unwrap_or(2),
     depends_on: data.depends_on.unwrap_or([]),
     actor: Bond.request_header(conn, "X-Kanban-Agent").unwrap_or(""),
+    links: data.links.unwrap_or([]),
   )
 
   result = Cards.create(pool.unwrap!, input)
@@ -116,6 +120,8 @@ export def update(conn: Bond.Conn, pool: Optional[Database.Pool], lease_minutes:
     actor: Bond.request_header(conn, "X-Kanban-Agent").unwrap_or(""),
     force: data.force.unwrap_or(false),
     lease_minutes: lease_minutes,
+    link: data.link.unwrap_or([]),
+    unlink: data.unlink.unwrap_or([]),
   )
 
   result = Cards.update(pool.unwrap!, input)

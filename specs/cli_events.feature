@@ -46,3 +46,4 @@ Feature: CLI events and prime
     And kanban output contains "card next"
     And kanban output contains "4 somebody else won"
     And kanban output contains "Never mark it done"
+    And kanban output contains "--link URL"

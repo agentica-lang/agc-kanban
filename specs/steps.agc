@@ -19,6 +19,9 @@ def main() -> Void
       BDD.step("I list boards", &list_boards),
       BDD.step("I get the project snapshot", &project_snapshot),
       BDD.step("I add a card titled {string}", &add_card),
+      BDD.step("I add a card titled {string} with the link {string}", &add_linked_card),
+      BDD.step("agent {string} links card {int} to {string}", &link_card),
+      BDD.step("agent {string} unlinks card {int} from {string}", &unlink_card),
       BDD.step("agent {string} retitles card {int} to {string}", &retitle_card),
       BDD.step("agent {string} forces a new title on card {int} to {string}", &force_retitle_card),
       BDD.step("agent {string} comments on card {int} with {string}", &comment_card),
@@ -303,6 +306,21 @@ end
 def add_card(ctx: BDD.Context, args: List[String]) -> BDD.Context
   body = JSON.encode(JSON.from({"title": args[0]}))
   api_request(ctx, "POST", "/api/boards/project/cards", body)
+end
+
+def add_linked_card(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  body = JSON.encode(JSON.object({"title": JSON.from(args[0]), "links": JSON.from([args[1]])}))
+  api_request(ctx, "POST", "/api/boards/project/cards", body)
+end
+
+def link_card(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  body = JSON.encode(JSON.object({"link": JSON.from([args[2]])}))
+  api_request_as(ctx, args[0], "PATCH", "/api/cards/#{args[1]}", body)
+end
+
+def unlink_card(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  body = JSON.encode(JSON.object({"unlink": JSON.from([args[2]])}))
+  api_request_as(ctx, args[0], "PATCH", "/api/cards/#{args[1]}", body)
 end
 
 def get_card(ctx: BDD.Context, args: List[String]) -> BDD.Context

@@ -35,11 +35,13 @@ def add(words: List[String]) -> Result[Void]
       Opt(name: "label"),
       Opt(name: "priority", kind: Kind.Int),
       Opt(name: "depends-on"),
+      Opt(name: "link", help: "a URL to link, repeatable"),
     ] +
     Settings.common_opts(),
   )
 
-  parsed = try OP.parse(parser, words)
+  links = try Input.repeated(words, "link")
+  parsed = try OP.parse(parser, links.rest)
   config = try Settings.load(Settings.read_flags(parsed))
   Support.require_agent(config)
   board = Support.board_of(config)
@@ -60,6 +62,10 @@ def add(words: List[String]) -> Result[Void]
   depends_on = try Input.ids(OP.optional_string(parsed, "depends-on"))
   if not depends_on.empty?
     fields = fields.put("depends_on", JSON.from(depends_on))
+  end
+
+  if not links.values.empty?
+    fields = fields.put("links", JSON.from(links.values))
   end
 
   response = Output.expect(
@@ -177,11 +183,15 @@ def update(words: List[String]) -> Result[Void]
       Opt(name: "branch"),
       Opt(name: "worktree"),
       Opt(name: "force", kind: Kind.Flag),
+      Opt(name: "link", help: "a URL to link, repeatable"),
+      Opt(name: "unlink", help: "a linked URL to remove, repeatable"),
     ] +
     Settings.common_opts(),
   )
 
-  parsed = try OP.parse(parser, words)
+  links = try Input.repeated(words, "link")
+  unlinks = try Input.repeated(links.rest, "unlink")
+  parsed = try OP.parse(parser, unlinks.rest)
   config = try Settings.load(Settings.read_flags(parsed))
   Support.require_agent(config)
   body = try Input.text(OP.optional_string(parsed, "body"), OP.optional_string(parsed, "body-file"))
@@ -198,6 +208,14 @@ def update(words: List[String]) -> Result[Void]
   priority = OP.optional_int(parsed, "priority")
   if priority.some?
     fields = fields.put("priority", JSON.from(priority.unwrap!))
+  end
+
+  if not links.values.empty?
+    fields = fields.put("link", JSON.from(links.values))
+  end
+
+  if not unlinks.values.empty?
+    fields = fields.put("unlink", JSON.from(unlinks.values))
   end
 
   if OP.flag(parsed, "force")

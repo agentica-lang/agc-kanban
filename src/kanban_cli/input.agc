@@ -1,5 +1,10 @@
 # Long text and id lists shared by the card commands.
 
+export struct Repeated
+  values: List[String]
+  rest: List[String]
+end
+
 export def text(body: Optional[String], file: Optional[String]) -> Result[Optional[String]]
   return error("use --body or --body-file, not both") if body.some? and file.some?
 
@@ -24,6 +29,32 @@ export def ids(value: Optional[String]) -> Result[List[Int]]
   end
 
   ok(found)
+end
+
+# The values of an option that may repeat (`--link A --link=B`), taken out of the words before the option parser, which
+# keeps only the last one.
+export def repeated(words: List[String], name: String) -> Result[Repeated]
+  flag = "--#{name}"
+  values: List[String] = []
+  rest: List[String] = []
+  i = 0
+  while i < words.size
+    word = words[i]
+    if word == flag
+      return error("#{flag} needs a value") if i + 1 >= words.size
+
+      values = values.push(words[i + 1])
+      i += 2
+    elsif word.start_with?("#{flag}=")
+      values = values.push(word.slice(flag.length + 1, word.length - flag.length - 1))
+      i += 1
+    else
+      rest = rest.push(word)
+      i += 1
+    end
+  end
+
+  ok(Repeated(values: values, rest: rest))
 end
 
 # `-` reads standard input, so a caller can pipe a long body.

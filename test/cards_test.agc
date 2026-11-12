@@ -102,6 +102,9 @@ def test_update_guards_and_lease_renewal() -> Result[Void]
   try Test.eq(Cards.update(pool, update.with(actor: "bad agent")), error("INVALID:agent"))
   try Test.eq(Cards.update(pool, update.with(labels: some([""]))), error("INVALID:labels"))
   try Test.eq(Cards.update(pool, update.with(lease_minutes: -1)), error("INVALID:lease"))
+  long = "https://example.com/#{"a" * 4980}"
+  try Test.eq(long.length, 5000)
+  try Test.eq(Cards.update(pool, update.with(link: [long])), error("INVALID:links"))
   try Test.eq(try snapshot(pool), before)
 
   _ = try Claims.claim(pool, card.id, "agent-1", 30)
@@ -117,6 +120,10 @@ def test_update_guards_and_lease_renewal() -> Result[Void]
   free = try Cards.update(pool, update.with(actor: "agent-3", title: some("Free")))
   try Test.eq(free.title, "Free")
   try Test.eq(try event_count(pool), 6)
+
+  twenty = (1..20).map do |n| "https://github.com/o/r/pull/#{n}" end
+  linked = try Cards.update(pool, update.with(actor: "agent-3", link: twenty + twenty))
+  try Test.eq(linked.links, twenty)
 
   Database.close(pool)
   try Path.remove("#{dir}/kanban.sqlite3")

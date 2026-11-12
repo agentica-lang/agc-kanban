@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from "vue";
+import { cardLink } from "../links.js";
 import { Markdown } from "../markdown.js";
 import CardTimes from "./CardTimes.vue";
 
@@ -11,6 +12,13 @@ defineEmits(["open"]);
 // The newest comment first, so a live one shows at the top. The API (and `kanban card show`) keep the oldest first.
 var comments = computed(function () {
   return props.state.detail.comments.slice().sort(function (a, b) { return b.created_at - a.created_at || b.id - a.id; });
+});
+
+// The links under the body, each a link only when it is http(s). A card from a server older than links has none.
+var links = computed(function () {
+  return (props.state.detail.card.links || []).map(function (url) {
+    return Object.assign({ url: url }, cardLink(url));
+  });
 });
 
 function when(ms) {
@@ -60,7 +68,16 @@ function when(ms) {
       </template>
     </dl>
     <Markdown v-if="state.detail.card.body" :text="state.detail.card.body" />
-    <h4 class="comments-title">Comments ({{ state.detail.comments.length }})</h4>
+    <template v-if="links.length">
+      <h4 class="section-title">Links ({{ links.length }})</h4>
+      <ul class="links">
+        <li v-for="(link, index) in links" :key="index">
+          <a v-if="link.href" :href="link.href" :title="link.url" target="_blank" rel="noopener noreferrer">{{ link.label }}</a>
+          <span v-else>{{ link.label }}</span>
+        </li>
+      </ul>
+    </template>
+    <h4 class="section-title">Comments ({{ state.detail.comments.length }})</h4>
     <ol class="comments">
       <li v-for="comment in comments" :key="comment.id">
         <div class="by"><b>{{ comment.author }}</b> <time :datetime="new Date(comment.created_at).toISOString()">{{ when(comment.created_at) }}</time></div>
