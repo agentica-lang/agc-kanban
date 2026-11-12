@@ -67,6 +67,13 @@ function run(lines, start, pattern) {
   return items;
 }
 
+// The first MAX_CHARS of `text`, without a high surrogate left alone at the end.
+export function capped(text) {
+  var head = text.slice(0, MAX_CHARS);
+  var last = head.charCodeAt(head.length - 1);
+  return last >= 0xd800 && last <= 0xdbff ? head.slice(0, -1) : head;
+}
+
 export function blocks(text) {
   var lines = text.replace(/\r\n?/g, "\n").split("\n");
   var nodes = [];
@@ -112,9 +119,9 @@ export var Markdown = {
   setup: function (props) {
     return function () {
       var text = props.text || "";
-      var nodes = blocks(text.slice(0, MAX_CHARS));
+      var nodes = blocks(capped(text));
       if (text.length > MAX_CHARS) {
-        nodes.push(h("p", { class: "empty" }, "\u2026 truncated: " + Math.ceil((text.length - MAX_CHARS) / 1000) + " KB more"));
+        nodes.push(h("p", { class: "empty" }, "\u2026 truncated: " + (text.length - capped(text).length) + " more characters"));
       }
       return h("div", { class: "md" }, nodes);
     };

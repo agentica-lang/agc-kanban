@@ -2,7 +2,7 @@
 // is never markup.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { blocks } from "../../app/javascript/markdown.js";
+import { Markdown, blocks, capped } from "../../app/javascript/markdown.js";
 
 var BOUND_MS = 500;
 var HOSTILE = {
@@ -36,4 +36,15 @@ function flat(nodes) {
 test("HTML stays text and only http(s) links are links", function () {
   var out = flat(blocks("<script>x</script> [bad](javascript:alert(1)) [ok](https://a.example/1) https://b.example/2."));
   assert.equal(out, "<p><script>x</script> [bad](javascript:alert(1)) <a https://a.example/1>ok <a https://b.example/2>https://b.example/2.");
+});
+
+test("a text over the cap is cut whole, with no broken character", function () {
+  var text = "a".repeat(49999) + "\u{1F600}" + "b".repeat(1000);
+  var head = capped(text);
+  assert.equal(head.length, 49999);
+  assert.ok(!head.includes("�"));
+  assert.equal(capped("short"), "short");
+  var out = flat([Markdown.setup({ text: text })()]);
+  assert.ok(out.endsWith("<p>\u2026 truncated: 1002 more characters"));
+  assert.ok(!out.includes("\uFFFD") && !/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/.test(out));
 });

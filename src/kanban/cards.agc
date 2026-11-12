@@ -116,7 +116,7 @@ export def show(pool: Database.Pool, id: Int) -> Result[Detail]
       end
 
       now = Time.now_ms()
-      steps = try steps_of(tx, id)
+      steps = (try steps_of(tx, id)).map do |step| named(step, card) end
       ok(Detail(card: card, comments: comments, times: Times.build(steps, card.done, now)))
     end
   end
@@ -469,4 +469,11 @@ def steps_of(conn: Db.Connection, id: Int) -> Result[List[Times.Step]]
       Times.Step(at: number(row, "at"), column_id: number(row, "column_id"), name: text(row, "name"))
     end,
   )
+end
+
+# The column the card is in now goes by its name now, so a stay in a column renamed since says the name it has.
+def named(step: Times.Step, card: Card) -> Times.Step
+  return step if step.column_id != card.column_id
+
+  Times.Step(at: step.at, column_id: step.column_id, name: card.column)
 end

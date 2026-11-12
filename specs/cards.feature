@@ -143,3 +143,8 @@ Feature: Cards
     And the response contains exactly 1 occurrences of "\"name\":\"Temp\""
     And the response contains exactly 1 occurrences of "\"name\":\"Doing\""
     And the response does not contain "\"name\":\"Other\""
+    When I rename column 2 to "In progress"
+    And I get card 1
+    Then the response contains "\"column\":\"In progress\",\"since\":"
+    And the response contains exactly 1 occurrences of "\"name\":\"In progress\""
+    And the response does not contain "\"name\":\"Doing\""
