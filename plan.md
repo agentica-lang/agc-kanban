@@ -651,27 +651,33 @@ from a shell with only `bin/kanban`.
 
 ### Phase 3: the live web
 
-- [ ] Features first: `web.feature` (login sets the cookie, a wrong key
-      does not, `/boards/:slug` needs the session, the page names the
-      fingerprinted assets) and `cable.feature`.
-- [ ] `specs/fixtures/ws_client.agc`: a small WebSocket client in Agentica
-      over `TCP` (handshake, masked text frames, read frames), driven by a
-      step through JSON lines, as bond-channels drives its peer. It replaces
-      the Python peer that Campfire and bond-channels use.
-- [ ] `cable.feature`: a client subscribes to `BoardChannel`; a CLI claim
-      makes it receive `card.claimed` with the card; a client with no
-      session is refused.
-- [ ] `/login`, the session, the page shell (EAG), `Bond.static` for
+Built small (the owner asked for a minimal, fast dashboard): the view is
+read-only, the browser fetches the board again after each event, the list of
+boards is not live, and the build uses pnpm (`corepack pnpm`).
+
+- [x] Features first: `web.feature` (login sets the cookie, a wrong key
+      does not, a page needs the session, the page names the fingerprinted
+      assets) and `cable.feature`.
+- [x] `specs/fixtures/ws_client/cable_client.agc`: the browser of
+      `cable.feature`, a program of the package `websocket-client` (tag
+      `websocket-client-0.2.0`, its own manifest as in bond-channels) that
+      prints each frame as a line, which a step reads. It replaces the Python
+      peer.
+- [x] `cable.feature`: a client subscribes to `BoardChannel`; a CLI claim
+      makes it receive `card.claimed`; a client with no session is refused.
+- [x] `/login`, the session, the page shell (EAG), `Bond.static` for
       `/assets`.
-- [ ] `src/kanban_web/cable.agc`: hub, `BoardsChannel`, `BoardChannel`,
-      broadcast after each committed write.
-- [ ] `package.json` (esbuild, sass), `pnpm-lock.yaml`, `tools/assets.mjs`,
-      `make assets`, `make assets-check`.
-- [ ] `app/javascript`: `cable.js`, `board.js` (state, apply event, catch
-      up after reconnect), `render.js`.
-- [ ] `app/stylesheets`: tokens, light and dark themes, board, column,
-      card, panel, feed.
-- [ ] A manual check with a browser (playwright-cli): open a board, run
+- [x] `src/kanban_web/cable.agc`: hub, `BoardChannel`, and a publisher task
+      that broadcasts the events after the commit, in journal order (a write
+      nudges it, a one second tick catches the rest). `BoardsChannel` is left
+      out: the list of boards is not live.
+- [x] `package.json` (esbuild, sass), `pnpm-lock.yaml`, `tools/assets.mjs`,
+      `make assets`, `make assets-check`. The Dockerfile builds them too.
+- [x] `app/javascript`: `cable.js`, `board.js` (state, refetch after an event
+      and after a reconnect), `render.js`. Plain JavaScript, no framework.
+- [x] `app/stylesheets`: tokens, light and dark themes, board, column, card,
+      feed. The side panel (body, dependencies, comments) is left out.
+- [x] A manual check with a browser (playwright-cli): open a board, run
       `kanban card move` in a shell, see the card move without a reload.
 
 Done when: the features pass, and the owner watches a card move live while
