@@ -56,7 +56,7 @@ def create(words: List[String]) -> Result[Void]
     Output.fail(config.json, "INVALID", "KANBAN_AGENT is required for writes", 2)
   end
 
-  body = JSON.encode(JSON.object(payload(parsed)))
+  body = JSON.encode(JSON.object(payload(parsed, config)))
   response = Output.expect(Client.post(Client.from(config), "/api/boards", body), config.json)
   return ok() if not response.ok?
 
@@ -107,9 +107,14 @@ def show(words: List[String]) -> Result[Void]
   ok()
 end
 
-def payload(parsed: OP.Parsed) -> Map[String, Json]
+def payload(parsed: OP.Parsed, config: Settings.Config) -> Map[String, Json]
   fields: Map[String, Json] = {"name": JSON.from(OP.string(parsed, "name"))}
+  # Creating the board the caller is configured for is the common case.
   slug = OP.optional_string(parsed, "slug")
+  if slug.none? and not config.board.empty?
+    slug = some(config.board)
+  end
+
   if slug.some?
     fields = fields.put("slug", JSON.from(slug.unwrap!))
   end
