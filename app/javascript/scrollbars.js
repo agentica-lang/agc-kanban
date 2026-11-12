@@ -17,22 +17,40 @@ function show(area) {
 }
 
 function onScroll(event) {
+  forget();
   if (event.target instanceof Element) {
     show(event.target);
   }
 }
 
+// The board and its bottom edge, read on the first move after a resize or a scroll and kept until the next one, so
+// that most moves cost one comparison. The board fills the page to its bottom, so nothing else moves that edge.
+var board = null;
+var boardBottom = 0;
+
+function forget() {
+  board = null;
+}
+
 function onPointerMove(event) {
-  if (event.pointerType !== "mouse" || !(event.target instanceof Element)) {
+  if (event.pointerType !== "mouse") {
     return;
   }
-  var board = event.target.closest(".board");
-  if (board && board.scrollWidth > board.clientWidth && board.getBoundingClientRect().bottom - event.clientY <= EDGE_PX) {
+  if (board === null || !board.isConnected) {
+    board = document.querySelector(".board");
+    if (board === null) {
+      return;
+    }
+    boardBottom = board.getBoundingClientRect().bottom;
+  }
+  if (boardBottom - event.clientY <= EDGE_PX && event.clientY <= boardBottom && board.scrollWidth > board.clientWidth &&
+    event.target instanceof Element && board.contains(event.target)) {
     show(board);
   }
 }
 
 export function hideIdleScrollbars() {
   document.addEventListener("scroll", onScroll, { capture: true, passive: true });
-  document.addEventListener("pointermove", onPointerMove, { passive: true });
+  document.addEventListener("pointermove", onPointerMove);
+  window.addEventListener("resize", forget);
 }
