@@ -25,8 +25,16 @@ export struct Release
   column: Optional[String]
 end
 
+# The column a card left, so the feed can say "from Doing to Review". Events written before it have no `from`.
+struct Source
+  id: Int
+  name: String
+end
+
+# The data of the card.moved, card.released and card.done events: the card after the change and where it was before.
 struct EventData
   card: Cards.Card
+  from: Source
   forced: Bool
 end
 
@@ -104,7 +112,7 @@ def finish_open(conn: Db.Connection, input: Action) -> Result[Cards.Card]
   )
 
   updated = try Cards.load_at(conn, input.id, now)
-  data = EventData(card: updated, forced: input.force)
+  data = EventData(card: updated, from: Source(id: card.column_id, name: card.column), forced: input.force)
   _ = try Db.execute(
     conn,
     "insert into events (board_id, card_id, kind, actor, data, created_at) values (?, ?, ?, ?, ?, ?)",
@@ -217,7 +225,7 @@ def move_open(conn: Db.Connection, input: Move, release: Bool) -> Result[Cards.C
     kind = "card.released"
   end
 
-  data = EventData(card: updated, forced: input.force)
+  data = EventData(card: updated, from: Source(id: card.column_id, name: card.column), forced: input.force)
   _ = try Db.execute(
     conn,
     "insert into events (board_id, card_id, kind, actor, data, created_at) values (?, ?, ?, ?, ?, ?)",

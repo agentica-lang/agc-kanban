@@ -61,7 +61,7 @@ function when(ms) {
     </dl>
     <Markdown v-if="state.detail.card.body" :text="state.detail.card.body" />
     <h4 class="comments-title">Comments ({{ state.detail.comments.length }})</h4>
-    <ol class="comments" reversed>
+    <ol class="comments">
       <li v-for="comment in comments" :key="comment.id">
         <div class="by"><b>{{ comment.author }}</b> <time :datetime="new Date(comment.created_at).toISOString()">{{ when(comment.created_at) }}</time></div>
         <Markdown :text="comment.body" />

@@ -11,6 +11,19 @@ Feature: Board events
     Then the response status is 200
     And the response contains "\"events\":[]"
 
+  Scenario: A move and a done event name the column the card left
+    Given the database server is running
+    When I post a board named "Project" with slug "project" as "agent-1"
+    And I add a card titled "First"
+    And I move card 1 to "Doing"
+    And agent "agent-1" claims card 1
+    And agent "agent-1" marks card 1 done
+    And I get board events for "project" with query "after=0&card=1"
+    Then the response contains "\"kind\":\"card.moved\""
+    And the response contains "\"from\":{\"id\":1,\"name\":\"Todo\"}"
+    And the response contains "\"kind\":\"card.done\""
+    And the response contains "\"from\":{\"id\":2,\"name\":\"Doing\"}"
+
   Scenario: An unknown board has no event stream
     Given the database server is running
     When I get board events for "missing" after 0

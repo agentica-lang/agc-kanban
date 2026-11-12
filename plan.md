@@ -357,8 +357,9 @@ Tests assert the `code` and the status, never the message.
 | `GET /api/boards/:board/events` | query: `after` (oldest first), or `before` (newest first, for the pages of older events; with `after` it is `INVALID`), `card`, `limit` (100, at most 1000) | `{"events": [event], "last_event_id"}` |
 
 Event `data` holds the changed object: the `board`, `column`, `card` or
-`comment` shape above, as `card.*` kinds do, with `forced` beside the card for
-`card.moved`, `card.released` and `card.done`. A column that changes the done
+`comment` shape above, as `card.*` kinds do, with `forced` and `from` (the
+column the card left: `{"id", "name"}`; missing in older events) beside the card
+for `card.moved`, `card.released` and `card.done`. A column that changes the done
 flag of its cards emits one `card.updated` per affected card in the same
 transaction.
 
