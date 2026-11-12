@@ -1,0 +1,5 @@
+*.agc text eol=lf linguist-language=Ruby
+*.feature text eol=lf
+*.md text eol=lf
+*.sh text eol=lf
+*.agcb binary
