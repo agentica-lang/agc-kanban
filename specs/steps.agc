@@ -7,6 +7,7 @@ def main() -> Void
     BDD.step("the database server is running", &start_database_server),
     BDD.step("I post a board named {string} with slug {string} as {string}", &post_board),
     BDD.step("I list boards", &list_boards),
+    BDD.step("I add the column {string} at position {int}", &add_column),
     BDD.step("I get board events for {string} after {int}", &board_events),
     BDD.step("the response contains {string}", &response_contains),
     BDD.step("an unrelated server is running", &start_unrelated),
@@ -194,6 +195,27 @@ def board_events(ctx: BDD.Context, args: List[String]) -> BDD.Context
     "http://127.0.0.1:#{port}/api/boards/#{args[0]}/events?after=#{args[1]}",
     "".bytes,
     [Header(name: "apikey", value: "01234567890123456789012345678901")],
+  ).unwrap!
+
+  HTTP.close_client(client)
+  stored = BDD.set(ctx, "status", JSON.from(response.status))
+  BDD.set(stored, "body", JSON.from(HTTP.text(response.body, response.headers).unwrap!))
+end
+
+def add_column(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  port = JSON.int(BDD.get(ctx, "port").unwrap!).unwrap!
+  data = JSON.object({"name": JSON.from(args[0]), "position": JSON.from(args[1].to_i!)})
+  client = HTTP.client().unwrap!
+  response = HTTP.request(
+    client,
+    "POST",
+    "http://127.0.0.1:#{port}/api/boards/project/columns",
+    JSON.encode(data).bytes,
+    [
+      Header(name: "apikey", value: "01234567890123456789012345678901"),
+      Header(name: "X-Kanban-Agent", value: "agent-1"),
+      Header(name: "Content-Type", value: "application/json"),
+    ],
   ).unwrap!
 
   HTTP.close_client(client)

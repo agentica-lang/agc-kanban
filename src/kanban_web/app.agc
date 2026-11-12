@@ -1,6 +1,7 @@
 import Bond from "pkg/bond/bond"
 import Regex from "std/regex"
 import Boards from "../kanban/boards"
+import Columns from "../kanban/columns"
 import Events from "../kanban/events"
 import Database from "../kanban/repo/database"
 
@@ -8,6 +9,17 @@ struct CreateBoard
   name: String
   slug: Optional[String]
   columns: Optional[List[String]]
+end
+
+struct CreateColumn
+  name: String
+  position: Optional[Int]
+  done: Optional[Bool]
+  wip_limit: Optional[Int]
+end
+
+struct ColumnAnswer
+  column: Boards.Column
 end
 
 struct BoardAnswer
@@ -36,6 +48,7 @@ export def build(key: String, pool: Optional[Database.Pool] = none) -> Bond.App
     |> Bond.get("/api/auth-check", &auth_check)
     |> Bond.get("/api/boards") do |conn| list_boards(conn, pool) end
     |> Bond.post("/api/boards") do |conn| create_board(conn, pool) end
+    |> Bond.post("/api/boards/:board/columns") do |conn| add_column(conn, pool) end
     |> Bond.get("/api/boards/:board/events") do |conn| board_events(conn, pool) end
   )
 end
@@ -164,4 +177,29 @@ def event_json(entry: Events.Event) -> Json
     "data": entry.data,
     "created_at": JSON.from(entry.created_at),
   })
+end
+
+def add_column(conn: Bond.Conn, pool: Optional[Database.Pool]) -> Result[Bond.Conn]
+  return ok(reject(conn, 503, "BUSY", "database unavailable")) if not pool.some?
+
+  body = Bond.body_text(conn)
+  return ok(reject(conn, 400, "INVALID", "invalid body", some("body"))) if not body.ok?
+
+  decoded = JSON.decode(body.unwrap!, CreateColumn)
+  return ok(reject(conn, 400, "INVALID", "invalid body", some("body"))) if not decoded.ok?
+
+  data = decoded.unwrap!
+  input = Columns.Add(
+    board: Bond.param(conn, "board").unwrap_or(""),
+    name: data.name,
+    position: data.position,
+    done: data.done.unwrap_or(false),
+    wip_limit: data.wip_limit,
+    actor: Bond.request_header(conn, "X-Kanban-Agent").unwrap_or(""),
+  )
+
+  result = Columns.add(pool.unwrap!, input)
+  return ok(failure(conn, result.message)) if not result.ok?
+
+  ok(Bond.json_as(conn, 201, ColumnAnswer.codec, ColumnAnswer(column: result.unwrap!)))
 end
