@@ -82,6 +82,10 @@ struct DetailAnswer
   comments: List[CommentLine]
 end
 
+struct CommentAnswer
+  comment: CommentLine
+end
+
 struct EventLine
   id: Int
   kind: String
@@ -231,6 +235,17 @@ export def print_card_detail(response: HttpResponse) -> Void
   for comment in detail.comments
     puts("-- #{comment.author}: #{comment.body}")
   end
+end
+
+export def print_comment(response: HttpResponse) -> Void
+  decoded = JSON.decode(body(response), CommentAnswer)
+  if not decoded.ok?
+    puts(body(response))
+    return
+  end
+
+  comment = decoded.unwrap!.comment
+  puts("comment\t#{comment.author}\t#{comment.body}")
 end
 
 export def print_events(response: HttpResponse) -> Void
