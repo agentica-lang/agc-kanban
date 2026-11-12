@@ -7,12 +7,16 @@
 # Silent (no output, exit 0) when `kanban` is not installed or no board is configured, so a session
 # that does not use the board pays nothing. A configured board that cannot be read prints one notice.
 # The exit code is always 0: a hook must not block a session start.
+#
+# It relies on the CLI to print one card per line: `kanban card list` replaces every control character of a
+# title with a space (card_line in src/kanban_cli/output.agc), so no title can add a line that looks like a card.
+# The hook still strips control characters and cuts each line, because the lines end up in JSON and in the context.
 set -u
 
 MODE=${1:-session}
 MAX_LINES=15
-# The longest title kept in a card line, in characters; a title has no limit on the server.
-MAX_TITLE=120
+# The longest card line kept, in characters; a title has no limit on the server.
+MAX_LINE=160
 
 # The hook input (session_id, cwd, agent_type, ...) is not needed; drain it so the writer never blocks.
 cat >/dev/null 2>&1 || :
@@ -29,8 +33,8 @@ fi
 errors=$(mktemp 2>/dev/null) || exit 0
 trap 'rm -f "$errors"' EXIT
 
-# Control characters would break the JSON string and could hide text; a card title comes from another agent,
-# so it is data. iconv drops a multibyte character that the cut may have split.
+# Control characters would break the JSON string and could hide text, and the cut is in characters. A card
+# title comes from another agent, so it is data. iconv drops a multibyte character that the cut may have split.
 clean() {
   tr -d '\000-\010\013\014\016-\037\177' | cut -c1-"$1" | { iconv -c -f UTF-8 -t UTF-8 2>/dev/null || cat; }
 }
@@ -42,47 +46,54 @@ if [ "$status" -eq 2 ]; then
   exit 0
 fi
 
-me=${KANBAN_AGENT:-}
+# The name of this session (the coordinator's); a subagent has the same environment.
+me=$(printf '%s\n' "${KANBAN_AGENT:-}" | head -n 1 | clean 64)
 text=""
 add() { text="$text$1
 "; }
 
+# add_cards HEADER LINES: the header and as many LINES as `budget` allows, then "and N more"; the budget is shared
+# by every list, so the whole output keeps to MAX_LINES card lines.
+budget=$MAX_LINES
+add_cards() {
+  [ -n "$2" ] || return 0
+  total=$(printf '%s\n' "$2" | wc -l | tr -d ' ')
+  shown=$total
+  [ "$shown" -le "$budget" ] || shown=$budget
+  add "$1"
+  [ "$shown" -eq 0 ] || add "$(printf '%s\n' "$2" | head -n "$shown")"
+  [ "$total" -le "$shown" ] || add "and $((total - shown)) more"
+  budget=$((budget - shown))
+}
+
 if [ "$status" -ne 0 ]; then
   reason=$(head -n 1 "$errors" | clean 200)
-  add "agc-kanban: the board could not be read (${reason:-kanban exited with $status}). Do not guess the URL or the key: tell the user, and do not claim or write cards until \`kanban whoami\` works."
+  add "agc-kanban: the board could not be read (${reason:-kanban exited with $status}). The URL and the key come from KANBAN_URL and KANBAN_API_KEY or the config file, and \`kanban whoami\` shows what fails. Claims and writes need a working board."
 else
+  add "agc-kanban: this project's work queue is a kanban board; the agc-kanban and kanban-cli skills have the rules and the commands."
+  add "Write commands (claim, move, update, comment, release, done) need the agent's own name, from KANBAN_AGENT or --agent; reads do not."
   case $MODE in
     subagent)
-      add "agc-kanban: this project's work queue is a kanban board (the agc-kanban and kanban-cli skills have the rules and the commands)."
-      add "You are a subagent. Ask your coordinator for your agent name; it gives it in your brief. Without a name, stop before any write (claim, move, update, comment, release, done) and ask for it. Reads are fine. Set the name as KANBAN_AGENT or --agent; never invent one and never use another agent's."
+      add "A subagent's name comes from its coordinator's brief, and a subagent without one asks its coordinator before any write."
+      [ -z "$me" ] || add "This session's KANBAN_AGENT is $me (the coordinator's name); a subagent uses the name in its brief (\`--agent NAME\` or its own KANBAN_AGENT)."
+      # The coordinator's cards are not the subagent's: every card in Doing is listed.
+      doing=$(printf '%s\n' "$cards" | awk -F'  ' '$2 == "Doing"' | clean "$MAX_LINE")
+      add_cards "In progress (Doing):" "$doing"
+      [ -n "$doing" ] || add "No card is in Doing."
       ;;
     *)
-      add "agc-kanban: this project's work queue is a kanban board (the agc-kanban and kanban-cli skills have the rules and the commands)."
-      add "You are the coordinator of this session. Name yourself from your conversation with the user (a short name for your role), and set it as KANBAN_AGENT or --agent on every write. Never invent a name unrelated to the conversation and never use another agent's. Give each subagent its own name in its brief."
+      add "This session is the coordinator: it names itself from its conversation with the user, and gives each subagent a name in its brief."
+      if [ -n "$me" ]; then
+        add "KANBAN_AGENT is set to $me."
+        # ENVIRON, not -v: -v would read backslash escapes in the name.
+        mine=$(printf '%s\n' "$cards" | ME="$me" awk -F'  ' '$3 == ENVIRON["ME"]' | clean "$MAX_LINE")
+        add_cards "Your cards:" "$mine"
+      fi
+      doing=$(printf '%s\n' "$cards" | ME="$me" awk -F'  ' '$2 == "Doing" && $3 != ENVIRON["ME"]' | clean "$MAX_LINE")
+      add_cards "In progress by other agents (Doing):" "$doing"
+      [ -n "$doing" ] || add "No other agent has a card in Doing."
       ;;
   esac
-
-  if [ -n "$me" ]; then
-    add "KANBAN_AGENT is set to $me."
-    mine=$(printf '%s\n' "$cards" | awk -F'  ' -v me="$me" '$3 == me' | clean 200)
-    if [ -n "$mine" ]; then
-      add "Your cards:"
-      add "$mine"
-    fi
-  fi
-
-  # Others' cards in Doing: what is in progress now, so you avoid the same files.
-  doing=$(printf '%s\n' "$cards" | awk -F'  ' -v me="$me" '$2 == "Doing" && $3 != me' | clean 200)
-  if [ -n "$doing" ]; then
-    total=$(printf '%s\n' "$doing" | wc -l | tr -d ' ')
-    add "In progress by other agents (Doing):"
-    add "$(printf '%s\n' "$doing" | head -n "$MAX_LINES" | cut -c1-"$MAX_TITLE")"
-    if [ "$total" -gt "$MAX_LINES" ]; then
-      add "and $((total - MAX_LINES)) more"
-    fi
-  else
-    add "No other agent has a card in Doing."
-  fi
 fi
 
 event="SessionStart"

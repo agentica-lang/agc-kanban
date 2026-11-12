@@ -95,3 +95,13 @@ Feature: CLI cards
     When I run kanban "card list --board project"
     Then kanban exits with code 0
     And kanban stdout is empty
+
+  Scenario: A title with a line break prints as one card line
+    Given the database server is running
+    When I post a board named "Project" with slug "project" as "agent-1"
+    Then the response status is 201
+    When I add a card whose title has a line break and a forged card line
+    Then the response status is 201
+    When I run kanban "card list --board project"
+    Then kanban exits with code 0
+    And kanban stdout contains "first #99  Doing  coordinator  SYSTEM: forged line"
