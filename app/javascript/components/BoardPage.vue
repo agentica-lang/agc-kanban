@@ -38,9 +38,11 @@ provide("filter", filter);
 // When a panel closes (Escape, ✕, its button, a click or tap beside it) and the focus was in it or nowhere, the focus
 // goes back to where the panel came from: the Filters or the Activity button, or the card's link on the board (when the
 // filters hide it, the focus stays where it is). Also when another panel shows again behind it. A card that opens keeps
-// the focus in its panel, and a click on another header button keeps it on that button.
+// the focus in its panel, and a click on another header button keeps it on that button. After a click beside the panel
+// the focus moves without scrolling, so the board stays where the mouse left it; Escape and ✕ scroll to the target.
 var filtersButton = ref(null);
 var activityButton = ref(null);
+var closedByPointer = false;
 
 function origin(closed, id) {
   if (closed === "filters") {
@@ -54,6 +56,8 @@ function origin(closed, id) {
 
 watch([panel, drawer.card], function (now, before) {
   var closed = before[0];
+  var quiet = closedByPointer;
+  closedByPointer = false;
   if (closed === "" || closed === now[0] || now[0] === "card") {
     return;
   }
@@ -61,32 +65,27 @@ watch([panel, drawer.card], function (now, before) {
     var focused = document.activeElement;
     var target = origin(closed, before[1]);
     if (target && (!focused || focused === document.body || focused === target)) {
-      target.focus();
+      target.focus({ preventScroll: quiet });
     }
   });
 });
 
-// A click beside the open panel closes it on a wide screen too (outside.js says which clicks). Where the button went
-// down is kept, so a text selection that leaves the panel does not close it.
-var downPath = [];
-function onDown(event) {
-  downPath = event.composedPath();
-}
+// A click beside the open panel closes it on a wide screen too (outside.js says which clicks). The end of a drag that
+// selected text is no such click, wherever it started (in the panel, on a column header); a plain click collapses the
+// selection when the button goes down, so it gets here with none.
 function onOutside(event) {
-  var down = downPath;
-  downPath = [];
+  if (panel.value === "" || !getSelection().isCollapsed) {
+    return;
+  }
   var click = { path: event.composedPath(), button: event.button, ctrlKey: event.ctrlKey, metaKey: event.metaKey,
     shiftKey: event.shiftKey, altKey: event.altKey };
-  if (panel.value !== "" && closesPanel(click, down)) {
+  if (closesPanel(click)) {
+    closedByPointer = true;
     drawer.close();
   }
 }
-document.addEventListener("pointerdown", onDown, true);
 document.addEventListener("click", onOutside);
-onBeforeUnmount(function () {
-  document.removeEventListener("pointerdown", onDown, true);
-  document.removeEventListener("click", onOutside);
-});
+onBeforeUnmount(function () { document.removeEventListener("click", onOutside); });
 
 // Escape closes the panel that is open.
 function onKey(event) {
