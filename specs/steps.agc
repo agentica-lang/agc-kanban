@@ -57,8 +57,15 @@ def main() -> Void
     BDD.step("kanban output does not contain {string}", &kanban_output_lacks),
     BDD.step("I run kanban without a key {string}", &run_kanban_no_key),
     BDD.step("I run kanban without an agent {string}", &run_kanban_no_agent),
+    BDD.step("I run kanban as agent {string} {string}", &run_kanban_as),
+    BDD.step("I run kanban with board {string} {string}", &run_kanban_for_board),
+    BDD.step("I run kanban {string} reading the body {string}", &run_kanban_stdin),
+    BDD.step("I run kanban against a dead server {string}", &run_kanban_dead),
     BDD.step("two agents run kanban {string}", &run_two_kanban),
     BDD.step("kanban exit codes are {string}", &kanban_codes),
+    BDD.step("kanban stderr contains {string}", &kanban_stderr),
+    BDD.step("kanban stdout contains {string}", &kanban_stdout),
+    BDD.step("kanban stdout is empty", &kanban_stdout_empty),
     BDD.step("I run whoami with key {string}", &whoami),
     BDD.step("whoami exits with code {int}", &whoami_status),
     BDD.step("I run whoami as JSON with key {string}", &whoami_json),
@@ -542,25 +549,98 @@ def claim_next(ctx: BDD.Context, args: List[String]) -> BDD.Context
   api_request_as(ctx, args[0], "POST", "/api/boards/project/claim-next", "{}")
 end
 
-def run_kanban(ctx: BDD.Context, args: List[String]) -> BDD.Context
+def kanban_env(ctx: BDD.Context) -> Map[String, String]
   port = JSON.int(BDD.get(ctx, "port").unwrap!).unwrap!
-  process = Process.spawn_captured(
-    "agentica",
-    ["cli.agc"] + args[0].split(" "),
-    Process.Options(
-      env: {
-        "KANBAN_URL": "http://127.0.0.1:#{port}",
-        "KANBAN_API_KEY": "01234567890123456789012345678901",
-        "KANBAN_AGENT": "agent-1",
-      },
-    ),
-  ).unwrap!
+  {
+    "KANBAN_URL": "http://127.0.0.1:#{port}",
+    "KANBAN_API_KEY": "01234567890123456789012345678901",
+    "KANBAN_AGENT": "agent-1",
+    "KANBAN_BOARD": "",
+  }
+end
+
+def kanban_process(ctx: BDD.Context, words: List[String], env: Map[String, String]) -> Process
+  Process.spawn_captured("agentica", ["cli.agc"] + words, Process.Options(env: env)).unwrap!
+end
+
+# One place runs the CLI, so every step records the same things.
+def run_kanban_with(ctx: BDD.Context, words: List[String], env: Map[String, String], stdin: String) -> BDD.Context
+  process = kanban_process(ctx, words, env)
+  if not stdin.empty?
+    Process.send(process, stdin, 30000).unwrap!
+    Process.close_stdin(process, 30000).unwrap!
+  end
 
   code = Process.wait(process, 30000).unwrap!
   output = Process.output(process, 30000).unwrap!
   Process.close(process)
   stored = BDD.set(ctx, "kanban_exit", JSON.from(code))
-  BDD.set(stored, "kanban_output", JSON.from("#{output.stdout}#{output.stderr}"))
+  with_out = BDD.set(stored, "kanban_output", JSON.from("#{output.stdout}#{output.stderr}"))
+  with_err = BDD.set(with_out, "kanban_stdout", JSON.from(output.stdout))
+  BDD.set(with_err, "kanban_stderr", JSON.from(output.stderr))
+end
+
+def run_kanban(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  run_kanban_with(ctx, args[0].split(" "), kanban_env(ctx), "")
+end
+
+def run_kanban_as(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  env = kanban_env(ctx).put("KANBAN_AGENT", args[0])
+  run_kanban_with(ctx, args[1].split(" "), env, "")
+end
+
+def run_kanban_for_board(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  env = kanban_env(ctx).put("KANBAN_BOARD", args[0])
+  run_kanban_with(ctx, args[1].split(" "), env, "")
+end
+
+# Standard input is how a long body arrives without a temporary file.
+def run_kanban_stdin(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  run_kanban_with(ctx, args[0].split(" "), kanban_env(ctx), args[1])
+end
+
+def run_kanban_dead(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  env = kanban_env(ctx).put("KANBAN_URL", "http://127.0.0.1:1")
+  run_kanban_with(ctx, args[0].split(" "), env, "")
+end
+
+def run_kanban_no_key(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  env = kanban_env(ctx).put("KANBAN_API_KEY", "")
+  run_kanban_with(ctx, args[0].split(" "), env, "")
+end
+
+def run_kanban_no_agent(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  env = kanban_env(ctx).put("KANBAN_AGENT", "")
+  run_kanban_with(ctx, args[0].split(" "), env, "")
+end
+
+# Both processes boot their own interpreter, so this is a smoke check of the
+# installed path rather than a barrier-synchronised race; the atomic claim
+# itself is proven by the API race in claims.feature.
+def run_two_kanban(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  words = args[0].split(" ")
+  one = kanban_process(ctx, words, kanban_env(ctx))
+  two = kanban_process(ctx, words, kanban_env(ctx).put("KANBAN_AGENT", "agent-2"))
+  first = Process.wait(one, 30000).unwrap!
+  second = Process.wait(two, 30000).unwrap!
+  output = Process.output(one, 30000).unwrap!
+  other = Process.output(two, 30000).unwrap!
+  Process.close(one)
+  Process.close(two)
+  low = first
+  high = second
+  if low > high
+    low = second
+    high = first
+  end
+
+  stored = BDD.set(ctx, "kanban_codes", JSON.from("#{low},#{high}"))
+  BDD.set(stored, "kanban_output", JSON.from("#{output.stdout}#{output.stderr}#{other.stdout}#{other.stderr}"))
+end
+
+def kanban_codes(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  codes = JSON.string(BDD.get(ctx, "kanban_codes").unwrap!).unwrap!
+  BDD.assert(ctx, codes == args[0], "exit codes were #{codes}")
 end
 
 def kanban_status(ctx: BDD.Context, args: List[String]) -> BDD.Context
@@ -578,64 +658,17 @@ def kanban_output_lacks(ctx: BDD.Context, args: List[String]) -> BDD.Context
   BDD.assert(ctx, not output.include?(args[0]), "output was #{output}")
 end
 
-def kanban_env(ctx: BDD.Context) -> Map[String, String]
-  port = JSON.int(BDD.get(ctx, "port").unwrap!).unwrap!
-  {
-    "KANBAN_URL": "http://127.0.0.1:#{port}",
-    "KANBAN_API_KEY": "01234567890123456789012345678901",
-    "KANBAN_AGENT": "agent-1",
-  }
+def kanban_stderr(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  output = JSON.string(BDD.get(ctx, "kanban_stderr").unwrap!).unwrap!
+  BDD.assert(ctx, output.include?(args[0]), "stderr was #{output}")
 end
 
-def kanban_process(ctx: BDD.Context, words: List[String], env: Map[String, String]) -> Process
-  Process.spawn_captured("agentica", ["cli.agc"] + words, Process.Options(env: env)).unwrap!
+def kanban_stdout(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  output = JSON.string(BDD.get(ctx, "kanban_stdout").unwrap!).unwrap!
+  BDD.assert(ctx, output.include?(args[0]), "stdout was #{output}")
 end
 
-def run_kanban_no_key(ctx: BDD.Context, args: List[String]) -> BDD.Context
-  env = kanban_env(ctx)
-  env = env.put("KANBAN_API_KEY", "")
-  process = kanban_process(ctx, args[0].split(" "), env)
-  code = Process.wait(process, 30000).unwrap!
-  output = Process.output(process, 30000).unwrap!
-  Process.close(process)
-  stored = BDD.set(ctx, "kanban_exit", JSON.from(code))
-  BDD.set(stored, "kanban_output", JSON.from("#{output.stdout}#{output.stderr}"))
-end
-
-def run_kanban_no_agent(ctx: BDD.Context, args: List[String]) -> BDD.Context
-  env = kanban_env(ctx)
-  env = env.put("KANBAN_AGENT", "")
-  process = kanban_process(ctx, args[0].split(" "), env)
-  code = Process.wait(process, 30000).unwrap!
-  output = Process.output(process, 30000).unwrap!
-  Process.close(process)
-  stored = BDD.set(ctx, "kanban_exit", JSON.from(code))
-  BDD.set(stored, "kanban_output", JSON.from("#{output.stdout}#{output.stderr}"))
-end
-
-# Two real processes, two names, one card: exactly one exits 0 and the other 4.
-def run_two_kanban(ctx: BDD.Context, args: List[String]) -> BDD.Context
-  words = args[0].split(" ")
-  one = kanban_process(ctx, words, kanban_env(ctx))
-  two_env = kanban_env(ctx).put("KANBAN_AGENT", "agent-2")
-  two = kanban_process(ctx, words, two_env)
-  first = Process.wait(one, 30000).unwrap!
-  second = Process.wait(two, 30000).unwrap!
-  output = "#{Process.output(one, 30000).unwrap!.stdout}#{Process.output(two, 30000).unwrap!.stdout}"
-  Process.close(one)
-  Process.close(two)
-  low = first
-  high = second
-  if low > high
-    low = second
-    high = first
-  end
-
-  stored = BDD.set(ctx, "kanban_codes", JSON.from("#{low},#{high}"))
-  BDD.set(stored, "kanban_output", JSON.from(output))
-end
-
-def kanban_codes(ctx: BDD.Context, args: List[String]) -> BDD.Context
-  codes = JSON.string(BDD.get(ctx, "kanban_codes").unwrap!).unwrap!
-  BDD.assert(ctx, codes == args[0], "exit codes were #{codes}")
+def kanban_stdout_empty(ctx: BDD.Context, _args: List[String]) -> BDD.Context
+  output = JSON.string(BDD.get(ctx, "kanban_stdout").unwrap!).unwrap!
+  BDD.assert(ctx, output.empty?, "stdout was #{output}")
 end

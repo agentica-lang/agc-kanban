@@ -29,8 +29,12 @@ Feature: CLI cards
     Then kanban exits with code 0
     And kanban output contains "First"
     And kanban output does not contain "Second"
-    When I run kanban "card list --board project --column Todo"
-    Then kanban output contains "Second"
+    When I run kanban "card add Third --board project --column Review"
+    Then kanban exits with code 0
+    When I run kanban "card list --board project --column Review"
+    Then kanban exits with code 0
+    And kanban output contains "Third"
+    And kanban output does not contain "First"
 
   Scenario: Done cards are hidden unless --all
     Given the database server is running
@@ -43,9 +47,11 @@ Feature: CLI cards
     When agent "agent-1" marks card 1 done
     Then the response status is 200
     When I run kanban "card list --board project"
-    Then kanban output does not contain "Finished"
+    Then kanban exits with code 0
+    And kanban output does not contain "Finished"
     When I run kanban "card list --board project --all"
-    Then kanban output contains "Finished"
+    Then kanban exits with code 0
+    And kanban output contains "Finished"
 
   Scenario: Update a card
     Given the database server is running
@@ -57,7 +63,8 @@ Feature: CLI cards
     Then kanban exits with code 0
     And kanban output contains "Renamed"
     When I run kanban "card show 1"
-    Then kanban output contains "[ui, api]"
+    Then kanban exits with code 0
+    And kanban output contains "[ui, api]"
     When I run kanban "card update 1 --board project"
     Then kanban exits with code 2
     And kanban output contains "INVALID"
@@ -67,3 +74,23 @@ Feature: CLI cards
     When I run kanban "card show 999"
     Then kanban exits with code 1
     And kanban output contains "NOT_FOUND"
+
+  Scenario: A body comes from a file or standard input
+    Given the database server is running
+    When I post a board named "Project" with slug "project" as "agent-1"
+    Then the response status is 201
+    When I add a card titled "First"
+    Then the response status is 201
+    When I run kanban "card comment 1 -" reading the body "a long note from stdin"
+    Then kanban exits with code 0
+    When I run kanban "card show 1"
+    Then kanban exits with code 0
+    And kanban output contains "a long note from stdin"
+
+  Scenario: An empty board lists nothing
+    Given the database server is running
+    When I post a board named "Project" with slug "project" as "agent-1"
+    Then the response status is 201
+    When I run kanban "card list --board project"
+    Then kanban exits with code 0
+    And kanban stdout is empty

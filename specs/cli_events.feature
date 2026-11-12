@@ -16,12 +16,18 @@ Feature: CLI events and prime
     Then the response status is 201
     When I add a card titled "First"
     Then the response status is 201
-    When I run kanban "card claim 1 --board project"
+    When I add a card titled "Second"
+    Then the response status is 201
+    When I run kanban "card claim 2 --board project"
     Then kanban exits with code 0
     When I run kanban "events --board project --card 1"
-    Then kanban output contains "card.claimed"
+    Then kanban exits with code 0
+    And kanban output contains "card.created"
+    And kanban output does not contain "card.claimed"
     When I run kanban "events --board project --after 2"
-    Then kanban output does not contain "card.created"
+    Then kanban exits with code 0
+    And kanban output contains "card.created"
+    And kanban output does not contain "board.created"
 
   Scenario: Prime prints the agent rules
     Given the database server is running
