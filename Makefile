@@ -12,7 +12,7 @@ cli:
 check:
 	$(AGENTICA) check
 fmt-check:
-	$(AGENTICA) fmt --check server.agc cli.agc src specs
+	$(AGENTICA) fmt --check server.agc cli.agc src specs test
 test:
 	$(AGENTICA) test --jobs $(JOBS)
 assets:

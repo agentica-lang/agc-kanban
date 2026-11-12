@@ -1,5 +1,6 @@
 import Bond from "pkg/bond/bond"
 import App from "src/kanban_web/app"
+import Database from "src/kanban/repo/database"
 
 def main() -> Void
   key = System.env("KANBAN_API_KEY").unwrap_or("")
@@ -15,7 +16,15 @@ def main() -> Void
     System.exit(1)
   end
 
+  data_dir = System.env("KANBAN_DATA_DIR").unwrap_or("./data")
+  pool = Database.open(data_dir)
+  if not pool.ok?
+    IO.warn("kanban: #{pool.message}")
+    System.exit(1)
+  end
+
   result = Bond.run(App.build(key), host, port.unwrap!)
+  Database.close(pool.unwrap!)
   if not result.ok?
     IO.warn(result.message)
     System.exit(1)

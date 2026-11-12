@@ -580,10 +580,10 @@ talks to a running server.
       `cards.feature`, `claims.feature`, `deps.feature`, `comments.feature`,
       `events.feature`, `auth.feature`. Steps call the API with `std/http`
       against the server fixture and assert the status and `error.code`.
-- [ ] Migrations with `Migrate.up`, one file each, as agentica-db's layout:
+- [x] Migrations with `Migrate.up`, one file each, as agentica-db's layout:
       `m0001_boards`, `m0002_columns`, `m0003_cards`, `m0004_card_deps`,
       `m0005_comments`, `m0006_events`. `migrations.agc` lists them.
-- [ ] `test/migrations_test.agc`: versions go 1 to N, one file per version.
+- [x] `test/migrations_test.agc`: versions go 1 to N, with one migration per version.
 - [ ] `repo/database.agc`: migrate at start, `DbPool` for requests,
       `busy?` that maps to 503 `BUSY`.
 - [ ] Domain modules in `src/kanban/`. Each write: one `Db.transaction`,
@@ -778,5 +778,6 @@ Our stack, read for this plan:
 The recommendations in section 9 are accepted: start locally, keep blocking
 dependencies, make the web view-only, use claims without expiry by default,
 use global card ids, run the bytecode CLI with Agentica on PATH, and use the
-`apikey` header. When WebSocket tests are needed, use the `websocket-client`
-package from agentica packages.
+`apikey` header. Leases are configurable: zero disables expiry, and a positive
+value renews a live claim on writes by its holder. When WebSocket tests are
+needed, use `websocket-client-0.2.0` from agentica packages.
