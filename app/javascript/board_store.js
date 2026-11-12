@@ -10,8 +10,9 @@ var FLASH_MS = 1700; // a little longer than the CSS flash
 
 // The one reactive state of the board page: the snapshot of the API (`board`, `cards`) and the feed. It is fetched
 // again after each event the cable brings and after each confirmed subscription, so a missed broadcast never leaves a
-// wrong board. `reconcile` keeps the old object of every card and column that did not change, so Vue touches only what
-// an event changed and the scroll, the focus and anything open stay.
+// wrong board. `reconcile` keeps the old object of every card and of the board when it did not change, and the lists are
+// keyed by id, so Vue keeps the DOM node of a card that did not change (the columns and the blocked marks are worked
+// out again on each load, which is cheap) and the scroll, the focus and anything open stay.
 //
 // The feed is the events by id, newest first, with no duplicates (an event can come from the cable and from a fetch).
 // The last PAGE events load first, `before` the oldest shown gives the older ones, and what happened since the newest
@@ -30,6 +31,7 @@ export function useBoard(slug) {
     loadMore: loadMore,
   });
   var timer = null;
+  var requests = 0; // the number of the newest snapshot request: an older answer that comes late is dropped
   var synced = 0; // the newest event id that the feed is known to hold with nothing missing before it
 
   function same(a, b) {
@@ -55,10 +57,19 @@ export function useBoard(slug) {
     state.feed = Object.keys(byId).map(function (id) { return byId[id]; }).sort(function (a, b) { return b.id - a.id; });
   }
 
+  // A failed refetch keeps the board that is shown and sets `error` (a banner); the next success clears it.
   function load() {
     timer = null;
-    return getJSON("/api/boards/" + encodeURIComponent(slug)).then(reconcile, function (error) {
-      state.error = error.message;
+    var mine = ++requests;
+    return getJSON("/api/boards/" + encodeURIComponent(slug)).then(function (snapshot) {
+      if (mine === requests) {
+        state.error = "";
+        reconcile(snapshot);
+      }
+    }, function (error) {
+      if (mine === requests) {
+        state.error = error.message;
+      }
     });
   }
 

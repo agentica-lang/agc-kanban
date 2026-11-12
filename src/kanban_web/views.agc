@@ -27,7 +27,8 @@ def form(note: String) -> String
   EAG
 end
 
-# `content` is markup of this file (the form), never a value of a client; `title` and `slug` are escaped.
+# `content` is markup of this file (the form), never a value of a client; `title` and `slug` are escaped. A page with
+# no `content` is one that the script draws, so only it gets `#app`, with the text that shows until the script mounts.
 def layout(title: String, view: String, slug: String, content: String) -> String
   <<~EAG
     <%@ escape &Bond.escape %>
@@ -45,7 +46,9 @@ def layout(title: String, view: String, slug: String, content: String) -> String
       <form class="logout" method="post" action="/logout"><button type="submit">Sign out</button></form>
     <% end %>
     <%== content %>
+    <% if content.empty? %>
       <div id="app"><p class="empty">Loading...</p></div>
+    <% end %>
     </body>
     </html>
   EAG

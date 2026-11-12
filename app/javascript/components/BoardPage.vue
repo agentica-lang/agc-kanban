@@ -41,6 +41,7 @@ var columns = computed(function () {
   </main>
   <p v-else-if="!state.board" class="empty">Loading...</p>
   <template v-else>
+    <p v-if="state.error" class="empty">Could not refresh the board: {{ state.error }}</p>
     <header class="top"><a href="/boards">Boards</a><h1>{{ state.board.name }}</h1></header>
     <main class="board">
       <Column v-for="entry in columns" :key="entry.column.id" :column="entry.column" :cards="entry.cards" :blocked="blocked" :flash="state.flash" />

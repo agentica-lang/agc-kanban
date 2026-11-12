@@ -4,7 +4,12 @@ import { getJSON } from "../api.js";
 
 // The list of boards: not live, a reload shows a new board.
 var boards = ref(null);
-getJSON("/api/boards").then(function (answer) { boards.value = answer.boards; });
+var error = ref("");
+getJSON("/api/boards").then(function (answer) {
+  boards.value = answer.boards;
+}, function (failure) {
+  error.value = failure.message;
+});
 </script>
 
 <template>
@@ -15,4 +20,5 @@ getJSON("/api/boards").then(function (answer) { boards.value = answer.boards; })
     </ul>
     <p v-else class="empty">No boards yet.</p>
   </main>
+  <p v-else class="empty">{{ error || "Loading..." }}</p>
 </template>
