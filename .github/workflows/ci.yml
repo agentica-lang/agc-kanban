@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      # The Dockerfile is the one place of the Agentica version and sha256, so CI and the image cannot drift.
+      - name: Read the pinned Agentica release
+        id: pin
+        run: |
+          echo "version=$(sed -n 's/^ARG AGENTICA_VERSION=//p' Dockerfile)" >> "$GITHUB_OUTPUT"
+          echo "sha256=$(sed -n 's/^ARG AGENTICA_SHA256=//p' Dockerfile)" >> "$GITHUB_OUTPUT"
+
+      - name: Install the pinned Agentica release
+        uses: agentica-lang/setup-agentica@v1
+        with:
+          version: ${{ steps.pin.outputs.version }}
+          sha256: ${{ steps.pin.outputs.sha256 }}
+
+      # `make assets` runs `corepack pnpm`; the version is the packageManager of package.json.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Cache the pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/pnpm/store
+          key: pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+
+      - name: Install the packages
+        run: |
+          agentica --version
+          make install
+
+      - name: Check
+        run: make check
+
+      - name: Format
+        run: make fmt-check
+
+      - name: Test
+        run: make test
+
+  docker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the image
+        run: docker build .
