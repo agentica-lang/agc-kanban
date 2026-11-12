@@ -681,22 +681,29 @@ end
 # once the child exists and the wrapper sleeps in `wait`, so `pid` is set. The
 # wrapper is itself a background job here, which starts with SIGQUIT ignored,
 # so `env` gives it back the default, as a terminal's foreground job has it.
-# The script prints whether the child and the temp file are gone; a child
-# left behind is killed here so the run stays clean.
+# The script prints whether the child and the temp file are gone. One EXIT trap
+# removes the temp dir and kills the wrapper (until it is waited for) and the
+# child, so no exit path (90, 91 or the normal one) leaves them behind. A zombie
+# counts as gone: with no init to reap it, `kill -0` would still succeed.
+# Linux and GNU only: `env --default-signal`, `/proc` and `pgrep -P -x`.
 def quit_wrapper(ctx: BDD.Context, _args: List[String]) -> BDD.Context
   script = (
-    "dir=$(mktemp -d) && agentica compile cli.agc -o \"$dir/k.agcb\" && mkdir \"$dir/tmp\" && mkfifo \"$dir/in\" || exit 90\n" +
+    "w= child=\n" +
+    "dir=$(mktemp -d) || exit 90\n" +
+    "trap 'kill $w $child 2>/dev/null; rm -rf \"$dir\"' EXIT\n" +
+    "alive() { [ \"$(cut -d' ' -f3 /proc/$1/stat 2>/dev/null)\" != Z ] && kill -0 \"$1\" 2>/dev/null; }\n" +
+    "agentica compile cli.agc -o \"$dir/k.agcb\" && mkdir \"$dir/tmp\" && mkfifo \"$dir/in\" || exit 90\n" +
     "exec 4<>\"$dir/in\"\n" +
     "env --default-signal=QUIT TMPDIR=\"$dir/tmp\" KANBAN_TEST_PROGRAM=\"$dir/k.agcb\" bin/kanban card comment 1 - <\"$dir/in\" &\n" +
-    "w=$! child= i=0\n" +
+    "w=$! i=0\n" +
     "until [ -n \"$child\" ] && [ \"$(cut -d' ' -f3 /proc/$w/stat)\" = S ]; do\n" +
     "  i=$((i + 1)); [ $i -le 1000 ] || exit 91; sleep 0.01; child=$(pgrep -P \"$w\" -x agentica)\n" +
     "done\n" +
-    "kill -QUIT \"$w\"; code=0; wait \"$w\" || code=$?\n" +
-    "i=0; while kill -0 \"$child\" 2>/dev/null && [ $i -lt 1000 ]; do i=$((i + 1)); sleep 0.01; done\n" +
-    "if kill -0 \"$child\" 2>/dev/null; then kill \"$child\"; echo child left; else echo child gone; fi\n" +
+    "kill -QUIT \"$w\"; code=0; wait \"$w\" || code=$?; w=\n" +
+    "i=0; while alive \"$child\" && [ $i -lt 1000 ]; do i=$((i + 1)); sleep 0.01; done\n" +
+    "if alive \"$child\"; then echo child left; else echo child gone; fi\n" +
     "[ -z \"$(ls -A \"$dir/tmp\")\" ] && echo temp gone || echo temp left\n" +
-    "rm -rf \"$dir\"; exit $code"
+    "exit $code"
   )
 
   process = Process.spawn_captured(
