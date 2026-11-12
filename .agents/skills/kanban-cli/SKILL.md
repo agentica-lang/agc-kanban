@@ -103,7 +103,19 @@ then exits 3 with `UNSUPPORTED` (the other fields were saved). When you open a
 PR, add its link to the card.
 
 Long text: `--body`, `--body-file PATH`, or `-` to read standard input
-(`kanban card comment 12 - < notes.md`). Labels and `--depends-on` take a
+(`kanban card comment 12 - < notes.md`). Bodies and comments are Markdown (fenced
+code, headings, lists, quotes, `code`, bold, italic, links), rendered on the web
+view, so write a comment as a short list and not one long line; from a shell use
+a heredoc, which keeps quotes and backticks as they are:
+
+```sh
+kanban card comment 12 - <<'EOF'
+- PR: https://github.com/org/repo/pull/7
+- head `3f2a9c1` on `fix/login`
+- CI green
+EOF
+```
+ Labels and `--depends-on` take a
 comma-separated list.
 
 Card ids are global, so `card show`, `claim`, `comment`, `done` and `dep` need
