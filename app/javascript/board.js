@@ -3,6 +3,7 @@ import { subscribe } from "./cable.js";
 import { render } from "./render.js";
 
 var REFETCH_MS = 80; // a burst of events (a claim and a move) is one fetch
+var RETRY_MS = 2000; // the pause before the one retry of a failed feed fetch
 var PAGE = 30; // events shown at first, and loaded by each "Ver más"
 var NEWEST = Number.MAX_SAFE_INTEGER; // `before` of the newest page
 
@@ -16,6 +17,7 @@ export function startBoard(root, slug) {
   var events = "/api/boards/" + encodeURIComponent(slug) + "/events?limit=";
   var state = { board: null, cards: [], feed: [], changed: {}, more: false, loadMore: loadMore };
   var timer = null;
+  var synced = 0; // the newest event id that the feed is known to hold with nothing missing before it
 
   function draw() {
     render(root, state);
@@ -36,14 +38,23 @@ export function startBoard(root, slug) {
     state.feed = Object.keys(byId).map(function (id) { return byId[id]; }).sort(function (a, b) { return b.id - a.id; });
   }
 
+  function showError(error) {
+    root.replaceChildren(h("main", null, h("h1", null, "Board " + slug), h("p", { class: "empty" }, error.message)));
+  }
+
   function load() {
     timer = null;
     return getJSON("/api/boards/" + encodeURIComponent(slug)).then(function (snapshot) {
       state.board = snapshot.board;
       state.cards = snapshot.cards;
       draw();
-    }, function (error) {
-      root.replaceChildren(h("main", null, h("h1", null, "Board " + slug), h("p", { class: "empty" }, error.message)));
+    }, showError);
+  }
+
+  // Runs `task` again once, after a pause, when it fails: a blip of the network must not leave a hole in the feed.
+  function retried(task) {
+    return task().catch(function () {
+      return new Promise(function (resolve) { setTimeout(resolve, RETRY_MS); }).then(task);
     });
   }
 
@@ -56,15 +67,31 @@ export function startBoard(root, slug) {
   }
 
   function loadMore() {
-    loadOlder(oldest()).then(draw);
+    if (state.loading) {
+      return;
+    }
+    state.loading = true;
+    state.loadError = false;
+    draw();
+    retried(function () { return loadOlder(oldest()); }).catch(function () {
+      state.loadError = true;
+    }).then(function () {
+      state.loading = false;
+      draw();
+    });
   }
 
-  // The events after `last`, a page at a time, until a short page.
-  function catchUp(last) {
-    return getJSON(events + PAGE + "&after=" + last).then(function (answer) {
+  // The events after `synced`, a page at a time, until a short page. `synced` moves only when a page arrived, so a
+  // failed fetch leaves it where it was and the next confirmation asks again from there. (The newest event of the feed
+  // is no good for this: an event of the cable moves it past a hole.)
+  function catchUp() {
+    return retried(function () { return getJSON(events + PAGE + "&after=" + synced); }).then(function (answer) {
       merge(answer.events);
+      if (answer.events.length > 0) {
+        synced = Math.max(synced, answer.last_event_id);
+      }
       if (answer.events.length === PAGE) {
-        return catchUp(answer.last_event_id);
+        return catchUp();
       }
     });
   }
@@ -80,18 +107,16 @@ export function startBoard(root, slug) {
   }
 
   // Every confirmation, the first too, fetches again: an event that came between the first fetch and the
-  // confirmation was not broadcast to this client. `after` is read now, before any event of the cable is handled.
+  // confirmation was not broadcast to this client. The pages that did arrive are drawn even when a later one fails.
   function onSubscribed() {
-    var last = newest();
     load();
-    if (last > 0) {
-      catchUp(last).then(draw);
-    }
+    catchUp().catch(function () {}).then(draw);
   }
 
   loadOlder(NEWEST).then(function () {
+    synced = newest();
     return load();
   }).then(function () {
     subscribe({ channel: "BoardChannel", board: slug }, onEvent, onSubscribed);
-  });
+  }, showError);
 }

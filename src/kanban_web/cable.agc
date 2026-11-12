@@ -1,52 +1,62 @@
 ## The live side: `/cable` (Action Cable on bond-channels) and the broadcast of every event after its write.
 ##
-## `BoardChannel` (param `board`, the slug) streams `board:SLUG`. A task of its own, the publisher, reads the events
-## that are newer than the last one it sent and broadcasts them, so a broadcast always follows the commit, never runs
-## inside it, and goes out in the order of the journal. A write nudges it (`nudge`); a slow tick catches an event that a
-## nudge missed, so a lost wake-up is a delay and not a missed event. A client that misses a broadcast (a reconnect)
-## fetches the board again.
+## `BoardChannel` (param `board`, the slug) streams `board:SLUG`. The publisher (`publisher.agc`) is an actor
+## (`std/actor`) under a supervisor (`std/supervisor`). It reads the events that are newer than the last one it sent
+## and broadcasts them, so a broadcast always follows the commit, never runs inside it, and goes out in the order of
+## the journal. A write sends it `Nudge`, at most one while one is pending; a timer sends `Tick` each second, so a
+## lost nudge is a delay and not a missed event. A client that misses a broadcast (a reconnect) fetches the board again.
 ##
-## The cursor (the id of the last event sent) lives in an `ATS` table, not in the loop of the publisher: a supervisor task
-## starts the publisher again if it crashes, and the new one goes on from the cursor, so a crash loses no event.
+## A restart builds the actor again from the job that the child captured, and the new one reads the cursor from the
+## `ATS` cell that the job holds, so it goes on where the old one stopped.
 
+import Actor from "std/actor"
+import Supervisor from "std/supervisor"
 import Bond from "pkg/bond/bond"
 import Channels from "pkg/channels/channels"
 import Auth from "auth"
 import Database from "../kanban/repo/database"
-import Events from "../kanban/events"
+import Publisher from "publisher"
 import Routes from "routes"
 
 BOARD_CHANNEL = "BoardChannel"
-LAST = "last"
-BATCH = 100
+NAME = "publisher"
+PENDING = "pending"
 TICK_MS = 1_000
+# The address of the publisher: a restart gives a new actor a new address, so the writes look it up on each nudge.
+NAMES: ATS[String, Address[Msg]] = ATS.new()
+# Set while a `Nudge` is in the inbox, so a burst of writes is one flush and not one read of the journal per write.
+FLAGS: ATS[String, Int] = ATS.new()
 
-## What the writes and the publisher share: the nudge channel (one place, a nudge while one waits is enough).
+enum Msg
+  Nudge
+  Tick
+end
+
+## What the writes need: the hub of the channels. The publisher is reached by name.
 export struct Cable
   hub: Channels.Hub
-  wake: Channel[Int]
 end
 
-struct Publisher
-  pool: Database.Pool
-  hub: Channels.Hub
-  wake: Channel[Int]
-  cursor: ATS[String, Int]
-end
-
-## Starts the hub and, with a database, the publisher.
+## Starts the hub and, with a database, the publisher under a supervisor and its timer. Call it from the main task:
+## the supervisor and the timer are its children.
 export def start(pool: Optional[Database.Pool]) -> Cable
   hub = Channels.start_hub().unwrap!
-  wake: Channel[Int] = Channel.new(1)
   if pool.some?
     cursor: ATS[String, Int] = ATS.new()
-    job = Publisher(pool: pool.unwrap!, hub: hub, wake: wake, cursor: cursor)
-    # One try here, so that a write that follows the start is seen; `publish` retries while the read fails.
-    _ = seeded?(job)
-    _ = Task.spawn(&supervise, job)
+    job = Publisher.new(pool.unwrap!, hub, cursor)
+    # One try here, so that a write that follows the start is seen; the actor retries while the read fails.
+    _ = Publisher.seeded(job)
+    behaviour: Actor.Behaviour[Publisher.Publisher, Msg] = Actor.Behaviour(
+      init: init_from() do job end,
+      handle: &handle,
+    )
+
+    child = Supervisor.child(NAME, behaviour) do |address| NAMES.put(NAME, address) end
+    _ = Supervisor.start([child])
+    _ = Task.spawn(&ticker)
   end
 
-  Cable(hub: hub, wake: wake)
+  Cable(hub: hub)
 end
 
 ## Mounts `/cable`.
@@ -55,9 +65,15 @@ export def mount(app: Bond.App, cable: Cable) -> Bond.App
   Channels.mount(app, Routes.CABLE, cable.hub, options).unwrap!
 end
 
-## Tells the publisher that a write may have added events.
-export def nudge(cable: Cable) -> Void
-  _ = cable.wake.send(1, 0)
+## Tells the publisher that a write may have added events. Only the nudge that sets the flag is sent.
+export def nudge(_cable: Cable) -> Void
+  return if not NAMES.get(NAME).ok?
+
+  if FLAGS.put_new(PENDING, 1)
+    if not cast(Msg.Nudge)
+      FLAGS.delete(PENDING)
+    end
+  end
 end
 
 # The session was checked at the handshake: no session is an `unauthorized` disconnect, and the client stays out.
@@ -74,78 +90,28 @@ def board_subscribed(session: Channels.Session, params: Json) -> Result[Channels
   ok(Channels.Subscription(streams: ["board:#{board}"]))
 end
 
-# Runs the publisher and runs it again after a crash (a runtime error in a task ends only that task).
-def supervise(job: Publisher) -> Void
-  while not job.wake.closed?
-    outcome = Task.await(Task.spawn(&publish, job))
-    if not outcome.ok?
-      IO.warn("kanban: the live publisher stopped, starting it again: #{outcome.message}")
-      Task.sleep(TICK_MS)
-    end
-  end
-end
-
-# The live broadcast starts at the newest event, so that history is not replayed. A failed read leaves the
-# cursor unset:
-# replaying the journal from 0 would flood the clients.
-def seeded?(job: Publisher) -> Bool
-  return true if job.cursor.get(LAST).ok?
-
-  newest = Events.latest_id(job.pool)
-  if not newest.ok?
-    IO.warn("kanban: live start read failed: #{newest.message}")
-    return false
-  end
-
-  job.cursor.put(LAST, newest.unwrap!)
-  true
-end
-
-def publish(job: Publisher) -> Result[Void]
-  while not seeded?(job)
+# Casts `Tick` to the publisher each second, wherever it lives now.
+def ticker() -> Void
+  while true
     Task.sleep(TICK_MS)
-  end
-
-  while not job.wake.closed?
-    _ = job.wake.recv(TICK_MS)
-    flush(job)
-  end
-
-  ok()
-end
-
-# Sends the events after the cursor and moves it. A failed read keeps it, so the next tick tries again.
-def flush(job: Publisher) -> Void
-  last = job.cursor.get(LAST).unwrap_or(0)
-  found = Events.published_after(job.pool, last, BATCH)
-  if not found.ok?
-    IO.warn("kanban: live read failed: #{found.message}")
-    return
-  end
-
-  for item in found.unwrap!
-    # A failed broadcast is logged and dropped: the journal still has the event.
-    result = Channels.broadcast_json(job.hub, "board:#{item.slug}", payload(item.event))
-    if not result.ok?
-      IO.warn("kanban: broadcast failed: #{result.message}")
-    end
-
-    job.cursor.put(LAST, item.event.id)
-  end
-
-  if found.unwrap!.size == BATCH
-    flush(job)
+    _ = cast(Msg.Tick)
   end
 end
 
-def payload(event: Events.Event) -> Json
-  JSON.object({
-    "type": JSON.from(event.kind),
-    "event_id": JSON.from(event.id),
-    "board_id": JSON.from(event.board_id),
-    "card_id": JSON.from(event.card_id),
-    "actor": JSON.from(event.actor),
-    "data": event.data,
-    "at": JSON.from(event.created_at),
-  })
+# A full inbox drops the message (timeout 0): a later tick or nudge reads the same journal.
+def cast(message: Msg) -> Bool
+  found = NAMES.get(NAME)
+  return false if not found.ok?
+
+  Actor.cast(found.unwrap!, message, 0).ok?
+end
+
+# The block of `init` gives the state of each new actor; the helper only types it as an `Fn`.
+def init_from[R](f: Fn[R]) -> Fn[R] = f
+
+# The flag is cleared before the flush: a write during the flush sends one more nudge. A crash that loses a pending
+# nudge leaves the flag set, and the next tick clears it.
+def handle(job: Publisher.Publisher, _message: Msg) -> Actor.Step[Publisher.Publisher]
+  FLAGS.delete(PENDING)
+  Actor.continue(Publisher.flush(Publisher.seeded(job)))
 end

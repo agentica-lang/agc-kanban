@@ -59,7 +59,8 @@ function feedView(state) {
     h("ul", null, state.feed.map(function (event) {
       return h("li", null, h("b", null, event.kind), event.card_id !== null ? " #" + event.card_id : "", " ", h("span", { class: "actor" }, event.actor));
     })),
-    state.more ? h("button", { class: "more", type: "button", onclick: state.loadMore }, "Ver m\u00e1s") : null
+    state.more ? h("button", { class: "more", type: "button", disabled: state.loading, onclick: state.loadMore }, "Ver m\u00e1s") : null,
+    state.loadError ? h("p", { class: "empty" }, "No se pudo cargar.") : null
   );
 }
 
