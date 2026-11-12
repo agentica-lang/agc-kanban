@@ -63,7 +63,7 @@ kanban board create "Project" --slug project   # slug defaults to KANBAN_BOARD
 # without --columns: Todo, Doing, Review, Done
 kanban board show [BOARD]
 
-kanban column add Review --position 2 [--done] [--wip 3]
+kanban column add Review --position 2 [--done] [--wip 3]   # --done moves the done flag off the old done column
 kanban column rename Review Check
 kanban column move Check 1
 kanban column remove Check             # refused when it has cards or is the done column
@@ -114,9 +114,16 @@ $ kanban card list
 | --- | --- |
 | 0 | done |
 | 1 | the server refused: `NOT_FOUND`, `INVALID`, `CONFLICT`, `CYCLE`, `NOT_CLAIMER`, `NO_READY_CARD` |
-| 2 | usage: unknown command, missing argument, missing agent or board |
+| 2 | usage: unknown command, missing argument, missing agent or board; the code printed is `USAGE` |
 | 3 | no server, `UNAUTHORIZED`, `BUSY` after the retries, or any other failure |
 | 4 | lost the race: `CLAIMED`, `BLOCKED`, `DONE` |
+
+A refusal is one line on stderr, with the card when that is what failed:
+
+```
+$ kanban card claim 12
+kanban: CLAIMED: card 12 is claimed by claude-1
+```
 
 The client retries a `503` after 200, 400 and 800 ms and then exits 3, so a
 short restart of the server is invisible. A failed write is never repeated

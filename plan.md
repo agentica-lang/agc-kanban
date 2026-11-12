@@ -440,7 +440,8 @@ no skills installed still learns the rules from the shell alone.
 - `--json`: one JSON document on stdout, the server's answer as is. Errors
   are `{"error": {...}}` on stdout too, so an agent reads one stream.
 - Text errors go to stderr as `kanban: CLAIMED: card 12 is claimed by
-  claude-1`.
+  claude-1`. A usage error prints the code `USAGE`, so it cannot be mistaken
+  for a refusal from the server.
 
 Exit codes:
 
@@ -448,12 +449,13 @@ Exit codes:
 |---|---|
 | 0 | Done. |
 | 1 | The server refused it: `INVALID`, `NOT_FOUND`, `NO_READY_CARD`, `NOT_CLAIMER`, `CYCLE`, `CONFLICT`. |
-| 2 | Bad usage (from `option_parser`), or `KANBAN_AGENT` is missing for a write. |
+| 2 | Bad usage (from `option_parser`), or `KANBAN_AGENT` is missing for a write; the code is `USAGE`. |
 | 3 | No server, `UNAUTHORIZED`, or `BUSY` after 3 tries. |
 | 4 | Lost a race: `CLAIMED`, `BLOCKED` or `DONE`. Pick another card. |
 
-The CLI retries `BUSY` and connection errors 3 times (200 ms, 400 ms,
-800 ms). A claim is safe to retry: claiming a card you hold renews it.
+The CLI retries `BUSY` 3 times (200 ms, 400 ms, 800 ms). A connection failure
+is retried only for `GET`: a write that failed in transport may have arrived,
+and a retry would duplicate it.
 
 ## 6. Live web
 
