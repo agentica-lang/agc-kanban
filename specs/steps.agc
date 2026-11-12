@@ -7,6 +7,8 @@ def main() -> Void
     BDD.step("the database server is running", &start_database_server),
     BDD.step("I post a board named {string} with slug {string} as {string}", &post_board),
     BDD.step("I list boards", &list_boards),
+    BDD.step("I add a card titled {string}", &add_card),
+    BDD.step("I get card {int}", &get_card),
     BDD.step("I add the column {string} at position {int}", &add_column),
     BDD.step("I get board events for {string} after {int}", &board_events),
     BDD.step("the response contains {string}", &response_contains),
@@ -211,6 +213,35 @@ def add_column(ctx: BDD.Context, args: List[String]) -> BDD.Context
     "POST",
     "http://127.0.0.1:#{port}/api/boards/project/columns",
     JSON.encode(data).bytes,
+    [
+      Header(name: "apikey", value: "01234567890123456789012345678901"),
+      Header(name: "X-Kanban-Agent", value: "agent-1"),
+      Header(name: "Content-Type", value: "application/json"),
+    ],
+  ).unwrap!
+
+  HTTP.close_client(client)
+  stored = BDD.set(ctx, "status", JSON.from(response.status))
+  BDD.set(stored, "body", JSON.from(HTTP.text(response.body, response.headers).unwrap!))
+end
+
+def add_card(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  body = JSON.encode(JSON.from({"title": args[0]}))
+  api_request(ctx, "POST", "/api/boards/project/cards", body)
+end
+
+def get_card(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  api_request(ctx, "GET", "/api/cards/#{args[0]}", "")
+end
+
+def api_request(ctx: BDD.Context, method: String, path: String, body: String) -> BDD.Context
+  port = JSON.int(BDD.get(ctx, "port").unwrap!).unwrap!
+  client = HTTP.client().unwrap!
+  response = HTTP.request(
+    client,
+    method,
+    "http://127.0.0.1:#{port}#{path}",
+    body.bytes,
     [
       Header(name: "apikey", value: "01234567890123456789012345678901"),
       Header(name: "X-Kanban-Agent", value: "agent-1"),

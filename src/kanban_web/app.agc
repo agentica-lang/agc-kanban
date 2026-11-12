@@ -1,6 +1,7 @@
 import Bond from "pkg/bond/bond"
 import Regex from "std/regex"
 import Boards from "../kanban/boards"
+import Cards from "../kanban/cards"
 import Columns from "../kanban/columns"
 import Events from "../kanban/events"
 import Database from "../kanban/repo/database"
@@ -9,6 +10,19 @@ struct CreateBoard
   name: String
   slug: Optional[String]
   columns: Optional[List[String]]
+end
+
+struct CreateCard
+  title: String
+  body: Optional[String]
+  column: Optional[String]
+  labels: Optional[List[String]]
+  priority: Optional[Int]
+  depends_on: Optional[List[Int]]
+end
+
+struct CardAnswer
+  card: Cards.Card
 end
 
 struct CreateColumn
@@ -48,6 +62,8 @@ export def build(key: String, pool: Optional[Database.Pool] = none) -> Bond.App
     |> Bond.get("/api/auth-check", &auth_check)
     |> Bond.get("/api/boards") do |conn| list_boards(conn, pool) end
     |> Bond.post("/api/boards") do |conn| create_board(conn, pool) end
+    |> Bond.post("/api/boards/:board/cards") do |conn| create_card(conn, pool) end
+    |> Bond.get("/api/cards/:id") do |conn| show_card(conn, pool) end
     |> Bond.post("/api/boards/:board/columns") do |conn| add_column(conn, pool) end
     |> Bond.get("/api/boards/:board/events") do |conn| board_events(conn, pool) end
   )
@@ -202,4 +218,43 @@ def add_column(conn: Bond.Conn, pool: Optional[Database.Pool]) -> Result[Bond.Co
   return ok(failure(conn, result.message)) if not result.ok?
 
   ok(Bond.json_as(conn, 201, ColumnAnswer.codec, ColumnAnswer(column: result.unwrap!)))
+end
+
+def create_card(conn: Bond.Conn, pool: Optional[Database.Pool]) -> Result[Bond.Conn]
+  return ok(reject(conn, 503, "BUSY", "database unavailable")) if not pool.some?
+
+  body = Bond.body_text(conn)
+  return ok(reject(conn, 400, "INVALID", "invalid body", some("body"))) if not body.ok?
+
+  decoded = JSON.decode(body.unwrap!, CreateCard)
+  return ok(reject(conn, 400, "INVALID", "invalid body", some("body"))) if not decoded.ok?
+
+  data = decoded.unwrap!
+  input = Cards.Create(
+    board: Bond.param(conn, "board").unwrap_or(""),
+    title: data.title,
+    body: data.body.unwrap_or(""),
+    column: data.column,
+    labels: data.labels.unwrap_or([]),
+    priority: data.priority.unwrap_or(2),
+    depends_on: data.depends_on.unwrap_or([]),
+    actor: Bond.request_header(conn, "X-Kanban-Agent").unwrap_or(""),
+  )
+
+  result = Cards.create(pool.unwrap!, input)
+  return ok(failure(conn, result.message)) if not result.ok?
+
+  ok(Bond.json_as(conn, 201, CardAnswer.codec, CardAnswer(card: result.unwrap!)))
+end
+
+def show_card(conn: Bond.Conn, pool: Optional[Database.Pool]) -> Result[Bond.Conn]
+  return ok(reject(conn, 503, "BUSY", "database unavailable")) if not pool.some?
+
+  id = Bond.param_int(conn, "id")
+  return ok(reject(conn, 400, "INVALID", "invalid id", some("id"))) if not id.ok?
+
+  result = Cards.show(pool.unwrap!, id.unwrap!)
+  return ok(failure(conn, result.message)) if not result.ok?
+
+  ok(Bond.json_as(conn, 200, Cards.Detail.codec, result.unwrap!))
 end

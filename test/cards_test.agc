@@ -1,0 +1,54 @@
+import Db from "pkg/db/db"
+import Boards from "../src/kanban/boards"
+import Cards from "../src/kanban/cards"
+import Database from "../src/kanban/repo/database"
+
+def test_create_validates_inputs_without_changes() -> Result[Void]
+  home = try System.env("HOME")
+  try Dir.mkdir("#{home}/.cache")
+  dir = "#{home}/.cache/kanban-cards-test-#{System.pid()}"
+  pool = try Database.open(dir)
+  _ = try Boards.create(pool, "Project", "project", "agent", ["Todo", "Done"])
+  input = Cards.Create(
+    board: "project",
+    title: "First",
+    body: "",
+    column: none,
+    labels: [],
+    priority: 2,
+    depends_on: [],
+    actor: "agent",
+  )
+
+  first = try Cards.create(pool, input)
+  before = try snapshot(pool)
+  try Test.eq(Cards.create(pool, input.with(board: "")), error("INVALID:board"))
+  try Test.eq(Cards.create(pool, input.with(board: "missing")), error("NOT_FOUND:board"))
+  try Test.eq(Cards.create(pool, input.with(title: "")), error("INVALID:title"))
+  try Test.eq(Cards.create(pool, input.with(priority: -1)), error("INVALID:priority"))
+  try Test.eq(Cards.create(pool, input.with(priority: 5)), error("INVALID:priority"))
+  try Test.eq(Cards.create(pool, input.with(actor: "bad agent")), error("INVALID:agent"))
+  try Test.eq(Cards.create(pool, input.with(labels: [""])), error("INVALID:labels"))
+  try Test.eq(Cards.create(pool, input.with(depends_on: [0])), error("INVALID:depends_on"))
+  try Test.eq(Cards.create(pool, input.with(depends_on: [first.id, first.id])), error("INVALID:depends_on"))
+  try Test.eq(Cards.create(pool, input.with(depends_on: [999])), error("NOT_FOUND:depends_on"))
+  try Test.eq(Cards.create(pool, input.with(column: some("missing"))), error("NOT_FOUND:column"))
+  after = try snapshot(pool)
+  try Test.eq(after, before)
+  detail = try Cards.show(pool, first.id)
+  try Test.eq(detail.card, first)
+  blocked = try Cards.create(pool, input.with(title: "Second", depends_on: [first.id]))
+  try Test.eq(blocked.ready, false)
+  try Test.eq(blocked.depends_on, [first.id])
+  updated = try Cards.show(pool, first.id)
+  try Test.eq(updated.card.blocks, [blocked.id])
+  Database.close(pool)
+  try Path.remove("#{dir}/kanban.sqlite3")
+  Path.remove(dir)
+end
+
+def snapshot(pool: Database.Pool) -> Result[List[Db.Row]]
+  Database.with_connection(pool) do |conn|
+    Db.query(conn, "select id, title, (select count(*) from events) as event_count from cards order by id", [])
+  end
+end
