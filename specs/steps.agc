@@ -55,6 +55,8 @@ def main() -> Void
       BDD.step("a server with an invalid authentication response is running", &start_invalid_auth),
       BDD.step("a server is busy {string}", &start_busy),
       BDD.step("I run kanban {string}", &run_kanban),
+      BDD.step("I run the kanban wrapper whose reader has left {string}", &run_wrapper_closed),
+      BDD.step("I run the kanban wrapper {string} reading the body {string}", &run_wrapper_stdin),
       BDD.step("kanban exits with code {int}", &kanban_status),
       BDD.step("kanban output contains {string}", &kanban_output),
       BDD.step("kanban output does not contain {string}", &kanban_output_lacks),
@@ -583,6 +585,57 @@ def run_kanban_with(ctx: BDD.Context, words: List[String], env: Map[String, Stri
   end
 
   code = Process.wait(process, 30000).unwrap!
+  output = Process.output(process, 30000).unwrap!
+  Process.close(process)
+  stored = BDD.set(ctx, "kanban_exit", JSON.from(code))
+  with_out = BDD.set(stored, "kanban_output", JSON.from("#{output.stdout}#{output.stderr}"))
+  with_err = BDD.set(with_out, "kanban_stdout", JSON.from(output.stdout))
+  BDD.set(with_err, "kanban_stderr", JSON.from(output.stderr))
+end
+
+# The wrapper needs a compiled program; one temporary folder per run keeps
+# parallel jobs apart. The reader of the pipe (`true`) exits at once, so the
+# CLI writes to a pipe nobody reads, as `kanban board show | head -1` does.
+# bash gives the status of the first command of the pipe. `true` could in
+# theory still be running when the CLI writes, but the CLI boots for far
+# longer than `true` takes to exit.
+def run_wrapper_closed(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  script = (
+    "dir=$(mktemp -d) && agentica compile cli.agc -o \"$dir/k.agcb\" && { KANBAN_TEST_PROGRAM=\"$dir/k.agcb\" bin/kanban \"$1\" | true; code=${PIPESTATUS[0]}; rm -rf \"$dir\"; exit $code; }"
+  )
+
+  process = Process.spawn_captured(
+    "bash",
+    ["-c", script, "bash", args[0]],
+    Process.Options(env: {"KANBAN_API_KEY": "01234567890123456789012345678901", "KANBAN_AGENT": "agent-1"}),
+  ).unwrap!
+
+  code = Process.wait(process, 60000).unwrap!
+  output = Process.output(process, 30000).unwrap!
+  Process.close(process)
+  stored = BDD.set(ctx, "kanban_exit", JSON.from(code))
+  with_out = BDD.set(stored, "kanban_output", JSON.from("#{output.stdout}#{output.stderr}"))
+  with_err = BDD.set(with_out, "kanban_stdout", JSON.from(output.stdout))
+  BDD.set(with_err, "kanban_stderr", JSON.from(output.stderr))
+end
+
+# The real wrapper under /bin/sh with a piped standard input: a background job
+# of a non-interactive shell reads /dev/null unless the wrapper hands it the
+# input, and a lost body would post an empty comment.
+def run_wrapper_stdin(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  script = (
+    "dir=$(mktemp -d) && agentica compile cli.agc -o \"$dir/k.agcb\" && { KANBAN_TEST_PROGRAM=\"$dir/k.agcb\" bin/kanban $1; code=$?; rm -rf \"$dir\"; exit $code; }"
+  )
+
+  process = Process.spawn_captured(
+    "/bin/sh",
+    ["-c", script, "sh", args[0]],
+    Process.Options(env: kanban_env(ctx)),
+  ).unwrap!
+
+  Process.send(process, args[1], 30000).unwrap!
+  Process.close_stdin(process, 30000).unwrap!
+  code = Process.wait(process, 60000).unwrap!
   output = Process.output(process, 30000).unwrap!
   Process.close(process)
   stored = BDD.set(ctx, "kanban_exit", JSON.from(code))
