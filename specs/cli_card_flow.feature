@@ -78,3 +78,13 @@ Feature: CLI card lifecycle
     Then kanban exits with code 0
     When I run kanban "card claim 2 --board project"
     Then kanban exits with code 0
+
+  Scenario: Releasing a card nobody holds is a no-op
+    Given the database server is running
+    When I post a board named "Project" with slug "project" as "agent-1"
+    Then the response status is 201
+    When I add a card titled "First"
+    Then the response status is 201
+    When I run kanban "card release 1 --board project"
+    Then kanban exits with code 0
+    And kanban output contains "already free"

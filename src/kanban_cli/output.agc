@@ -125,6 +125,17 @@ export def body(response: HttpResponse) -> String = HTTP.text(response.body, res
 
 # A connection failure is a 3 and a refused answer exits with its own code;
 # only a 2xx comes back.
+# The response whatever it says, so a command can decide what a refusal means.
+export def answered(result: Result[HttpResponse], json: Bool) -> HttpResponse
+  if not result.ok?
+    fail(json, "UNAVAILABLE", result.message, 3)
+  end
+
+  result.unwrap!
+end
+
+export def code_of(response: HttpResponse) -> Optional[String] = error_code(response)
+
 export def expect(result: Result[HttpResponse], json: Bool) -> Result[HttpResponse]
   if not result.ok?
     fail(json, "UNAVAILABLE", result.message, 3)

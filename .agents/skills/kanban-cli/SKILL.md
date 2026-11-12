@@ -64,6 +64,7 @@ kanban board create "Project" --slug project   # slug defaults to KANBAN_BOARD
 kanban board show [BOARD]
 
 kanban column add Review --position 2 [--done] [--wip 3]   # --done moves the done flag off the old done column
+#   and warns on stderr: "Done is no longer the done column; 2 cards are no longer done"
 kanban column rename Review Check
 kanban column move Check 1
 kanban column remove Check             # refused when it has cards or is the done column
@@ -76,7 +77,7 @@ kanban card update 12 [--title T] [--body T | --body-file F] [--label L] \
 
 kanban card claim 12                   # 4 when somebody else holds it
 kanban card next [--column Todo] [--label api]
-kanban card release 12 [--to Todo] [--force]
+kanban card release 12 [--to Todo] [--force]   # releasing a free card is a no-op: "already free"
 kanban card move 12 Doing [--position 0] [--force]
 kanban card done 12 [--force]
 kanban card comment 12 "ran the migration"   # or --file notes.md
@@ -113,7 +114,7 @@ $ kanban card list
 | Code | Meaning |
 | --- | --- |
 | 0 | done |
-| 1 | the server refused: `NOT_FOUND`, `INVALID`, `CONFLICT`, `CYCLE`, `NOT_CLAIMER`, `NO_READY_CARD` |
+| 1 | the server refused: `NOT_FOUND`, `INVALID`, `CONFLICT`, `CYCLE`, `NOT_CLAIMER` (another agent holds it), `NO_READY_CARD` |
 | 2 | usage: unknown command, missing argument, missing agent or board; the code printed is `USAGE` |
 | 3 | no server, `UNAUTHORIZED`, `BUSY` after the retries, or any other failure |
 | 4 | lost the race: `CLAIMED`, `BLOCKED`, `DONE` |

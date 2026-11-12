@@ -65,6 +65,7 @@ def main() -> Void
     BDD.step("kanban exit codes are {string}", &kanban_codes),
     BDD.step("kanban stderr contains {string}", &kanban_stderr),
     BDD.step("kanban stderr is {string}", &kanban_stderr_is),
+    BDD.step("kanban stderr does not contain {string}", &kanban_stderr_lacks),
     BDD.step("kanban stdout contains {string}", &kanban_stdout),
     BDD.step("kanban stdout is empty", &kanban_stdout_empty),
     BDD.step("kanban stderr is empty", &kanban_stderr_empty),
@@ -663,6 +664,11 @@ end
 def kanban_stderr(ctx: BDD.Context, args: List[String]) -> BDD.Context
   output = JSON.string(BDD.get(ctx, "kanban_stderr").unwrap!).unwrap!
   BDD.assert(ctx, output.include?(args[0]), "stderr was #{output}")
+end
+
+def kanban_stderr_lacks(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  output = JSON.string(BDD.get(ctx, "kanban_stderr").unwrap!).unwrap!
+  BDD.assert(ctx, not output.include?(args[0]), "stderr was #{output}")
 end
 
 def kanban_stderr_is(ctx: BDD.Context, args: List[String]) -> BDD.Context

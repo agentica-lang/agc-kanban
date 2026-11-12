@@ -6,6 +6,14 @@ import Settings from "settings"
 import Support from "support"
 import {Arg, Kind, Opt} from "std/option_parser"
 
+struct FreeCard
+  claimed_by: Optional[String]
+end
+
+struct FreeAnswer
+  card: FreeCard
+end
+
 export def run(words: List[String]) -> Result[Void]
   return error("card needs a command") if words.empty?
 
@@ -78,15 +86,46 @@ def release(words: List[String]) -> Result[Void]
   fields: Map[String, Json] = {}
   fields = Support.put(fields, "column", OP.optional_string(parsed, "to"))
   fields = Support.force(fields, parsed)
-  response = Output.expect(
-    Client.post(Client.from(config), "/api/cards/#{OP.int(parsed, "id")}/release", JSON.encode(JSON.object(fields))),
+  client = Client.from(config)
+  id = OP.int(parsed, "id")
+  answer = Output.answered(
+    Client.post(client, "/api/cards/#{id}/release", JSON.encode(JSON.object(fields))),
     config.json,
   )
 
-  return ok() if not response.ok?
+  if answer.status >= 200 and answer.status <= 299
+    Support.print_card(config, answer)
+    return ok()
+  end
 
-  Support.print_card(config, response.unwrap!)
+  # Releasing a card nobody holds is already what the caller wanted; only a
+  # card held by another agent is a refusal.
+  if Output.code_of(answer) == some("NOT_CLAIMER") and not held?(client, config, id)
+    print_already_free(config, client, id)
+    return ok()
+  end
+
+  Output.refuse(config.json, answer)
   ok()
+end
+
+def held?(client: Client.Client, config: Settings.Config, id: Int) -> Bool
+  response = Output.expect(Client.get(client, "/api/cards/#{id}"), config.json)
+  return true if not response.ok?
+
+  decoded = JSON.decode(Output.body(response.unwrap!), FreeAnswer)
+  return true if not decoded.ok?
+
+  decoded.unwrap!.card.claimed_by.some?
+end
+
+def print_already_free(config: Settings.Config, client: Client.Client, id: Int) -> Void
+  if config.json
+    puts(Output.body(Output.answered(Client.get(client, "/api/cards/#{id}"), config.json)))
+    return
+  end
+
+  puts("released\t#{id}\talready free")
 end
 
 def move(words: List[String]) -> Result[Void]

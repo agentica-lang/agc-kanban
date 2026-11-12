@@ -57,3 +57,16 @@ Feature: CLI columns
     When I run kanban "column rename Nope Other --board project"
     Then kanban exits with code 1
     And kanban output contains "NOT_FOUND"
+
+  Scenario: Marking a new done column says which cards stop being done
+    Given the database server is running
+    When I post a board named "Project" with slug "project" as "agent-1"
+    Then the response status is 201
+    When I run kanban "card add Shipped --board project --column Done"
+    Then kanban exits with code 0
+    When I run kanban "column add Wip --done --board project"
+    Then kanban exits with code 0
+    And kanban stderr contains "Done is no longer the done column; 1 card is no longer done"
+    When I run kanban "column add Next --done --board project"
+    Then kanban exits with code 0
+    And kanban stderr does not contain "no longer the done column"

@@ -16,8 +16,13 @@ struct BoardInfo
   columns: List[ColumnLine]
 end
 
+struct SnapshotCard
+  column: String
+end
+
 struct Snapshot
   board: BoardInfo
+  cards: List[SnapshotCard]
 end
 
 struct ColumnAnswer
@@ -65,15 +70,54 @@ def add(words: List[String]) -> Result[Void]
     fields = fields.put("wip_limit", JSON.from(wip.unwrap!))
   end
 
+  client = Client.from(config)
+  note: Optional[String] = none
+  if OP.flag(parsed, "done")
+    note = done_note(client, config)
+  end
+
   response = Output.expect(
-    Client.post(Client.from(config), "/api/boards/#{board}/columns", JSON.encode(JSON.object(fields))),
+    Client.post(client, "/api/boards/#{board}/columns", JSON.encode(JSON.object(fields))),
     config.json,
   )
 
   return ok() if not response.ok?
 
   print_column(config, response.unwrap!, "added")
+  if note.some?
+    IO.warn("kanban: warning: #{note.unwrap!}")
+  end
+
   ok()
+end
+
+# Moving the done flag un-dones the cards that sat in the old done column; say
+# so before it happens, since the answer cannot list them.
+def done_note(client: Client.Client, config: Settings.Config) -> Optional[String]
+  board = Support.board_of(config)
+  response = Output.expect(Client.get(client, "/api/boards/#{board}"), config.json)
+  return none if not response.ok?
+
+  snapshot = JSON.decode(Output.body(response.unwrap!), Snapshot)
+  return none if not snapshot.ok?
+
+  data = snapshot.unwrap!
+  done_name = ""
+  for column in data.board.columns
+    if column.done
+      done_name = column.name
+    end
+  end
+
+  return none if done_name.empty?
+
+  affected = data.cards.select do |card| card.column == done_name end
+  return none if affected.empty?
+
+  count = affected.size
+  return some("#{done_name} is no longer the done column; 1 card is no longer done") if count == 1
+
+  some("#{done_name} is no longer the done column; #{count} cards are no longer done")
 end
 
 def rename(words: List[String]) -> Result[Void]
