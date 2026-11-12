@@ -45,6 +45,7 @@ def main() -> Void
       BDD.step("I get board events for {string} with query {string}", &board_events_query),
       BDD.step("the response contains {string}", &response_contains),
       BDD.step("the response does not contain {string}", &response_lacks),
+      BDD.step("the response lists {string} before {string}", &response_lists_before),
       BDD.step("the response contains exactly {int} occurrences of {string}", &response_occurrences),
       BDD.step("I list project cards with query {string}", &list_cards_query),
       BDD.step("agent {string} claims the next card", &claim_next),
@@ -60,6 +61,7 @@ def main() -> Void
       BDD.step("kanban exits with code {int}", &kanban_status),
       BDD.step("kanban output contains {string}", &kanban_output),
       BDD.step("kanban output does not contain {string}", &kanban_output_lacks),
+      BDD.step("kanban output lists {string} before {string}", &kanban_output_before),
       BDD.step("I run kanban without a key {string}", &run_kanban_no_key),
       BDD.step("I run kanban without an agent {string}", &run_kanban_no_agent),
       BDD.step("I run kanban as agent {string} {string}", &run_kanban_as),
@@ -548,6 +550,17 @@ def response_lacks(ctx: BDD.Context, args: List[String]) -> BDD.Context
   BDD.assert(ctx, not body.include?(args[0]), "response was #{body}")
 end
 
+def response_lists_before(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  body = JSON.string(BDD.get(ctx, "body").unwrap!).unwrap!
+  BDD.assert(ctx, appears_before(body, args[0], args[1]), "response was #{body}")
+end
+
+def appears_before(text: String, first: String, second: String) -> Bool
+  a = text.index_of(first)
+  b = text.index_of(second)
+  a.some? and b.some? and a.unwrap! < b.unwrap!
+end
+
 def response_occurrences(ctx: BDD.Context, args: List[String]) -> BDD.Context
   body = JSON.string(BDD.get(ctx, "body").unwrap!).unwrap!
   found = body.split(args[1]).size - 1
@@ -715,6 +728,11 @@ end
 def kanban_output(ctx: BDD.Context, args: List[String]) -> BDD.Context
   output = JSON.string(BDD.get(ctx, "kanban_output").unwrap!).unwrap!
   BDD.assert(ctx, output.include?(args[0]), "output was #{output}")
+end
+
+def kanban_output_before(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  output = JSON.string(BDD.get(ctx, "kanban_output").unwrap!).unwrap!
+  BDD.assert(ctx, appears_before(output, args[0], args[1]), "output was #{output}")
 end
 
 def kanban_output_lacks(ctx: BDD.Context, args: List[String]) -> BDD.Context
