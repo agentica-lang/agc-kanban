@@ -48,3 +48,22 @@ Feature: Card claims
     When I add eight cards
     And eight agents race to claim the next card
     Then each agent claims a different card
+
+  Scenario: Only the holder can finish a claimed card
+    Given the database server is running
+    When I post a board named "Project" with slug "project" as "agent-1"
+    Then the response status is 201
+    When I add a card titled "Implement API"
+    Then the response status is 201
+    When agent "agent-1" claims card 1
+    Then the response status is 200
+    When agent "agent-2" marks card 1 done
+    Then the response status is 409
+    And the response contains "NOT_CLAIMER"
+    When agent "agent-1" marks card 1 done
+    Then the response status is 200
+    And the response contains "\"done\":true"
+    And the response contains "\"claimed_by\":null"
+    When agent "agent-2" claims card 1
+    Then the response status is 409
+    And the response contains "DONE"

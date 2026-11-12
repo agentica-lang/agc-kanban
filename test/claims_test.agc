@@ -3,6 +3,7 @@ import Boards from "../src/kanban/boards"
 import Cards from "../src/kanban/cards"
 import Claims from "../src/kanban/claims"
 import Database from "../src/kanban/repo/database"
+import Transitions from "../src/kanban/transitions"
 
 def test_claim_guards_and_leases() -> Result[Void]
   home = try System.env("HOME")
@@ -78,4 +79,39 @@ def expire(pool: Database.Pool, id: Int) -> Result[Void]
     _ = try Db.execute(conn, "update cards set lease_until = 1 where id = ?", [Db.Value.Int(id)])
     ok()
   end
+end
+
+def test_finish_validates_and_preserves_cards_on_error() -> Result[Void]
+  home = try System.env("HOME")
+  try Dir.mkdir("#{home}/.cache")
+  dir = "#{home}/.cache/kanban-finish-test-#{System.pid()}"
+  pool = try Database.open(dir)
+  _ = try Boards.create(pool, "Project", "project", "agent", ["Todo", "Doing", "Done"])
+  input = Cards.Create(
+    board: "project",
+    title: "First",
+    body: "",
+    column: none,
+    labels: [],
+    priority: 2,
+    depends_on: [],
+    actor: "agent",
+  )
+
+  card = try Cards.create(pool, input)
+  _ = try Claims.claim(pool, card.id, "agent", 0)
+  action = Transitions.Action(id: card.id, actor: "agent", force: false)
+  before = try state(pool)
+  try Test.eq(Transitions.finish(pool, action.with(id: 0)), error("INVALID:id"))
+  try Test.eq(Transitions.finish(pool, action.with(id: 999)), error("NOT_FOUND:card"))
+  try Test.eq(Transitions.finish(pool, action.with(actor: "bad agent")), error("INVALID:agent"))
+  try Test.eq(Transitions.finish(pool, action.with(actor: "other")), error("NOT_CLAIMER:card"))
+  try Test.eq(try state(pool), before)
+  done = try Transitions.finish(pool, action)
+  try Test.eq(done.done, true)
+  try Test.eq(done.claimed_by, none)
+  try Test.assert(done.done_at.some?, "done time missing")
+  Database.close(pool)
+  try Path.remove("#{dir}/kanban.sqlite3")
+  Path.remove(dir)
 end

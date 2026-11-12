@@ -16,6 +16,7 @@ def main() -> Void
     BDD.step("I add a card titled {string}", &add_card),
     BDD.step("I get card {int}", &get_card),
     BDD.step("agent {string} claims card {int}", &claim_card),
+    BDD.step("agent {string} marks card {int} done", &done_card),
     BDD.step("eight agents race to claim card {int}", &race_claims),
     BDD.step("I add eight cards", &add_eight_cards),
     BDD.step("eight agents race to claim the next card", &race_next),
@@ -371,4 +372,23 @@ def assert_distinct_claims(ctx: BDD.Context, _args: List[String]) -> BDD.Context
   end
 
   BDD.assert(ctx, ids.size == 8, "claim next returned duplicate cards")
+end
+
+def done_card(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  port = JSON.int(BDD.get(ctx, "port").unwrap!).unwrap!
+  client = HTTP.client().unwrap!
+  response = HTTP.request(
+    client,
+    "POST",
+    "http://127.0.0.1:#{port}/api/cards/#{args[1]}/done",
+    "{}".bytes,
+    [
+      Header(name: "apikey", value: "01234567890123456789012345678901"),
+      Header(name: "X-Kanban-Agent", value: args[0]),
+    ],
+  ).unwrap!
+
+  HTTP.close_client(client)
+  stored = BDD.set(ctx, "status", JSON.from(response.status))
+  BDD.set(stored, "body", JSON.from(HTTP.text(response.body, response.headers).unwrap!))
 end
