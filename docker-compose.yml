@@ -1,0 +1,39 @@
+# Runs the API on the private network kanban-net at 172.28.0.10 (no published
+# port, so it is reachable only from this machine and from the containers of
+# that network). Put the key in .env (not in git):
+# KANBAN_API_KEY=$(openssl rand -hex 32)
+# Start with `make up`, stop with `make down`, smoke test with `make smoke-docker`.
+services:
+  kanban:
+    build: .
+    image: agc-kanban:local
+    container_name: agc-kanban
+    init: true
+    restart: unless-stopped
+    environment:
+      KANBAN_API_KEY: ${KANBAN_API_KEY:?set KANBAN_API_KEY in .env}
+      KANBAN_HOST: 0.0.0.0
+      KANBAN_PORT: "4580"
+      KANBAN_DATA_DIR: /data
+      KANBAN_LEASE_MINUTES: "0"
+    networks:
+      kanban:
+        ipv4_address: 172.28.0.10
+    volumes:
+      - kanban-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 1 bash -c '</dev/tcp/127.0.0.1/4580' || exit 1"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+      start_period: 5s
+
+networks:
+  kanban:
+    name: kanban-net
+    ipam:
+      config:
+        - subnet: 172.28.0.0/24
+
+volumes:
+  kanban-data:
