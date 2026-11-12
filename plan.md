@@ -623,20 +623,21 @@ and `curl` with the key can run the whole loop by hand.
 
 ### Phase 2: the CLI
 
-- [ ] Features first: `cli_board.feature`, `cli_card.feature`,
+- [x] Features first: `cli_board.feature`, `cli_column.feature`,
+      `cli_card.feature`, `cli_card_flow.feature`, `cli_events.feature`,
       `cli_errors.feature`. Each starts the server fixture, then runs
-      `cli.agc` with `BDD.given_env` (`KANBAN_URL`, `KANBAN_API_KEY`,
-      `KANBAN_AGENT`) and `BDD.given_argument`, and asserts stdout with
-      `I receive a JSON line` and the exit code.
+      `cli.agc` in a child process with `KANBAN_URL`, `KANBAN_API_KEY` and
+      `KANBAN_AGENT`, and asserts stdout and the exit code.
 - [x] Config order: flags, environment, `config.toml`.
-- [ ] Every command in section 5, with `--json` and text output.
-- [ ] Exit codes 0 to 4 and the `BUSY` retry.
-- [ ] `--body-file` and `-` (stdin) for long text.
+- [x] Every command in section 5, with `--json` and text output. Labels and
+      `--depends-on` take a comma-separated list, since a flag cannot repeat.
+- [x] Exit codes 0 to 4 and the `BUSY` retry.
+- [x] `--body-file` and `-` (stdin) for long text.
 - [x] `make cli` (compile to `dist/kanban.agcb`), `bin/kanban`,
       `make install-cli` (a symlink, so the wrapper still finds the repo).
-- [ ] A scenario that runs two CLI processes claiming one card: one exits
+- [x] A scenario that runs two CLI processes claiming one card: one exits
       0, the other exits 4.
-- [ ] `.agents/skills/kanban-cli/SKILL.md`: how to install the CLI (wrapper,
+- [x] `.agents/skills/kanban-cli/SKILL.md`: how to install the CLI (wrapper,
       `make cli`, agentica version), the commands and flags with one example
       each, the config order, the exit codes and the `BUSY` retry. It is the
       usage skill for the tool, written last in this phase once the surface
