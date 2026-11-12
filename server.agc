@@ -23,7 +23,7 @@ def main() -> Void
   end
 
   data_dir = System.env("KANBAN_DATA_DIR").unwrap_or("./data")
-  pool = Database.open(data_dir)
+  pool = Database.open(data_dir, 1000)
   if not pool.ok?
     IO.warn("kanban: #{pool.message}")
     System.exit(1)

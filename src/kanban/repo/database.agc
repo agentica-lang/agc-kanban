@@ -26,7 +26,11 @@ end
 export def with_connection[R](pool: Pool, body: Fn[Db.Connection, Result[R]]) -> Result[R] = DbPool.with(pool, body)
 
 export def busy?(message: String) -> Bool
-  DbPool.timeout?(message) or message.include?("pool error: queue full") or message.include?("sqlite error 5:")
+  return true if DbPool.timeout?(message)
+  return true if message.include?("pool error: queue full")
+  return true if message.include?("pool error: closed")
+
+  message.include?("sqlite error 5:")
 end
 
 def prepare_dir(dir: String) -> Result[Void]
