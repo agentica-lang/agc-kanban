@@ -435,7 +435,7 @@ def insert(conn: Db.Connection, input: Create) -> Result[Card]
   # A card is never created closed with an open dependency (the rule of `done` and of a move into the done column).
   if number(column, "done") == 1
     waiting = try open_among(conn, input.depends_on)
-    return error("BLOCKED:#{waiting.map do |id| id.to_s end.join(",")}") if not waiting.empty?
+    return error("BLOCKED:#{waiting.map { |id| id.to_s }.join(",")}") if not waiting.empty?
   end
 
   now = Time.now_ms()

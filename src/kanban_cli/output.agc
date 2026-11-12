@@ -127,12 +127,12 @@ struct EventsAnswer
   last_event_id: Int
 end
 
-export def body(response: HttpResponse) -> String = HTTP.text(response.body, response.headers).unwrap_or("")
+export def body(response: HTTP.Response) -> String = HTTP.text(response.body, response.headers).unwrap_or("")
 
 # A connection failure is a 3 and a refused answer exits with its own code;
 # only a 2xx comes back.
 # The response whatever it says, so a command can decide what a refusal means.
-export def answered(result: Result[HttpResponse], json: Bool) -> HttpResponse
+export def answered(result: Result[HTTP.Response], json: Bool) -> HTTP.Response
   if not result.ok?
     fail(json, "UNAVAILABLE", result.message, 3)
   end
@@ -140,9 +140,9 @@ export def answered(result: Result[HttpResponse], json: Bool) -> HttpResponse
   result.unwrap!
 end
 
-export def code_of(response: HttpResponse) -> Optional[String] = error_code(response)
+export def code_of(response: HTTP.Response) -> Optional[String] = error_code(response)
 
-export def expect(result: Result[HttpResponse], json: Bool) -> Result[HttpResponse]
+export def expect(result: Result[HTTP.Response], json: Bool) -> Result[HTTP.Response]
   if not result.ok?
     fail(json, "UNAVAILABLE", result.message, 3)
   end
@@ -176,7 +176,7 @@ end
 
 # Turns a refused answer into the documented exit code: 1 refused, 3 no server
 # or BUSY, 4 lost a race.
-export def refuse(json: Bool, response: HttpResponse) -> Void
+export def refuse(json: Bool, response: HTTP.Response) -> Void
   code = error_code(response).unwrap_or("UNAVAILABLE")
   case response.status
     400, 404, 409 ->
@@ -192,7 +192,7 @@ export def refuse(json: Bool, response: HttpResponse) -> Void
   end
 end
 
-export def print_boards(response: HttpResponse) -> Void
+export def print_boards(response: HTTP.Response) -> Void
   decoded = JSON.decode(body(response), BoardsAnswer)
   if not decoded.ok?
     puts(body(response))
@@ -204,7 +204,7 @@ export def print_boards(response: HttpResponse) -> Void
   end
 end
 
-export def print_board(response: HttpResponse) -> Void
+export def print_board(response: HTTP.Response) -> Void
   decoded = JSON.decode(body(response), Snapshot)
   if not decoded.ok?
     puts(body(response))
@@ -213,13 +213,13 @@ export def print_board(response: HttpResponse) -> Void
 
   snapshot = decoded.unwrap!
   puts("#{snapshot.board.slug}\t#{snapshot.board.name}")
-  puts("columns: #{snapshot.board.columns.map do |column| column.name end.join(", ")}")
+  puts("columns: #{snapshot.board.columns.map { |column| column.name }.join(", ")}")
   for card in snapshot.cards
     puts("#{card_line(card)}")
   end
 end
 
-export def print_cards(response: HttpResponse) -> Void
+export def print_cards(response: HTTP.Response) -> Void
   decoded = JSON.decode(body(response), CardLines)
   if not decoded.ok?
     puts(body(response))
@@ -231,7 +231,7 @@ export def print_cards(response: HttpResponse) -> Void
   end
 end
 
-export def print_card(response: HttpResponse) -> Void
+export def print_card(response: HTTP.Response) -> Void
   decoded = JSON.decode(body(response), CardAnswer)
   if not decoded.ok?
     puts(body(response))
@@ -241,7 +241,7 @@ export def print_card(response: HttpResponse) -> Void
   puts("#{card_line(decoded.unwrap!.card)}")
 end
 
-export def print_card_detail(response: HttpResponse) -> Void
+export def print_card_detail(response: HTTP.Response) -> Void
   decoded = JSON.decode(body(response), DetailAnswer)
   if not decoded.ok?
     puts(body(response))
@@ -253,11 +253,11 @@ export def print_card_detail(response: HttpResponse) -> Void
   puts("##{card.id}  #{card.column}  #{card.claimed_by.unwrap_or("free")}  #{card.title}#{labels_text(card.labels)}")
   puts("priority: #{card.priority}  ready: #{card.ready}  done: #{card.done}")
   if not card.depends_on.empty?
-    puts("depends on: #{card.depends_on.map do |id| id.to_s end.join(", ")}")
+    puts("depends on: #{card.depends_on.map { |id| id.to_s }.join(", ")}")
   end
 
   if not card.blocks.empty?
-    puts("blocks: #{card.blocks.map do |id| id.to_s end.join(", ")}")
+    puts("blocks: #{card.blocks.map { |id| id.to_s }.join(", ")}")
   end
 
   if card.branch.some?
@@ -288,7 +288,7 @@ export def print_card_detail(response: HttpResponse) -> Void
   end
 end
 
-export def print_comment(response: HttpResponse) -> Void
+export def print_comment(response: HTTP.Response) -> Void
   decoded = JSON.decode(body(response), CommentAnswer)
   if not decoded.ok?
     puts(body(response))
@@ -299,7 +299,7 @@ export def print_comment(response: HttpResponse) -> Void
   puts("comment\t#{comment.author}\t#{comment.body}")
 end
 
-export def print_events(response: HttpResponse) -> Void
+export def print_events(response: HTTP.Response) -> Void
   decoded = JSON.decode(body(response), EventsAnswer)
   if not decoded.ok?
     puts(body(response))
@@ -328,7 +328,7 @@ def labels_text(labels: List[String]) -> String
   " [#{labels.join(", ")}]"
 end
 
-def error_code(response: HttpResponse) -> Optional[String]
+def error_code(response: HTTP.Response) -> Optional[String]
   decoded = JSON.decode(body(response), ErrorOutput)
   return none if not decoded.ok?
 
@@ -337,7 +337,7 @@ end
 
 # With --json the server's document is printed as it came, fields included;
 # only the text form is rewritten.
-def stop(json: Bool, response: HttpResponse, code: String, exit_code: Int) -> Void
+def stop(json: Bool, response: HTTP.Response, code: String, exit_code: Int) -> Void
   if json
     text = body(response)
     if text.strip.start_with?("{")
@@ -349,7 +349,7 @@ def stop(json: Bool, response: HttpResponse, code: String, exit_code: Int) -> Vo
   fail(json, code, human_message(code, response), exit_code)
 end
 
-def human_message(code: String, response: HttpResponse) -> String
+def human_message(code: String, response: HTTP.Response) -> String
   claimed = JSON.decode(body(response), ClaimedOutput)
   if claimed.ok?
     failure = claimed.unwrap!.error
@@ -368,7 +368,7 @@ def human_message(code: String, response: HttpResponse) -> String
 end
 
 # `#3` or `#3, #5`, so the caller can go and look.
-def ids_text(ids: List[Int]) -> String = ids.map do |id| "##{id}" end.join(", ")
+def ids_text(ids: List[Int]) -> String = ids.map { |id| "##{id}" }.join(", ")
 
 # The server answers `CODE:field`; print the field, not the code twice.
 def detail(code: String, message: String) -> String
@@ -395,7 +395,7 @@ def detail(code: String, message: String) -> String
   end
 end
 
-def message_of(response: HttpResponse) -> String
+def message_of(response: HTTP.Response) -> String
   decoded = JSON.decode(body(response), ErrorOutput)
   return "" if not decoded.ok?
 

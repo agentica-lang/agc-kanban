@@ -1,3 +1,4 @@
+import HTTP from "std/http"
 import OP from "std/option_parser"
 import Client from "client"
 import Output from "output"
@@ -35,7 +36,7 @@ export def run(words: List[String]) -> Result[Void]
   ok()
 end
 
-def check_health(client: Client.Client, json: Bool) -> Result[HttpResponse]
+def check_health(client: Client.Client, json: Bool) -> Result[HTTP.Response]
   result = Client.get(client, "/api/health")
   if not result.ok?
     Output.fail(json, "UNAVAILABLE", result.message, 3)

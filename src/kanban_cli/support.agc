@@ -1,3 +1,4 @@
+import HTTP from "std/http"
 import OP from "std/option_parser"
 import Output from "output"
 import Settings from "settings"
@@ -31,7 +32,7 @@ export def force(fields: Map[String, Json], parsed: OP.Parsed) -> Map[String, Js
   fields.put("force", JSON.from(true))
 end
 
-export def print_card(config: Settings.Config, response: HttpResponse) -> Void
+export def print_card(config: Settings.Config, response: HTTP.Response) -> Void
   if config.json
     puts(Output.body(response))
     return

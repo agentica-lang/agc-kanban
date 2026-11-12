@@ -18,7 +18,7 @@ make up        # docker compose up -d --build --wait
 make down      # stop (the data volume stays)
 ```
 
-Without Docker (needs Agentica 0.30.1, Node and corepack):
+Without Docker (needs Agentica 0.31.0-alpha.1, Node and corepack):
 
 ```sh
 export KANBAN_API_KEY="$(openssl rand -hex 32)"

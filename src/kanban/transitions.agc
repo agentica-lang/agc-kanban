@@ -137,7 +137,7 @@ def refuse_blocked(conn: Db.Connection, id: Int, force: Bool) -> Result[Void]
   return ok() if force
 
   ids = try Cards.open_blockers(conn, id)
-  return error("BLOCKED:#{ids.map do |blocker| blocker.to_s end.join(",")}") if not ids.empty?
+  return error("BLOCKED:#{ids.map { |blocker| blocker.to_s }.join(",")}") if not ids.empty?
 
   ok()
 end

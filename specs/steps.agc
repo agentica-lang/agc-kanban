@@ -130,7 +130,7 @@ def request(ctx: BDD.Context, args: List[String]) -> BDD.Context
     "GET",
     "http://127.0.0.1:#{port}#{args[0]}",
     "".bytes,
-    [Header(name: "apikey", value: args[1])],
+    [HTTP.Header(name: "apikey", value: args[1])],
   ).unwrap!
 
   HTTP.close_client(client)
@@ -262,9 +262,9 @@ def post_board(ctx: BDD.Context, args: List[String]) -> BDD.Context
     "http://127.0.0.1:#{port}/api/boards",
     body.bytes,
     [
-      Header(name: "apikey", value: "01234567890123456789012345678901"),
-      Header(name: "X-Kanban-Agent", value: args[2]),
-      Header(name: "Content-Type", value: "application/json"),
+      HTTP.Header(name: "apikey", value: "01234567890123456789012345678901"),
+      HTTP.Header(name: "X-Kanban-Agent", value: args[2]),
+      HTTP.Header(name: "Content-Type", value: "application/json"),
     ],
   ).unwrap!
 
@@ -281,7 +281,7 @@ def list_boards(ctx: BDD.Context, _args: List[String]) -> BDD.Context
     "GET",
     "http://127.0.0.1:#{port}/api/boards",
     "".bytes,
-    [Header(name: "apikey", value: "01234567890123456789012345678901")],
+    [HTTP.Header(name: "apikey", value: "01234567890123456789012345678901")],
   ).unwrap!
 
   HTTP.close_client(client)
@@ -312,7 +312,7 @@ def board_events_query(ctx: BDD.Context, args: List[String]) -> BDD.Context
     "GET",
     "http://127.0.0.1:#{port}/api/boards/#{args[0]}/events?#{args[1]}",
     "".bytes,
-    [Header(name: "apikey", value: "01234567890123456789012345678901")],
+    [HTTP.Header(name: "apikey", value: "01234567890123456789012345678901")],
   ).unwrap!
 
   HTTP.close_client(client)
@@ -330,9 +330,9 @@ def add_column(ctx: BDD.Context, args: List[String]) -> BDD.Context
     "http://127.0.0.1:#{port}/api/boards/project/columns",
     JSON.encode(data).bytes,
     [
-      Header(name: "apikey", value: "01234567890123456789012345678901"),
-      Header(name: "X-Kanban-Agent", value: "agent-1"),
-      Header(name: "Content-Type", value: "application/json"),
+      HTTP.Header(name: "apikey", value: "01234567890123456789012345678901"),
+      HTTP.Header(name: "X-Kanban-Agent", value: "agent-1"),
+      HTTP.Header(name: "Content-Type", value: "application/json"),
     ],
   ).unwrap!
 
@@ -426,9 +426,9 @@ def raw_request(
   body: String,
   agent: String,
 ) -> BDD.Context
-  fields = [Header(name: "apikey", value: key)]
+  fields = [HTTP.Header(name: "apikey", value: key)]
   if not agent.empty?
-    fields = fields.push(Header(name: "X-Kanban-Agent", value: agent))
+    fields = fields.push(HTTP.Header(name: "X-Kanban-Agent", value: agent))
   end
 
   port = JSON.int(BDD.get(ctx, "port").unwrap!).unwrap!
@@ -457,9 +457,9 @@ def claim_card(ctx: BDD.Context, args: List[String]) -> BDD.Context
     "http://127.0.0.1:#{port}/api/cards/#{args[1]}/claim",
     "{}".bytes,
     [
-      Header(name: "apikey", value: "01234567890123456789012345678901"),
-      Header(name: "X-Kanban-Agent", value: args[0]),
-      Header(name: "Content-Type", value: "application/json"),
+      HTTP.Header(name: "apikey", value: "01234567890123456789012345678901"),
+      HTTP.Header(name: "X-Kanban-Agent", value: args[0]),
+      HTTP.Header(name: "Content-Type", value: "application/json"),
     ],
   ).unwrap!
 
@@ -488,7 +488,10 @@ def race_claim(url: String, agent: String) -> Result[RaceReply]
     "POST",
     url,
     "{}".bytes,
-    [Header(name: "apikey", value: "01234567890123456789012345678901"), Header(name: "X-Kanban-Agent", value: agent)],
+    [
+      HTTP.Header(name: "apikey", value: "01234567890123456789012345678901"),
+      HTTP.Header(name: "X-Kanban-Agent", value: agent),
+    ],
   )
 
   HTTP.close_client(client)
@@ -555,8 +558,8 @@ def done_card(ctx: BDD.Context, args: List[String]) -> BDD.Context
     "http://127.0.0.1:#{port}/api/cards/#{args[1]}/done",
     "{}".bytes,
     [
-      Header(name: "apikey", value: "01234567890123456789012345678901"),
-      Header(name: "X-Kanban-Agent", value: args[0]),
+      HTTP.Header(name: "apikey", value: "01234567890123456789012345678901"),
+      HTTP.Header(name: "X-Kanban-Agent", value: args[0]),
     ],
   ).unwrap!
 
@@ -574,8 +577,8 @@ def release_card(ctx: BDD.Context, args: List[String]) -> BDD.Context
     "http://127.0.0.1:#{port}/api/cards/#{args[1]}/release",
     "{}".bytes,
     [
-      Header(name: "apikey", value: "01234567890123456789012345678901"),
-      Header(name: "X-Kanban-Agent", value: args[0]),
+      HTTP.Header(name: "apikey", value: "01234567890123456789012345678901"),
+      HTTP.Header(name: "X-Kanban-Agent", value: args[0]),
     ],
   ).unwrap!
 

@@ -21,7 +21,7 @@ end
 export def csv(value: Optional[String]) -> List[String]
   return [] if value.none?
 
-  value.unwrap!.split(",").select do |part| not part.strip.empty? end.map do |part| part.strip end
+  value.unwrap!.split(",").select { |part| not part.strip.empty? }.map { |part| part.strip }
 end
 
 export def ids(value: Optional[String]) -> Result[List[Int]]
@@ -38,7 +38,7 @@ end
 # (`--body --link` is a body), so `opts` are the options of the command.
 export def repeated(words: List[String], name: String, opts: List[Opt]) -> Result[Repeated]
   flag = "--#{name}"
-  valued = opts.select do |opt| opt.kind != Kind.Flag end.map do |opt| "--#{opt.name}" end
+  valued = opts.select { |opt| opt.kind != Kind.Flag }.map { |opt| "--#{opt.name}" }
   values: List[String] = []
   rest: List[String] = []
   i = 0

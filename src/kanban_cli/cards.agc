@@ -1,3 +1,4 @@
+import HTTP from "std/http"
 import OP from "std/option_parser"
 import URI from "std/uri"
 import Client from "client"
@@ -231,7 +232,7 @@ end
 
 # A server older than links answers the write and drops the links it does not know; that is no silent success. The
 # other fields of the request were saved.
-def require_links(config: Settings.Config, response: HttpResponse, asked: Bool) -> Void
+def require_links(config: Settings.Config, response: HTTP.Response, asked: Bool) -> Void
   return if not asked
 
   return if has_links?(Output.body(response))
