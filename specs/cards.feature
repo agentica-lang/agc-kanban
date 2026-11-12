@@ -17,3 +17,13 @@ Feature: Cards
     When I get card 999
     Then the response status is 404
     And the response contains "NOT_FOUND"
+
+  Scenario: List cards on a board
+    Given the database server is running
+    When I post a board named "Project" with slug "project" as "agent-1"
+    Then the response status is 201
+    When I add a card titled "Implement API"
+    Then the response status is 201
+    When I list project cards
+    Then the response status is 200
+    And the response contains "Implement API"

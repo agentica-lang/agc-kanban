@@ -9,6 +9,7 @@ def main() -> Void
     BDD.step("I list boards", &list_boards),
     BDD.step("I add a card titled {string}", &add_card),
     BDD.step("I get card {int}", &get_card),
+    BDD.step("I list project cards", &list_cards),
     BDD.step("I add the column {string} at position {int}", &add_column),
     BDD.step("I get board events for {string} after {int}", &board_events),
     BDD.step("the response contains {string}", &response_contains),
@@ -252,4 +253,8 @@ def api_request(ctx: BDD.Context, method: String, path: String, body: String) ->
   HTTP.close_client(client)
   stored = BDD.set(ctx, "status", JSON.from(response.status))
   BDD.set(stored, "body", JSON.from(HTTP.text(response.body, response.headers).unwrap!))
+end
+
+def list_cards(ctx: BDD.Context, _args: List[String]) -> BDD.Context
+  api_request(ctx, "GET", "/api/boards/project/cards", "")
 end

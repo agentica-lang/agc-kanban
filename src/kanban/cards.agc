@@ -52,6 +52,14 @@ export struct Create
   actor: String
 end
 
+export struct Filters
+  column: Optional[String]
+  ready: Optional[Bool]
+  claimed_by: Optional[String]
+  label: Optional[String]
+  done: Optional[Bool]
+end
+
 export def create(pool: Database.Pool, input: Create) -> Result[Card]
   return error("INVALID:board") if input.board.empty?
   return error("INVALID:title") if input.title.strip.empty?
@@ -92,6 +100,70 @@ export def show(pool: Database.Pool, id: Int) -> Result[Detail]
     end
 
     ok(Detail(card: card, comments: comments))
+  end
+end
+
+export def list(pool: Database.Pool, board: String, filters: Filters) -> Result[List[Card]]
+  return error("INVALID:board") if board.empty?
+
+  Database.with_connection(pool) do |conn| Db.transaction(conn) do |tx| list_open(tx, board, filters) end end
+end
+
+def list_open(conn: Db.Connection, board: String, filters: Filters) -> Result[List[Card]]
+  found = try Db.query(
+    conn,
+    "select id from boards where slug = ? or cast(id as text) = ? order by case when slug = ? then 0 else 1 end limit 1",
+    [Db.Value.Text(board), Db.Value.Text(board), Db.Value.Text(board)],
+  )
+
+  return error("NOT_FOUND:board") if found.empty?
+
+  board_id = number(found[0], "id")
+  now = Time.now_ms()
+  column = optional_value(filters.column)
+  claimed = optional_value(filters.claimed_by)
+  label = optional_value(filters.label)
+  ready = bool_value(filters.ready)
+  done = bool_value(filters.done)
+  rows = try Db.query(
+    conn,
+    "select c.id from cards c join columns col on col.id = c.column_id where c.board_id = ? and c.archived_at is null and (? is null or col.name = ? or cast(col.id as text) = ?) and (? is null or c.claimed_by = ?) and (? is null or exists (select 1 from json_each(c.labels) j where j.value = ?)) and (? is null or col.done = ?) and (? is null or (case when col.done = 0 and (c.claimed_by is null or c.lease_until <= ?) and not exists (select 1 from card_deps d join cards dep on dep.id = d.depends_on_id join columns dc on dc.id = dep.column_id where d.card_id = c.id and dc.done = 0) then 1 else 0 end) = ?) order by col.position, c.position, c.id",
+    [
+      Db.Value.Int(board_id),
+      column,
+      column,
+      column,
+      claimed,
+      claimed,
+      label,
+      label,
+      done,
+      done,
+      ready,
+      Db.Value.Int(now),
+      ready,
+    ],
+  )
+
+  cards: List[Card] = []
+  for row in rows
+    cards = cards.push(try load_at(conn, number(row, "id"), now))
+  end
+
+  ok(cards)
+end
+
+def optional_value(value: Optional[String]) -> Db.Value
+  case value
+    none -> Db.Value.Null
+    some(text) -> Db.Value.Text(text)
+  end
+end
+
+def bool_value(value: Optional[Bool]) -> Db.Value
+  case value
+    none -> Db.Value.Null
+    some(flag) -> bool_int(flag)
   end
 end
 
@@ -191,7 +263,9 @@ def find_column(conn: Db.Connection, board_id: Int, requested: Optional[String])
   ok(found[0])
 end
 
-def load(conn: Db.Connection, id: Int) -> Result[Card]
+def load(conn: Db.Connection, id: Int) -> Result[Card] = load_at(conn, id, Time.now_ms())
+
+def load_at(conn: Db.Connection, id: Int, now: Int) -> Result[Card]
   rows = try Db.query(
     conn,
     "select c.*, b.slug as board_slug, col.name as column_name, col.done as column_done, case when c.archived_at is null and col.done = 0 and (c.claimed_by is null or c.lease_until <= ?) and not exists (select 1 from card_deps d join cards dep on dep.id = d.depends_on_id join columns dc on dc.id = dep.column_id where d.card_id = c.id and dc.done = 0) then 1 else 0 end as ready from cards c join boards b on b.id = c.board_id join columns col on col.id = c.column_id where c.id = ? and c.archived_at is null",
@@ -268,5 +342,13 @@ def optional_text(row: Db.Row, key: String) -> Optional[String]
   case row.get(key, Db.Value.Null)
     Db.Value.Text(value) -> some(value)
     _ -> none
+  end
+end
+
+def bool_int(flag: Bool) -> Db.Value
+  if flag
+    Db.Value.Int(1)
+  else
+    Db.Value.Int(0)
   end
 end

@@ -12,6 +12,10 @@ struct CreateBoard
   columns: Optional[List[String]]
 end
 
+struct CardsAnswer
+  cards: List[Cards.Card]
+end
+
 struct CreateCard
   title: String
   body: Optional[String]
@@ -62,6 +66,7 @@ export def build(key: String, pool: Optional[Database.Pool] = none) -> Bond.App
     |> Bond.get("/api/auth-check", &auth_check)
     |> Bond.get("/api/boards") do |conn| list_boards(conn, pool) end
     |> Bond.post("/api/boards") do |conn| create_board(conn, pool) end
+    |> Bond.get("/api/boards/:board/cards") do |conn| list_cards(conn, pool) end
     |> Bond.post("/api/boards/:board/cards") do |conn| create_card(conn, pool) end
     |> Bond.get("/api/cards/:id") do |conn| show_card(conn, pool) end
     |> Bond.post("/api/boards/:board/columns") do |conn| add_column(conn, pool) end
@@ -257,4 +262,45 @@ def show_card(conn: Bond.Conn, pool: Optional[Database.Pool]) -> Result[Bond.Con
   return ok(failure(conn, result.message)) if not result.ok?
 
   ok(Bond.json_as(conn, 200, Cards.Detail.codec, result.unwrap!))
+end
+
+def list_cards(conn: Bond.Conn, pool: Optional[Database.Pool]) -> Result[Bond.Conn]
+  return ok(reject(conn, 503, "BUSY", "database unavailable")) if not pool.some?
+
+  params = Bond.query_params(conn)
+  return ok(reject(conn, 400, "INVALID", "invalid query", some("query"))) if not params.ok?
+
+  query = params.unwrap!
+  ready = query_bool(query, "ready")
+  done = query_bool(query, "done")
+  return ok(reject(conn, 400, "INVALID", "invalid query", some("query"))) if not ready.ok? or not done.ok?
+
+  filters = Cards.Filters(
+    column: query_text(query, "column"),
+    ready: ready.unwrap!,
+    claimed_by: query_text(query, "claimed_by"),
+    label: query_text(query, "label"),
+    done: done.unwrap!,
+  )
+
+  result = Cards.list(pool.unwrap!, Bond.param(conn, "board").unwrap_or(""), filters)
+  return ok(failure(conn, result.message)) if not result.ok?
+
+  ok(Bond.json_as(conn, 200, CardsAnswer.codec, CardsAnswer(cards: result.unwrap!)))
+end
+
+def query_text(params: Map[String, List[String]], name: String) -> Optional[String]
+  case params.get(name)
+    none -> none
+    some(values) -> some(values[0])
+  end
+end
+
+def query_bool(params: Map[String, List[String]], name: String) -> Result[Optional[Bool]]
+  case query_text(params, name)
+    none -> ok(none)
+    some("1") -> ok(some(true))
+    some("0") -> ok(some(false))
+    _ -> error("invalid boolean")
+  end
 end
