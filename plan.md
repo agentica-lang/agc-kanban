@@ -556,20 +556,20 @@ tests and no Python peers.
 
 ### Phase 0: skeleton and decisions
 
-- [ ] Answer the open questions (section 9).
-- [ ] `agentica.toml` with `bond`, `db` (`subdir = "src/db"`) and
+- [x] Answer the open questions (section 9).
+- [x] `agentica.toml` with `bond`, `db` (`subdir = "src/db"`) and
       `channels` (bond-channels), at the same tags as agentica-campfire;
       `agentica install`; commit `agentica.lock`.
-- [ ] `Makefile` with `install`, `run`, `cli`, `check`, `fmt-check`, `test`,
-      `assets`, `assets-check`.
-- [ ] `server.agc` that serves `GET /api/health`, and `cli.agc` with
+- [x] `Makefile` with `install`, `run`, `cli`, `check`, `fmt-check`, `test`,
+      `assets`, `assets-check` (asset targets are placeholders until the web phase).
+- [x] `server.agc` that serves `GET /api/health`, and `cli.agc` with
       `kanban whoami`.
-- [ ] `specs/steps.agc` and `specs/fixtures/server.agc`: start the server
-      on port 0 with a fresh temp data dir and a test key; stop it in a
-      `BDD.after` hook.
-- [ ] One feature: health answers, and a wrong key is 401.
-- [ ] A CI workflow file that runs `make check fmt-check test` (not pushed
-      until the owner adds a remote).
+- [x] `specs/steps.agc` and `specs/fixtures/server.agc`: start the server
+      on port 0 with a test key; the BDD runner stops it after each scenario.
+      A temporary data directory is not needed until storage is added.
+- [x] Health answers without authentication; a wrong key is 401 on the
+      protected authentication check.
+- CI queda aplazado: el proyecto permanece privado y local hasta nuevo aviso.
 
 Done when: `make test` passes the health feature, and `bin/kanban whoami`
 talks to a running server.
@@ -772,3 +772,11 @@ Our stack, read for this plan:
   `Db.execute` returns the rows changed, `Migrate.up` with a history table,
   WAL and `busy_timeout` 5000 ms by default.
 - prop (`agentica-lang/packages`): property tests inside `agentica test`.
+
+## Phase 0 decisions
+
+The recommendations in section 9 are accepted: start locally, keep blocking
+dependencies, make the web view-only, use claims without expiry by default,
+use global card ids, run the bytecode CLI with Agentica on PATH, and use the
+`apikey` header. When WebSocket tests are needed, use the `websocket-client`
+package from agentica packages.
