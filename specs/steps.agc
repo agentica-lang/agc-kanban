@@ -25,6 +25,9 @@ def main() -> Void
       BDD.step("agent {string} links card {int} to {int} URLs", &link_many),
       BDD.step("agent {string} unlinks {int} URLs from card {int}", &unlink_many),
       BDD.step("a server older than links is running", &start_before_links),
+      BDD.step("I add a card titled {string} with {int} links", &add_card_many_links),
+      BDD.step("agent {string} unlinks {string} and links {string} on card {int}", &swap_link),
+      BDD.step("agent {string} retitles card {int} to {string} and links {string}", &retitle_and_link),
       BDD.step("agent {string} retitles card {int} to {string}", &retitle_card),
       BDD.step("agent {string} forces a new title on card {int} to {string}", &force_retitle_card),
       BDD.step("agent {string} comments on card {int} with {string}", &comment_card),
@@ -343,6 +346,21 @@ end
 def unlink_many(ctx: BDD.Context, args: List[String]) -> BDD.Context
   body = JSON.encode(JSON.object({"unlink": JSON.from(numbered_urls(args[1].to_i!))}))
   api_request_as(ctx, args[0], "PATCH", "/api/cards/#{args[2]}", body)
+end
+
+def add_card_many_links(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  body = JSON.encode(JSON.object({"title": JSON.from(args[0]), "links": JSON.from(numbered_urls(args[1].to_i!))}))
+  api_request(ctx, "POST", "/api/boards/project/cards", body)
+end
+
+def swap_link(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  body = JSON.encode(JSON.object({"unlink": JSON.from([args[1]]), "link": JSON.from([args[2]])}))
+  api_request_as(ctx, args[0], "PATCH", "/api/cards/#{args[3]}", body)
+end
+
+def retitle_and_link(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  body = JSON.encode(JSON.object({"title": JSON.from(args[2]), "link": JSON.from([args[3]])}))
+  api_request_as(ctx, args[0], "PATCH", "/api/cards/#{args[1]}", body)
 end
 
 def get_card(ctx: BDD.Context, args: List[String]) -> BDD.Context

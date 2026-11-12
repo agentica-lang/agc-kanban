@@ -352,7 +352,7 @@ Tests assert the `code` and the status, never the message.
 | `GET /api/boards/:board/cards` | query: `column`, `ready=1`, `claimed_by`, `label`, `done=0/1` | `{"cards": [card]}`, ordered by column, then position |
 | `POST /api/boards/:board/cards` | `{"title", "body"?, "column"?, "labels"?, "priority"?, "depends_on"?: [id], "links"?: [url]}` | 201 `{"card"}`; the first column by default |
 | `GET /api/cards/:id` | | `{"card", "comments": [comment]}` |
-| `PATCH /api/cards/:id` | `{"title"?, "body"?, "labels"?, "priority"?, "branch"?, "worktree"?, "link"?: [url], "unlink"?: [url]}` | `{"card"}`; `CLAIMED` if another agent holds it. `unlink` (at most 50) removes, then `link` adds the URLs the card lacks; when only links were asked and none changed, nothing is written (no version, no event). |
+| `PATCH /api/cards/:id` | `{"title"?, "body"?, "labels"?, "priority"?, "branch"?, "worktree"?, "link"?: [url], "unlink"?: [url]}` | `{"card"}`; `CLAIMED` if another agent holds it. `unlink` removes, then `link` adds (each list at most 50, repeats included) the URLs the card lacks; when only links were asked and none changed, nothing is written (no version, no event). |
 | `POST /api/cards/:id/claim` | `{}` | `{"card"}`; `CLAIMED`, `BLOCKED`, `DONE`. Claiming a card you hold renews the lease. |
 | `POST /api/boards/:board/claim-next` | `{"column"?, "label"?}` | `{"card"}` or `NO_READY_CARD` |
 | `POST /api/cards/:id/release` | `{"force"?: false, "column"?}` | `{"card"}`; `NOT_CLAIMER` unless `force` |

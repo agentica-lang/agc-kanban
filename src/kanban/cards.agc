@@ -6,8 +6,9 @@ import Times from "times"
 # A link is untrusted text shown on the web and printed to terminals: http(s) only, a host with no credentials (no `@`
 # before the path), printable ASCII only (an IDN host as punycode, a path percent-encoded) and none of the characters
 # that end a URL in HTML or Markdown (quotes, angle brackets, backslash and the like), so it stays one plain URL
-# wherever it is printed. ASCII only, so LINK_MAX counts bytes. A card holds at most LINKS_MAX links, and an update
-# removes at most LINKS_MAX.
+# wherever it is printed. ASCII only, so LINK_MAX counts bytes. A card holds at most LINKS_MAX links, and a request
+# names at most LINKS_MAX to add and LINKS_MAX to remove, repeats included, checked before the transaction so that a
+# huge list never reaches `merged`, which is quadratic.
 LINK_MAX = 2048
 LINKS_MAX = 50
 
@@ -98,7 +99,7 @@ export def create(pool: Database.Pool, input: Create) -> Result[Card]
     return error("INVALID:labels") if label.strip.empty?
   end
 
-  return error("INVALID:links") if not valid_links?(input.links) or merged([], input.links).size > LINKS_MAX
+  return error("INVALID:links") if input.links.size > LINKS_MAX or not valid_links?(input.links)
 
   for id in input.depends_on
     return error("INVALID:depends_on") if id <= 0
@@ -197,7 +198,10 @@ export def update(pool: Database.Pool, input: Update) -> Result[Card]
 
   return error("INVALID:agent") if not Regex.match?(input.actor, /^[A-Za-z0-9._@\/-]{1,64}$/)
   return error("INVALID:lease") if input.lease_minutes < 0 or input.lease_minutes > 1000000000
-  return error("INVALID:links") if not valid_links?(input.link) or input.unlink.size > LINKS_MAX
+  if input.link.size > LINKS_MAX or input.unlink.size > LINKS_MAX or not valid_links?(input.link)
+    return error("INVALID:links")
+  end
+
   if input.labels.some?
     for label in input.labels.unwrap!
       return error("INVALID:labels") if label.strip.empty?

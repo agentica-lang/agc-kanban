@@ -30,6 +30,11 @@ def test_create_validates_inputs_without_changes() -> Result[Void]
   try Test.eq(Cards.create(pool, input.with(priority: 5)), error("INVALID:priority"))
   try Test.eq(Cards.create(pool, input.with(actor: "bad agent")), error("INVALID:agent"))
   try Test.eq(Cards.create(pool, input.with(labels: [""])), error("INVALID:labels"))
+  try Test.eq(
+    Cards.create(pool, input.with(links: (1..51).map do |_| "https://github.com/o/r/pull/1" end)),
+    error("INVALID:links"),
+  )
+
   try Test.eq(Cards.create(pool, input.with(depends_on: [0])), error("INVALID:depends_on"))
   try Test.eq(Cards.create(pool, input.with(depends_on: [first.id, first.id])), error("INVALID:depends_on"))
   try Test.eq(Cards.create(pool, input.with(depends_on: [999])), error("NOT_FOUND:depends_on"))
@@ -105,6 +110,9 @@ def test_update_guards_and_lease_renewal() -> Result[Void]
   long = "https://example.com/#{"a" * 4980}"
   try Test.eq(long.length, 5000)
   try Test.eq(Cards.update(pool, update.with(link: [long])), error("INVALID:links"))
+  # A request names at most 50 links, repeats included, so a huge list is refused before the transaction.
+  repeated = (1..51).map do |_| "https://github.com/o/r/pull/1" end
+  try Test.eq(Cards.update(pool, update.with(link: repeated)), error("INVALID:links"))
   try Test.eq(try snapshot(pool), before)
 
   _ = try Claims.claim(pool, card.id, "agent-1", 30)
