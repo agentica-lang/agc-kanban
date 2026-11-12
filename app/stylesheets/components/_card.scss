@@ -1,3 +1,5 @@
+@use "claimer";
+
 // The left edge shows the priority (1 is the most urgent); a card that a live event touched flashes once.
 .card {
   position: relative;
@@ -23,7 +25,7 @@
   .id { color: var(--muted); font-size: 0.8rem; }
   .meta { display: flex; flex-wrap: wrap; gap: 0.25rem; margin-top: 0.375rem; font-size: 0.75rem; }
   .label, .claimer, .blocked { padding: 0.0625rem 0.5rem; border-radius: 999px; background: var(--panel); }
-  .claimer { background: hsl(var(--hue) 60% 45%); color: #fff; }
+  .claimer { @include claimer.claimer; }
   .blocked { color: var(--warn); border: 1px solid var(--warn); background: none; }
 }
 

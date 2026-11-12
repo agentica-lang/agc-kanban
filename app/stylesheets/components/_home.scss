@@ -1,4 +1,5 @@
 @use "../settings/tokens";
+@use "claimer";
 
 // The home page, drawn by the server: a short header, then one card per board. The card is a box with a stretched
 // title link, as the cards of the board are, so the whole card opens the board and the page has no control inside
@@ -109,7 +110,7 @@ main.home {
 
   .blocked, .claimer { padding: 0.0625rem 0.5rem; border-radius: 999px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .blocked { color: var(--warn); border: 1px solid var(--warn); }
-  .claimer { background: hsl(var(--hue) 60% 45%); color: #fff; }
+  .claimer { @include claimer.claimer; }
   time { margin-left: auto; color: var(--muted); white-space: nowrap; }
 }
 

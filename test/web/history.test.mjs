@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createApp, effectScope, reactive } from "vue";
 import { plainClick, useDrawer } from "../../app/javascript/drawer.js";
-import { useCard } from "../../app/javascript/card_store.js";
+import { followDrawer, useCard } from "../../app/javascript/card_store.js";
 import { useFilters } from "../../app/javascript/filter_store.js";
 import { Markdown } from "../../app/javascript/markdown.js";
 
@@ -25,7 +25,10 @@ function browser(start) {
   };
   globalThis.location = {
     get href() { return "http://kanban.test" + entries[at]; },
-    get search() { return entries[at].slice(entries[at].indexOf("?")); },
+    get search() {
+      var mark = entries[at].indexOf("?");
+      return mark < 0 ? "" : entries[at].slice(mark);
+    },
   };
   globalThis.history = {
     state: null,
@@ -48,7 +51,7 @@ function page(start) {
   var tab = browser(start);
   var scope = effectScope();
   var made = scope.run(function () { return { drawer: useDrawer(), filter: useFilters() }; });
-  return { tab: tab, drawer: made.drawer, filter: made.filter, stop: function () { scope.stop(); } };
+  return { tab: tab, drawer: made.drawer, filter: made.filter, scope: scope, stop: function () { scope.stop(); } };
 }
 
 test("Back goes from a card to the card before it, then to the board with no panel, and Forward opens it again", function () {
@@ -177,7 +180,8 @@ function markdownClick(board, opened) {
   return function (href, init) {
     var event = Object.assign({ button: 0, metaKey: false, ctrlKey: false, shiftKey: false, altKey: false, prevented: false,
       preventDefault: function () { this.prevented = true; } }, init);
-    event.target = Object.assign(new Element(), { closest: function () { return { href: href }; } });
+    // `href` null is a click that is not on a link (`closest` finds none); `text` is a click on a text node, which is no Element.
+    event.target = init && init.text ? {} : Object.assign(new Element(), { closest: function () { return href === null ? null : { href: href }; } });
     handler(event);
     return event;
   };
@@ -196,4 +200,33 @@ test("a plain click on a Markdown link to a card of this board opens it in the p
   assert.equal(click("http://kanban.test/boards/other?card=14").prevented, false);
   assert.equal(click("https://example.com/boards/p?card=15").prevented, false);
   assert.deepEqual(opened, [12]);
+});
+
+test("a click in a Markdown text that is not on a link is left alone, even beside a card link", function () {
+  globalThis.Element = class {};
+  globalThis.location = { origin: "http://kanban.test" };
+  var opened = [];
+  var click = markdownClick("p", opened);
+  assert.equal(click(null).prevented, false);
+  assert.equal(click("http://kanban.test/boards/p?card=12", { text: true }).prevented, false);
+  assert.deepEqual(opened, []);
+});
+
+test("a card that is gone closes the panel through the board page's wiring: the 404 clears `card` from the URL", async function () {
+  var one = page("/boards/p?label=api&card=404");
+  var seen = null;
+  globalThis.fetch = function (url) {
+    seen = url;
+    return Promise.resolve({ ok: false, status: 404, json: function () { return {}; } });
+  };
+  var card = one.scope.run(useCard);
+  one.scope.run(function () { followDrawer(one.drawer, card); });
+  await new Promise(function (resolve) { setTimeout(resolve, 20); });
+  assert.match(seen, /\/api\/cards\/404$/);
+  assert.equal(one.drawer.card.value, null);
+  assert.equal(one.drawer.panel.value, "");
+  assert.equal(one.tab.url().has("card"), false);
+  assert.equal(one.tab.url().get("label"), "api");
+  assert.equal(one.tab.length(), 1);
+  one.stop();
 });

@@ -1,4 +1,4 @@
-import { reactive } from "vue";
+import { reactive, watch } from "vue";
 import { getJSON, latest } from "./api.js";
 
 var REFETCH_MS = 80; // a burst of events of the card is one fetch
@@ -58,4 +58,15 @@ export function useCard() {
   state.show = show;
   state.changed = changed;
   return state;
+}
+
+// The card store follows the drawer: it fetches the card that the drawer shows, and a card that is gone closes the panel
+// quietly (`drawer.dismiss`: no history entry). The board page calls it once, in its setup.
+export function followDrawer(drawer, card) {
+  watch(drawer.card, card.show, { immediate: true });
+  watch(function () { return card.gone; }, function (gone) {
+    if (gone) {
+      drawer.dismiss(card.id);
+    }
+  });
 }

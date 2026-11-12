@@ -1,7 +1,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, provide, ref, watch } from "vue";
 import { useBoard } from "../board_store.js";
-import { useCard } from "../card_store.js";
+import { followDrawer, useCard } from "../card_store.js";
 import { useDrawer } from "../drawer.js";
 import { useFilters } from "../filter_store.js";
 import { closesPanel } from "../outside.js";
@@ -25,12 +25,7 @@ var panel = drawer.panel;
 var card = useCard();
 var state = useBoard(props.slug, card.changed);
 
-watch(drawer.card, card.show, { immediate: true });
-watch(function () { return card.gone; }, function (gone) {
-  if (gone) {
-    drawer.dismiss(card.id);
-  }
-});
+followDrawer(drawer, card);
 // A card on the board opens its detail; the open one is marked.
 provide("openCard", drawer.showCard);
 provide("openCardId", drawer.card);

@@ -5,6 +5,7 @@ import Bond from "pkg/bond/bond"
 import UTC from "std/utc"
 import AssetNames from "asset_names"
 import Overview from "../kanban/overview"
+import Claimer from "claimer"
 
 # The views that the script draws (application.js): only they get `#app` and its loading text.
 SCRIPTED_VIEWS = ["board"]
@@ -81,7 +82,7 @@ def home(items: List[Overview.Overview], now: Int) -> String
             <span class="blocked"><%= board.blocked %> blocked</span>
     <% end %>
     <% for agent in board.agents %>
-            <span class="claimer" style="--hue:<%= hue(agent) %>"><%= agent %></span>
+            <span class="<%= chip_class(agent) %>" style="--hue:<%= Claimer.hue(agent) %>"><%= agent %></span>
     <% end %>
             <time datetime="<%= UTC.iso8601(board.last_activity) %>">active <%= ago(now, board.last_activity) %></time>
           </p>
@@ -91,6 +92,13 @@ def home(items: List[Overview.Overview], now: Int) -> String
     <% end %>
     </main>
   EAG
+end
+
+# The agent's chip: a light one takes dark text (see claimer.agc).
+def chip_class(agent: String) -> String
+  return "claimer light" if Claimer.light?(Claimer.hue(agent))
+
+  "claimer"
 end
 
 def segment_class(column: Overview.ColumnCount) -> String
@@ -133,16 +141,6 @@ def ago(now: Int, at: Int) -> String
   return "#{elapsed / HOUR} h ago" if elapsed < DAY
 
   "#{elapsed / DAY} d ago"
-end
-
-# The color of an agent from its name, as Card.vue picks it, so an agent keeps one color on both pages.
-def hue(name: String) -> Int
-  sum = 0
-  for char in name.split("")
-    sum = (sum * 31 + char.code) % 360
-  end
-
-  sum
 end
 
 def form(note: String) -> String

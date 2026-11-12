@@ -5,6 +5,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { compile, compileString } from "sass";
+import { lightChip } from "../../app/javascript/claimer.js";
 
 var ROOT = new URL("../../app/stylesheets/", import.meta.url).pathname;
 var built = compile(ROOT + "application.scss", { style: "expanded" }).css;
@@ -154,16 +155,104 @@ function winner(list, element, property) {
   return best;
 }
 
-// The agent chip of a card: `<button class="claimer pick">` in the meta line of the card, on the board page.
-var CLAIMER = {
-  tag: "button",
-  classes: ["claimer", "pick"],
-  ancestors: ["meta", "card", "card-done", "priority-0", "priority-1", "priority-2", "priority-3", "changed", "open", "cards", "column",
-    "column-done", "board", "board-body", "board-page"],
-};
+// The agent chip of a card: `<button class="claimer pick">` in the meta line of the card, on the board page. A hue that
+// takes the light chip has the class `light` too (claimer.js).
+function boardChip(light) {
+  return {
+    tag: "button",
+    classes: ["claimer", "pick"].concat(light ? ["light"] : []),
+    ancestors: ["meta", "card", "card-done", "priority-0", "priority-1", "priority-2", "priority-3", "changed", "open", "cards", "column",
+      "column-done", "board", "board-body", "board-page"],
+  };
+}
 
-test("the agent chip on a card keeps its white text", function () {
-  assert.equal(winner(rules(built), CLAIMER, "color").value, "#fff");
+// The chip of an agent on the home page: `<span class="claimer">` in the facts of a board's card.
+function homeChip(light) {
+  return { tag: "span", classes: ["claimer"].concat(light ? ["light"] : []), ancestors: ["facts", "board-card", "boards", "home"] };
+}
+
+var CLAIMER = boardChip(false);
+
+// The color a browser paints for `hsl(hue S% L%)`, as 8-bit channels (the CSS Color rule), and the WCAG relative luminance.
+function paint(hue, saturation, lightness) {
+  var s = saturation / 100;
+  var l = lightness / 100;
+  var a = s * Math.min(l, 1 - l);
+  return [0, 8, 4].map(function (n) {
+    var k = (n + hue / 30) % 12;
+    return Math.round((l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1))) * 255);
+  });
+}
+
+function luminance(rgb) {
+  var [r, g, b] = rgb.map(function (c) {
+    var v = c / 255;
+    return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+  });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+function contrast(one, other) {
+  var [hi, lo] = [luminance(one), luminance(other)].sort(function (x, y) { return y - x; });
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+function hexRgb(hex) {
+  var digits = hex.length === 4 ? hex.slice(1).replace(/./g, "$&$&") : hex.slice(1);
+  return [0, 2, 4].map(function (i) { return parseInt(digits.slice(i, i + 2), 16); });
+}
+
+// The contrast of the chip of `hue`, from the background and the text that the stylesheet gives `element`. A value
+// that is not a literal color (a theme token such as `var(--card)`) would make the chip change with the theme, which
+// this check does not follow, so it is an error: the chip must look the same in both.
+function chipContrast(css, element, hue) {
+  var background = winner(rules(css), element, "background").value;
+  var color = winner(rules(css), element, "color").value;
+  var parts = /^hsl\(var\(--hue\),? (\d+)%,? (\d+)%\)$/.exec(background);
+  assert.ok(parts && /^#[0-9a-f]{3}([0-9a-f]{3})?$/.test(color), "a literal chip color: " + background + " on " + color);
+  return contrast(paint(hue, Number(parts[1]), Number(parts[2])), hexRgb(color));
+}
+
+// The lowest contrast over the 360 hues, with the chip of each as claimer.js picks it.
+function worst(css, chip) {
+  var found = { ratio: Infinity, hue: -1 };
+  for (var hue = 0; hue < 360; hue++) {
+    var ratio = chipContrast(css, chip(lightChip(hue)), hue);
+    if (ratio < found.ratio) {
+      found = { ratio: ratio, hue: hue };
+    }
+  }
+  return found;
+}
+
+test("the agent chip reaches 4.5:1 for every hue, on the board and on the home page, in both themes", function () {
+  // The chip has literal colors (chipContrast refuses a token), so the light and the dark theme paint the same pair.
+  [boardChip, homeChip].forEach(function (chip) {
+    var found = worst(built, chip);
+    assert.ok(found.ratio >= 4.5, "hue " + found.hue + " has " + found.ratio.toFixed(2) + ":1");
+  });
+});
+
+test("the check fails the old chip: white text on hsl(hue 60% 45%) for every hue", function () {
+  var old = built + compileString(".card .meta .claimer.pick, .card .meta .claimer.pick.light { background: hsl(var(--hue) 60% 45%); color: #fff; }").css;
+  var found = worst(old, boardChip);
+  assert.ok(found.ratio < 2.5, "the worst old hue has " + found.ratio.toFixed(2) + ":1");
+});
+
+test("the light chip has dark text and the dark chip white, so the cascade never leaves the white on a light chip", function () {
+  assert.equal(winner(rules(built), boardChip(false), "color").value, "#fff");
+  assert.notEqual(winner(rules(built), boardChip(true), "color").value, "#fff");
+  assert.equal(winner(rules(built), homeChip(false), "color").value, "#fff");
+  assert.notEqual(winner(rules(built), homeChip(true), "color").value, "#fff");
+});
+
+test("the blocked chip reaches 4.5:1 on the card and the page behind it, in the light theme", function () {
+  var light = /--card: (#[0-9a-f]+);[^}]*?--warn: (#[0-9a-f]+);/.exec(built.slice(built.indexOf(":root")));
+  assert.ok(light, "the light tokens");
+  var warn = hexRgb(light[2]);
+  [light[1], "#f4f5f7", "#e9ebef"].forEach(function (back) {
+    assert.ok(contrast(warn, hexRgb(back)) >= 4.5, back + " behind " + light[2]);
+  });
 });
 
 test("the check catches a rule that takes the white off later, from a media query, or with more weight", function () {
