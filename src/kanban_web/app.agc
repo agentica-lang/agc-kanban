@@ -53,6 +53,16 @@ struct CreateCard
   depends_on: Optional[List[Int]]
 end
 
+struct UpdateCard
+  title: Optional[String]
+  body: Optional[String]
+  labels: Optional[List[String]]
+  priority: Optional[Int]
+  branch: Optional[String]
+  worktree: Optional[String]
+  force: Optional[Bool]
+end
+
 struct CardAnswer
   card: Cards.Card
 end
@@ -132,6 +142,7 @@ export def build(key: String, pool: Optional[Database.Pool] = none, lease_minute
     |> Bond.post("/api/cards/:id/done") do |conn| done_card(conn, pool) end
     |> Bond.post("/api/cards/:id/claim") do |conn| claim_card(conn, pool, lease_minutes) end
     |> Bond.get("/api/cards/:id") do |conn| show_card(conn, pool) end
+    |> Bond.patch("/api/cards/:id") do |conn| update_card(conn, pool, lease_minutes) end
     |> Bond.post("/api/boards/:board/columns") do |conn| add_column(conn, pool) end
     |> Bond.patch("/api/columns/:id") do |conn| update_column(conn, pool) end
     |> Bond.delete("/api/columns/:id") do |conn| delete_column(conn, pool) end
@@ -600,4 +611,36 @@ def delete_column(conn: Bond.Conn, pool: Optional[Database.Pool]) -> Result[Bond
   return ok(failure(conn, result.message)) if not result.ok?
 
   ok(Bond.status(conn, 204))
+end
+
+def update_card(conn: Bond.Conn, pool: Optional[Database.Pool], lease_minutes: Int) -> Result[Bond.Conn]
+  return ok(reject(conn, 503, "BUSY", "database unavailable")) if not pool.some?
+
+  id = Bond.param_int(conn, "id")
+  return ok(reject(conn, 400, "INVALID", "invalid id", some("id"))) if not id.ok?
+
+  body = Bond.body_text(conn)
+  return ok(reject(conn, 400, "INVALID", "invalid body", some("body"))) if not body.ok?
+
+  decoded = JSON.decode(body.unwrap!, UpdateCard)
+  return ok(reject(conn, 400, "INVALID", "invalid body", some("body"))) if not decoded.ok?
+
+  data = decoded.unwrap!
+  input = Cards.Update(
+    id: id.unwrap!,
+    title: data.title,
+    body: data.body,
+    labels: data.labels,
+    priority: data.priority,
+    branch: data.branch,
+    worktree: data.worktree,
+    actor: Bond.request_header(conn, "X-Kanban-Agent").unwrap_or(""),
+    force: data.force.unwrap_or(false),
+    lease_minutes: lease_minutes,
+  )
+
+  result = Cards.update(pool.unwrap!, input)
+  return ok(failure(conn, result.message)) if not result.ok?
+
+  ok(Bond.json_as(conn, 200, CardAnswer.codec, CardAnswer(card: result.unwrap!)))
 end

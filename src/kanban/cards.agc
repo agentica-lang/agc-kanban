@@ -60,6 +60,19 @@ export struct Filters
   done: Optional[Bool]
 end
 
+export struct Update
+  id: Int
+  title: Optional[String]
+  body: Optional[String]
+  labels: Optional[List[String]]
+  priority: Optional[Int]
+  branch: Optional[String]
+  worktree: Optional[String]
+  actor: String
+  force: Bool
+  lease_minutes: Int
+end
+
 export def create(pool: Database.Pool, input: Create) -> Result[Card]
   return error("INVALID:board") if input.board.empty?
   return error("INVALID:title") if input.title.strip.empty?
@@ -153,6 +166,24 @@ export def list_open(conn: Db.Connection, board: String, filters: Filters) -> Re
   ok(cards)
 end
 
+export def update(pool: Database.Pool, input: Update) -> Result[Card]
+  return error("INVALID:id") if input.id <= 0
+  return error("INVALID:title") if input.title.some? and input.title.unwrap!.strip.empty?
+  if input.priority.some? and (input.priority.unwrap! < 0 or input.priority.unwrap! > 4)
+    return error("INVALID:priority")
+  end
+
+  return error("INVALID:agent") if not Regex.match?(input.actor, /^[A-Za-z0-9._@\/-]{1,64}$/)
+  return error("INVALID:lease") if input.lease_minutes < 0 or input.lease_minutes > 1000000000
+  if input.labels.some?
+    for label in input.labels.unwrap!
+      return error("INVALID:labels") if label.strip.empty?
+    end
+  end
+
+  Database.with_connection(pool) do |conn| Db.transaction(conn) do |tx| update_open(tx, input) end end
+end
+
 export def load_at(conn: Db.Connection, id: Int, now: Int) -> Result[Card]
   rows = try Db.query(
     conn,
@@ -216,6 +247,70 @@ def bool_value(value: Optional[Bool]) -> Db.Value
   case value
     none -> Db.Value.Null
     some(flag) -> bool_int(flag)
+  end
+end
+
+def update_open(conn: Db.Connection, input: Update) -> Result[Card]
+  now = Time.now_ms()
+  card = try load_at(conn, input.id, now)
+  holder = card.claimed_by
+  active = holder.some? and (not card.lease_until.some? or card.lease_until.unwrap! > now)
+  return error("CLAIMED:#{holder.unwrap!}") if active and holder.unwrap! != input.actor and not input.force
+
+  title = input.title.unwrap_or(card.title)
+  body = input.body.unwrap_or(card.body)
+  labels = input.labels.unwrap_or(card.labels)
+  priority = input.priority.unwrap_or(card.priority)
+  lease: Db.Value = nullable_number(card.lease_until)
+  if active and holder.unwrap! == input.actor and input.lease_minutes > 0
+    lease = Db.Value.Int(now + input.lease_minutes * 60000)
+  end
+
+  _ = try Db.execute(
+    conn,
+    "update cards set title = ?, body = ?, labels = ?, priority = ?, branch = ?, worktree = ?, lease_until = ?, updated_at = ?, version = version + 1 where id = ?",
+    [
+      Db.Value.Text(title),
+      Db.Value.Text(body),
+      Db.Value.Text(JSON.encode(JSON.from(labels))),
+      Db.Value.Int(priority),
+      branch_value(input.branch, card.branch),
+      branch_value(input.worktree, card.worktree),
+      lease,
+      Db.Value.Int(now),
+      Db.Value.Int(input.id),
+    ],
+  )
+
+  updated = try load_at(conn, input.id, now)
+  board = try Db.query(conn, "select board_id from cards where id = ?", [Db.Value.Int(input.id)])
+  _ = try Db.execute(
+    conn,
+    "insert into events (board_id, card_id, kind, actor, data, created_at) values (?, ?, ?, ?, ?, ?)",
+    [
+      Db.Value.Int(number(board[0], "board_id")),
+      Db.Value.Int(input.id),
+      Db.Value.Text("card.updated"),
+      Db.Value.Text(input.actor),
+      Db.Value.Text(JSON.encode(JSON.from(updated))),
+      Db.Value.Int(now),
+    ],
+  )
+
+  ok(updated)
+end
+
+def branch_value(given: Optional[String], current: Optional[String]) -> Db.Value
+  case given
+    some(text) -> Db.Value.Text(text)
+    none -> optional_value(current)
+  end
+end
+
+def nullable_number(value: Optional[Int]) -> Db.Value
+  case value
+    none -> Db.Value.Null
+    some(number) -> Db.Value.Int(number)
   end
 end
 

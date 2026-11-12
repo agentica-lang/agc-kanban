@@ -14,6 +14,8 @@ def main() -> Void
     BDD.step("I list boards", &list_boards),
     BDD.step("I get the project snapshot", &project_snapshot),
     BDD.step("I add a card titled {string}", &add_card),
+    BDD.step("agent {string} retitles card {int} to {string}", &retitle_card),
+    BDD.step("agent {string} forces a new title on card {int} to {string}", &force_retitle_card),
     BDD.step("I get card {int}", &get_card),
     BDD.step("I make card {int} depend on card {int}", &add_dependency),
     BDD.step("I remove the dependency of card {int} on card {int}", &remove_dependency),
@@ -256,6 +258,10 @@ def get_card(ctx: BDD.Context, args: List[String]) -> BDD.Context
 end
 
 def api_request(ctx: BDD.Context, method: String, path: String, body: String) -> BDD.Context
+  api_request_as(ctx, "agent-1", method, path, body)
+end
+
+def api_request_as(ctx: BDD.Context, agent: String, method: String, path: String, body: String) -> BDD.Context
   port = JSON.int(BDD.get(ctx, "port").unwrap!).unwrap!
   client = HTTP.client().unwrap!
   response = HTTP.request(
@@ -265,7 +271,7 @@ def api_request(ctx: BDD.Context, method: String, path: String, body: String) ->
     body.bytes,
     [
       Header(name: "apikey", value: "01234567890123456789012345678901"),
-      Header(name: "X-Kanban-Agent", value: "agent-1"),
+      Header(name: "X-Kanban-Agent", value: agent),
       Header(name: "Content-Type", value: "application/json"),
     ],
   ).unwrap!
@@ -444,4 +450,14 @@ end
 def mark_column_done(ctx: BDD.Context, args: List[String]) -> BDD.Context
   body = JSON.encode(JSON.from({"done": true}))
   api_request(ctx, "PATCH", "/api/columns/#{args[0]}", body)
+end
+
+def retitle_card(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  body = JSON.encode(JSON.from({"title": args[2]}))
+  api_request_as(ctx, args[0], "PATCH", "/api/cards/#{args[1]}", body)
+end
+
+def force_retitle_card(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  body = JSON.encode(JSON.object({"title": JSON.from(args[2]), "force": JSON.from(true)}))
+  api_request_as(ctx, args[0], "PATCH", "/api/cards/#{args[1]}", body)
 end
