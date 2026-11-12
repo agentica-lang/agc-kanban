@@ -11,7 +11,38 @@ Feature: CLI failures
     Then the response status is 201
     When I run kanban without an agent "card add First --board project"
     Then kanban exits with code 2
-    And kanban output contains "USAGE"
+    And kanban stderr is "kanban: USAGE: no agent name; ask your coordinator, then set KANBAN_AGENT or --agent"
+
+  Scenario: Taking a card or listing mine needs an agent name too
+    Given the database server is running
+    When I post a board named "Project" with slug "project" as "agent-1"
+    Then the response status is 201
+    When I run kanban without an agent "card next --board project"
+    Then kanban exits with code 2
+    And kanban stderr is "kanban: USAGE: no agent name; ask your coordinator, then set KANBAN_AGENT or --agent"
+    When I run kanban without an agent "card list --mine --board project"
+    Then kanban exits with code 2
+    And kanban stderr is "kanban: USAGE: no agent name; ask your coordinator, then set KANBAN_AGENT or --agent"
+    When I run kanban without an agent "card list --board project"
+    Then kanban exits with code 0
+
+  Scenario: The agent key of the config file is ignored with a warning
+    Given the database server is running
+    When I post a board named "Project" with slug "project" as "agent-1"
+    Then the response status is 201
+    When I run kanban without an agent and the home fixture "agent_in_config" "card add First --board project"
+    Then kanban exits with code 2
+    And kanban stderr contains "kanban: warning: the agent key of the config file is ignored"
+    And kanban stderr contains "USAGE: no agent name"
+
+  Scenario: Whoami shows the name or none
+    Given the database server is running
+    When I run kanban "whoami"
+    Then kanban exits with code 0
+    And kanban stdout contains "agent: agent-1"
+    When I run kanban without an agent "whoami"
+    Then kanban exits with code 0
+    And kanban stdout contains "agent: none"
 
   Scenario: An unknown board is not found
     Given the database server is running
@@ -120,3 +151,11 @@ Feature: CLI failures
     And kanban stdout contains "\"card_id\":1"
     And kanban stdout contains "\"claimed_by\":\"agent-2\""
     And kanban stderr is empty
+
+  Scenario: The config warning leaves the JSON on stdout alone, and whoami has a null agent
+    Given the database server is running
+    When I run kanban without an agent and the home fixture "agent_in_config" "whoami --json"
+    Then kanban exits with code 0
+    And kanban stderr contains "kanban: warning: the agent key of the config file is ignored"
+    And kanban stdout is a JSON document
+    And kanban stdout contains "\"agent\":null"

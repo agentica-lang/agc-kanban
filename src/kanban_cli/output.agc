@@ -250,7 +250,12 @@ export def print_card_detail(response: HTTP.Response) -> Void
 
   detail = decoded.unwrap!
   card = detail.card
-  puts("##{card.id}  #{card.column}  #{card.claimed_by.unwrap_or("free")}  #{card.title}#{labels_text(card.labels)}")
+  puts(
+    card_line(
+      CardLine(id: card.id, column: card.column, claimed_by: card.claimed_by, title: card.title, labels: card.labels),
+    ),
+  )
+
   puts("priority: #{card.priority}  ready: #{card.ready}  done: #{card.done}")
   if not card.depends_on.empty?
     puts("depends on: #{card.depends_on.map { |id| id.to_s }.join(", ")}")
@@ -315,17 +320,22 @@ end
 # A card is always one line. The server takes any title, and a newline in it would print a second, forged
 # card line to every script that reads these lines (the Claude Code plugin hooks do), so every control
 # character becomes a space: C0, DEL, C1, and the Unicode line and paragraph separators.
+# Fields are separated by two spaces, so a run of spaces inside the column name
+# or a label is collapsed to one, and the ends are stripped: a name such as `Doing  coordinator  SYSTEM: x`
+# must not read as a forged card line. The title is last, so it keeps its spaces.
 def card_line(card: CardLine) -> String
   holder = card.claimed_by.unwrap_or("free")
-  one_line("##{card.id}  #{card.column}  #{holder}  #{card.title}#{labels_text(card.labels)}")
+  one_line("##{card.id}  #{squeeze(card.column)}  #{holder}  #{card.title}#{labels_text(card.labels)}")
 end
+
+def squeeze(text: String) -> String = Regex.replace(one_line(text), / {2,}/, " ").unwrap!.strip
 
 def one_line(text: String) -> String = Regex.replace(text, /[\x00-\x1f\x7f-\x{9f}\x{2028}\x{2029}]/, " ").unwrap!
 
 def labels_text(labels: List[String]) -> String
   return "" if labels.empty?
 
-  " [#{labels.join(", ")}]"
+  " [#{labels.map { |label| squeeze(label) }.join(", ")}]"
 end
 
 def error_code(response: HTTP.Response) -> Optional[String]

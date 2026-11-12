@@ -5,6 +5,12 @@ Feature: Claude Code plugin hooks
     And kanban stdout contains "SessionStart"
     And kanban stdout contains "the board could not be read"
 
+  Scenario: The config warning about the agent key stays out of the notice
+    When I run the "session" hook without a server and the home fixture "agent_in_config"
+    Then kanban exits with code 0
+    And kanban stdout contains "the board could not be read"
+    And kanban output does not contain "warning"
+
   Scenario: A project with no board configured gets nothing
     Given the database server is running
     When I run the "session" hook without a board
