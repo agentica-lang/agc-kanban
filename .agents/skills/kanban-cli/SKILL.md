@@ -69,11 +69,13 @@ kanban column rename Review Check
 kanban column move Check 1
 kanban column remove Check             # refused when it has cards or is the done column
 
-kanban card add "Fix login" --label api,ui --priority 1 --body-file task.md
+kanban card add "Fix login" --label api,ui --priority 1 --body-file task.md \
+                [--link URL]...
 kanban card list [--column Todo] [--ready] [--mine] [--claimed-by NAME] [--label api] [--all]
 kanban card show 12
 kanban card update 12 [--title T] [--body T | --body-file F] [--label L] \
-                     [--priority N] [--branch B] [--worktree W] [--force]
+                     [--priority N] [--branch B] [--worktree W] [--force] \
+                     [--link URL]... [--unlink URL]...
 
 kanban card claim 12                   # 4 when somebody else holds it
 kanban card next [--column Todo] [--label api]
@@ -86,6 +88,11 @@ kanban card dep remove 12 10
 
 kanban events [--after 42 | --before 42] [--card 12] [--limit 50]   # --before: newest first
 ```
+
+`--link` and `--unlink` repeat. A link is an http(s) URL (a PR, an issue, a CI
+run), at most 2,048 characters, without spaces, quotes or angle brackets;
+anything else is `INVALID`. Adding a link the card has, or removing one it has
+not, changes nothing. When you open a PR, add its link to the card.
 
 Long text: `--body`, `--body-file PATH`, or `-` to read standard input
 (`kanban card comment 12 - < notes.md`). Labels and `--depends-on` take a
@@ -101,7 +108,7 @@ argument or from `KANBAN_BOARD`.
 Boards, columns and comments print one tab-separated line each; card lines and
 events use two spaces (`#12  Doing  claude-code  Fix login [api]`), so a card
 line can be read with `cut -d' ' -f1` on the id. `card show` is a short
-multi-line page; its `time:` lines give the time in each column
+multi-line page with one `link:` line per link; its `time:` lines give the time in each column
 (`time: Todo 25 min · Doing 2 h 15 min`, then `time: 40 min in Review`, or
 `time: total 2 h 40 min` for a done card). `--json` prints the server answer
 verbatim, with `times` in milliseconds.

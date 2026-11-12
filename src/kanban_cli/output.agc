@@ -95,6 +95,8 @@ struct CardDetail
   claimed_by: Optional[String]
   branch: Optional[String]
   worktree: Optional[String]
+  # None from a server older than links.
+  links: Optional[List[String]]
   depends_on: List[Int]
   blocks: List[Int]
   ready: Bool
@@ -263,6 +265,10 @@ export def print_card_detail(response: HttpResponse) -> Void
 
   if card.worktree.some?
     puts("worktree: #{card.worktree.unwrap!}")
+  end
+
+  for url in card.links.unwrap_or([])
+    puts("link: #{url}")
   end
 
   if detail.times.some?

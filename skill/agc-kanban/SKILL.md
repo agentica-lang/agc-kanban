@@ -30,6 +30,9 @@ This skill is only the rules.
 - Comment at each phase: the branch and worktree, the PR number and head,
   the test or CI verdict, a blocker. Comment before every status change, so
   the reason sits next to the change.
+- When you open a PR, add its link to the card:
+  `kanban card update ID --link URL`. One card may carry several (a PR and
+  its fixes, a PR per repository).
 - Keep comments short and facts only: the next agent reads them as context.
   Long text goes by `--file` or standard input.
 - Move your card to Review when the work is ready to be reviewed. Never mark

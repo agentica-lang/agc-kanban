@@ -3,6 +3,10 @@ import Regex from "std/regex"
 import Database from "repo/database"
 import Times from "times"
 
+# A link is untrusted text shown on the web: http(s) only, a host, and none of the characters that end a URL in HTML or
+# Markdown (space, quotes, angle brackets, backslash and the like), so it stays one plain URL wherever it is printed.
+LINK_MAX = 2048
+
 export struct Card
   id: Int
   board: String
@@ -12,6 +16,7 @@ export struct Card
   title: String
   body: String
   labels: List[String]
+  links: List[String]
   priority: Int
   claimed_by: Optional[String]
   claimed_at: Optional[Int]
@@ -52,6 +57,7 @@ export struct Create
   priority: Int
   depends_on: List[Int]
   actor: String
+  links: List[String] = []
 end
 
 export struct Filters
@@ -73,6 +79,10 @@ export struct Update
   actor: String
   force: Bool
   lease_minutes: Int
+  # Added after removed, each once and in the order given; adding a link the card has, or removing one it has not, is
+  # no change.
+  link: List[String] = []
+  unlink: List[String] = []
 end
 
 export def create(pool: Database.Pool, input: Create) -> Result[Card]
@@ -83,6 +93,8 @@ export def create(pool: Database.Pool, input: Create) -> Result[Card]
   for label in input.labels
     return error("INVALID:labels") if label.strip.empty?
   end
+
+  return error("INVALID:links") if not valid_links?(input.links)
 
   for id in input.depends_on
     return error("INVALID:depends_on") if id <= 0
@@ -181,6 +193,7 @@ export def update(pool: Database.Pool, input: Update) -> Result[Card]
 
   return error("INVALID:agent") if not Regex.match?(input.actor, /^[A-Za-z0-9._@\/-]{1,64}$/)
   return error("INVALID:lease") if input.lease_minutes < 0 or input.lease_minutes > 1000000000
+  return error("INVALID:links") if not valid_links?(input.link)
   if input.labels.some?
     for label in input.labels.unwrap!
       return error("INVALID:labels") if label.strip.empty?
@@ -201,6 +214,7 @@ export def load_at(conn: Db.Connection, id: Int, now: Int) -> Result[Card]
 
   row = rows[0]
   labels = try JSON.decode(text(row, "labels"), List[String])
+  links = try JSON.decode(text(row, "links"), List[String])
   deps = try Db.query(
     conn,
     "select depends_on_id as id from card_deps where card_id = ? order by depends_on_id",
@@ -223,6 +237,7 @@ export def load_at(conn: Db.Connection, id: Int, now: Int) -> Result[Card]
       title: text(row, "title"),
       body: text(row, "body"),
       labels: labels,
+      links: links,
       priority: number(row, "priority"),
       claimed_by: optional_text(row, "claimed_by"),
       claimed_at: optional_number(row, "claimed_at"),
@@ -267,6 +282,7 @@ def update_open(conn: Db.Connection, input: Update) -> Result[Card]
   body = input.body.unwrap_or(card.body)
   labels = input.labels.unwrap_or(card.labels)
   priority = input.priority.unwrap_or(card.priority)
+  links = merged(card.links.select do |url| not input.unlink.include?(url) end, input.link)
   lease: Db.Value = nullable_number(card.lease_until)
   if active and holder.unwrap! == input.actor and input.lease_minutes > 0
     lease = Db.Value.Int(now + input.lease_minutes * 60000)
@@ -274,11 +290,12 @@ def update_open(conn: Db.Connection, input: Update) -> Result[Card]
 
   _ = try Db.execute(
     conn,
-    "update cards set title = ?, body = ?, labels = ?, priority = ?, branch = ?, worktree = ?, lease_until = ?, updated_at = ?, version = version + 1 where id = ?",
+    "update cards set title = ?, body = ?, labels = ?, links = ?, priority = ?, branch = ?, worktree = ?, lease_until = ?, updated_at = ?, version = version + 1 where id = ?",
     [
       Db.Value.Text(title),
       Db.Value.Text(body),
       Db.Value.Text(JSON.encode(JSON.from(labels))),
+      Db.Value.Text(JSON.encode(JSON.from(links))),
       Db.Value.Int(priority),
       branch_value(input.branch, card.branch),
       branch_value(input.worktree, card.worktree),
@@ -304,6 +321,27 @@ def update_open(conn: Db.Connection, input: Update) -> Result[Card]
   )
 
   ok(updated)
+end
+
+def valid_links?(links: List[String]) -> Bool
+  links.all? do |url|
+    (
+      url.length <= LINK_MAX and
+      Regex.match?(url, /^https?:\/\/[^\s"'<>\\^`{|}\x00-\x1f\x7f\/?#][^\s"'<>\\^`{|}\x00-\x1f\x7f]*$/)
+    )
+  end
+end
+
+# `links` with each of `added` it lacks, in order.
+def merged(links: List[String], added: List[String]) -> List[String]
+  result = links
+  for url in added
+    next if result.include?(url)
+
+    result = result.push(url)
+  end
+
+  result
 end
 
 def branch_value(given: Optional[String], current: Optional[String]) -> Db.Value
@@ -351,7 +389,7 @@ def insert(conn: Db.Connection, input: Create) -> Result[Card]
 
   _ = try Db.execute(
     conn,
-    "insert into cards (board_id, column_id, position, title, body, labels, priority, created_by, created_at, updated_at, done_at) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    "insert into cards (board_id, column_id, position, title, body, labels, links, priority, created_by, created_at, updated_at, done_at) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     [
       Db.Value.Int(board_id),
       Db.Value.Int(column_id),
@@ -359,6 +397,7 @@ def insert(conn: Db.Connection, input: Create) -> Result[Card]
       Db.Value.Text(input.title),
       Db.Value.Text(input.body),
       Db.Value.Text(JSON.encode(JSON.from(input.labels))),
+      Db.Value.Text(JSON.encode(JSON.from(merged([], input.links)))),
       Db.Value.Int(input.priority),
       Db.Value.Text(input.actor),
       Db.Value.Int(now),

@@ -5,7 +5,16 @@ import M0003 from "migrations/m0003_cards"
 import M0004 from "migrations/m0004_card_deps"
 import M0005 from "migrations/m0005_comments"
 import M0006 from "migrations/m0006_events"
+import M0007 from "migrations/m0007_card_links"
 
 export def all() -> List[Migrate.Migration]
-  [M0001.migration(), M0002.migration(), M0003.migration(), M0004.migration(), M0005.migration(), M0006.migration()]
+  [
+    M0001.migration(),
+    M0002.migration(),
+    M0003.migration(),
+    M0004.migration(),
+    M0005.migration(),
+    M0006.migration(),
+    M0007.migration(),
+  ]
 end
