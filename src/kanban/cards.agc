@@ -455,13 +455,13 @@ def bool_int(flag: Bool) -> Db.Value
 end
 
 # Every event of the card that carries the card names its column: `column_id` at the top (created, claimed, updated)
-# or under `card` (moved, released, done). The name is the column's name now, or the one in the event when the column
-# is gone.
+# or under `card` (moved, released, done), with the column's name at that time. The name of the column table is only
+# for an event without one, and only from the card's board: the id of a removed column can be reused.
 def steps_of(conn: Db.Connection, id: Int) -> Result[List[Times.Step]]
   rows = try Db.query(
     conn,
-    "select s.at, s.column_id, coalesce(col.name, s.name) as name from (select id, created_at as at, coalesce(json_extract(data, '$.column_id'), json_extract(data, '$.card.column_id')) as column_id, coalesce(json_extract(data, '$.column'), json_extract(data, '$.card.column')) as name from events where card_id = ?) s left join columns col on col.id = s.column_id where s.column_id is not null order by s.id",
-    [Db.Value.Int(id)],
+    "select s.at, s.column_id, coalesce(s.name, col.name) as name from (select id, created_at as at, coalesce(json_extract(data, '$.column_id'), json_extract(data, '$.card.column_id')) as column_id, coalesce(json_extract(data, '$.column'), json_extract(data, '$.card.column')) as name from events where card_id = ?) s left join columns col on col.id = s.column_id and col.board_id = (select board_id from cards where id = ?) where s.column_id is not null order by s.id",
+    [Db.Value.Int(id), Db.Value.Int(id)],
   )
 
   ok(

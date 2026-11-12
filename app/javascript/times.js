@@ -27,7 +27,7 @@ export function lines(times, elapsed) {
   var stays = times.stays.map(function (stay) {
     return stay.name + " " + human(stay.ms + (stay.column_id === times.column_id ? live : 0));
   });
-  var last = times.total_ms !== null ? "total " + human(times.total_ms) : human(times.now - times.since + live) + " in " + times.column;
+  var last = times.total_ms !== null ? "total " + human(times.total_ms) : human(Math.max(0, times.now - times.since) + live) + " in " + times.column;
   if (stays.length === 0 || (!times.done && stays.length === 1)) {
     return [last];
   }

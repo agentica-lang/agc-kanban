@@ -19,6 +19,7 @@ fmt-check:
 	$(AGENTICA) fmt --check server.agc cli.agc src specs test
 test: assets
 	$(AGENTICA) test --jobs $(JOBS)
+	node --test 'test/web/*.test.mjs'
 smoke:
 	tools/smoke.sh
 smoke-docker:

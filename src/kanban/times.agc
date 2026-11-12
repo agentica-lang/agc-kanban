@@ -63,14 +63,14 @@ export def build(steps: List[Step], done: Bool, now: Int) -> Times
     end
 
     names = names.put(visit.column_id, visit.name)
-    sums = sums.put(visit.column_id, sums.get(visit.column_id, 0) + finish - visit.at)
+    sums = sums.put(visit.column_id, sums.get(visit.column_id, 0) + span(visit.at, finish))
   end
 
   total: Optional[Int] = none
   if done
     total = some(0)
     if last > 0
-      total = some(visits[last].at - visits[1].at)
+      total = some(span(visits[1].at, visits[last].at))
     end
   end
 
@@ -91,7 +91,7 @@ export def lines(times: Times) -> List[String]
   return [] if times.column.empty?
 
   stays = times.stays.map do |stay| "#{stay.name} #{human(stay.ms)}" end
-  last = "#{human(times.now - times.since)} in #{times.column}"
+  last = "#{human(span(times.since, times.now))} in #{times.column}"
   if times.total_ms.some?
     last = "total #{human(times.total_ms.unwrap!)}"
   end
@@ -117,4 +117,11 @@ export def human(ms: Int) -> String
   return "#{ms / HOUR} h" if minutes == 0
 
   "#{ms / HOUR} h #{minutes} min"
+end
+
+# The time from `start` to `finish`, never below 0: a clock that steps back must not give a negative time.
+def span(start: Int, finish: Int) -> Int
+  return 0 if finish < start
+
+  finish - start
 end

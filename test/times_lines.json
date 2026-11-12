@@ -1,0 +1,125 @@
+[
+  {
+    "times": {
+      "stays": [],
+      "column_id": 0,
+      "column": "",
+      "since": 0,
+      "now": 0,
+      "done": false,
+      "total_ms": null
+    },
+    "lines": []
+  },
+  {
+    "times": {
+      "stays": [
+        {
+          "column_id": 1,
+          "name": "Todo",
+          "ms": 2400000
+        }
+      ],
+      "column_id": 1,
+      "column": "Todo",
+      "since": 0,
+      "now": 2400000,
+      "done": false,
+      "total_ms": null
+    },
+    "lines": [
+      "40 min in Todo"
+    ]
+  },
+  {
+    "times": {
+      "stays": [
+        {
+          "column_id": 1,
+          "name": "Todo",
+          "ms": 900000
+        },
+        {
+          "column_id": 2,
+          "name": "Doing",
+          "ms": 6300000
+        }
+      ],
+      "column_id": 2,
+      "column": "Doing",
+      "since": 4500000,
+      "now": 7200000,
+      "done": false,
+      "total_ms": null
+    },
+    "lines": [
+      "Todo 15 min · Doing 1 h 45 min",
+      "45 min in Doing"
+    ]
+  },
+  {
+    "times": {
+      "stays": [
+        {
+          "column_id": 1,
+          "name": "Todo",
+          "ms": 1800000
+        },
+        {
+          "column_id": 2,
+          "name": "Doing",
+          "ms": 8100000
+        },
+        {
+          "column_id": 3,
+          "name": "Review",
+          "ms": 2400000
+        }
+      ],
+      "column_id": 4,
+      "column": "Done",
+      "since": 12300000,
+      "now": 54000000,
+      "done": true,
+      "total_ms": 10500000
+    },
+    "lines": [
+      "Todo 30 min · Doing 2 h 15 min · Review 40 min",
+      "total 2 h 55 min"
+    ]
+  },
+  {
+    "times": {
+      "stays": [],
+      "column_id": 4,
+      "column": "Done",
+      "since": 0,
+      "now": 60000,
+      "done": true,
+      "total_ms": 0
+    },
+    "lines": [
+      "total < 1 min"
+    ]
+  },
+  {
+    "times": {
+      "stays": [
+        {
+          "column_id": 1,
+          "name": "Todo",
+          "ms": 93600000
+        }
+      ],
+      "column_id": 1,
+      "column": "Todo",
+      "since": 0,
+      "now": 93600000,
+      "done": false,
+      "total_ms": null
+    },
+    "lines": [
+      "1 d 2 h in Todo"
+    ]
+  }
+]

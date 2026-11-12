@@ -8,7 +8,7 @@ var REFETCH_MS = 80; // a burst of events of the card is one fetch
 // `receivedAt` is the local time of the answer, from which the panel counts the time of an open card on.
 export function useCard() {
   var state = reactive({ id: null, detail: null, error: "", receivedAt: 0 });
-  var fetchCard = null;
+  var fetchCard = null; // the fetch of the card shown; a new one on each `show`
   var timer = null;
 
   function show(id) {
@@ -21,18 +21,25 @@ export function useCard() {
       fetchCard = null;
       return;
     }
-    // A new sequence per card: an answer for the card shown before can never land on this one.
-    fetchCard = latest(function () {
+    // A new sequence per `show` orders the answers for that card. An answer (or failure) of an earlier `show` is
+    // dropped: another card is shown, the panel closed, or the same card was opened again.
+    var mine = latest(function () {
       return getJSON("/api/cards/" + id);
     }, function (detail, fresh) {
+      if (fetchCard !== mine) {
+        return;
+      }
       state.detail = detail;
       state.receivedAt = Date.now();
       if (fresh) {
         state.error = "";
       }
     }, function (error) {
-      state.error = error.message;
+      if (fetchCard === mine) {
+        state.error = error.message;
+      }
     });
+    fetchCard = mine;
     fetchCard();
   }
 

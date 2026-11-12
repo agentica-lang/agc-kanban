@@ -75,11 +75,12 @@ var columns = computed(function () {
         <Column v-for="entry in columns" :key="entry.column.id" :column="entry.column" :cards="entry.cards" :blocked="blocked" :flash="state.flash" />
         <p v-if="!columns.length" class="empty">This board has no columns.</p>
       </main>
+      <div v-if="panel !== ''" class="backdrop" aria-hidden="true" @click="drawer.close()"></div>
       <Drawer v-if="panel === 'activity'" title="Activity" @close="drawer.close()">
         <Feed :state="state" />
       </Drawer>
       <Drawer v-else-if="panel === 'card'" :title="'Card #' + drawer.card.value" @close="drawer.close()">
-        <CardPanel :state="card" @open="drawer.showCard" />
+        <CardPanel :state="card" :slug="slug" @open="drawer.showCard" />
       </Drawer>
     </div>
   </div>

@@ -124,3 +124,22 @@ Feature: Cards
     And the response contains exactly 1 occurrences of "\"name\":\"Doing\""
     And the response does not contain "\"name\":\"Done\""
     And the response contains "\"done\":true,\"total_ms\":"
+
+  Scenario: The time in each column keeps the names of renamed, removed and reused columns
+    Given the database server is running
+    When I post a board named "Project" with slug "project" as "agent-1"
+    And I add a card titled "Implement API"
+    And I add the column "Temp" at position 1
+    And I move card 1 to "Temp"
+    And agent "agent-1" comments on card 1 with "an event without a column"
+    And I move card 1 to "Doing"
+    And I delete column 5
+    And I add the column "Other" at position 1
+    Then the response contains "\"id\":5,"
+    When I rename column 1 to "Backlog"
+    And I get card 1
+    Then the response status is 200
+    And the response contains "\"stays\":[{\"column_id\":1,\"name\":\"Todo\""
+    And the response contains exactly 1 occurrences of "\"name\":\"Temp\""
+    And the response contains exactly 1 occurrences of "\"name\":\"Doing\""
+    And the response does not contain "\"name\":\"Other\""

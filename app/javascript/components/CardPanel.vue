@@ -2,8 +2,9 @@
 import { Markdown } from "../markdown.js";
 import CardTimes from "./CardTimes.vue";
 
-// The detail of the open card, read-only. A dependency opens that card in the same panel.
-defineProps({ state: Object });
+// The detail of the open card, read-only. A dependency opens that card in the same panel. A card of another board
+// (a dependency, or `?card=` by hand) gets only a link to its board: the live events of this page are not its own.
+defineProps({ state: Object, slug: String });
 defineEmits(["open"]);
 
 function when(ms) {
@@ -13,6 +14,10 @@ function when(ms) {
 
 <template>
   <p v-if="!state.detail" class="empty">{{ state.error || "Loading..." }}</p>
+  <p v-else-if="state.detail.card.board !== slug" class="empty">
+    Card #{{ state.detail.card.id }} is not on this board:
+    <a :href="'/boards/' + encodeURIComponent(state.detail.card.board) + '?card=' + state.detail.card.id">open it on {{ state.detail.card.board }}</a>.
+  </p>
   <div v-else class="detail">
     <p v-if="state.error" class="banner">Could not refresh the card: {{ state.error }}</p>
     <h3><span class="id">#{{ state.detail.card.id }}</span> {{ state.detail.card.title }}</h3>

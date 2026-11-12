@@ -3,8 +3,11 @@ import { h } from "vue";
 // A small Markdown for card bodies and comments, drawn as Vue nodes: every piece of the text is a text node, so no
 // markup of the text ever reaches the page (no v-html). It reads fenced code, headings, lists, quotes and paragraphs
 // (a line break is kept), and inline code, bold, italic and links. A link goes only to http(s), and a bare URL is a
-// link too, so issue and PR links are clickable.
-var INLINE = /(`[^`]+`)|\*\*([^*]+)\*\*|\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[^\s<>]*[^\s<>.,;:!?'")\]])|(?:^|(?<=\s))[*_]([^*_\s](?:[^*_]*[^*_\s])?)[*_]/g;
+// link too, so issue and PR links are clickable. Each pattern stops at the character that ends it (`[^[\]]` in a
+// link label), so no text makes the matching slow (test/web/markdown.test.mjs), and only the first MAX_CHARS of a text
+// are drawn.
+var INLINE = /(`[^`]+`)|\*\*([^*]+)\*\*|\[([^[\]]+)\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[^\s<>]*[^\s<>.,;:!?'")\]])|(?:^|(?<=\s))[*_]([^*_\s](?:[^*_]*[^*_\s])?)[*_]/g;
+var MAX_CHARS = 50000;
 var FENCE = /^```/;
 var HEADING = /^(#{1,6})\s+(.*)$/;
 var BULLET = /^\s*[-*+]\s+(.*)$/;
@@ -64,7 +67,7 @@ function run(lines, start, pattern) {
   return items;
 }
 
-function blocks(text) {
+export function blocks(text) {
   var lines = text.replace(/\r\n?/g, "\n").split("\n");
   var nodes = [];
   var i = 0;
@@ -108,7 +111,12 @@ export var Markdown = {
   props: { text: String },
   setup: function (props) {
     return function () {
-      return h("div", { class: "md" }, blocks(props.text || ""));
+      var text = props.text || "";
+      var nodes = blocks(text.slice(0, MAX_CHARS));
+      if (text.length > MAX_CHARS) {
+        nodes.push(h("p", { class: "empty" }, "\u2026 truncated: " + Math.ceil((text.length - MAX_CHARS) / 1000) + " KB more"));
+      }
+      return h("div", { class: "md" }, nodes);
     };
   },
 };
