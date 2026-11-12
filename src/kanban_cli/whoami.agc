@@ -24,12 +24,7 @@ export def run(words: List[String]) -> Result[Void]
   parsed = try OP.parse(parser, words)
   config = try Settings.load(Settings.read_flags(parsed))
   client = Client.from(config)
-  health = check_health(client, config.json)
-  if not health.ok?
-    puts(Output.body(health.unwrap!))
-    return ok()
-  end
-
+  _ = try check_health(client, config.json)
   check_auth(client, config.json)
   if config.json
     puts(JSON.encode(JSON.from(Identity(url: config.url, agent: config.agent, board: config.board, health: "ok"))))

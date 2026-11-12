@@ -4,11 +4,14 @@ import Client from "client"
 import Input from "input"
 import Output from "output"
 import Settings from "settings"
+import Support from "support"
 import {Arg, Kind, Opt} from "std/option_parser"
 import {Pair} from "std/uri"
 
 export def run(words: List[String]) -> Result[Void]
-  return error("card needs a command: add, list, show or update") if words.empty?
+  if words.empty?
+    return error("card needs a command: add, list, show, update, claim, next, release, move, done, comment or dep")
+  end
 
   rest = List.drop(words, 1)
   case words[0]
@@ -38,12 +41,12 @@ def add(words: List[String]) -> Result[Void]
 
   parsed = try OP.parse(parser, words)
   config = try Settings.load(Settings.read_flags(parsed))
-  require_agent(config)
-  board = board_of(config)
+  Support.require_agent(config)
+  board = Support.board_of(config)
   body = try Input.text(OP.optional_string(parsed, "body"), OP.optional_string(parsed, "body-file"))
   fields: Map[String, Json] = {"title": JSON.from(OP.string(parsed, "title"))}
-  fields = put(fields, "body", body)
-  fields = put(fields, "column", OP.optional_string(parsed, "column"))
+  fields = Support.put(fields, "body", body)
+  fields = Support.put(fields, "column", OP.optional_string(parsed, "column"))
   labels = Input.csv(OP.optional_string(parsed, "label"))
   if not labels.empty?
     fields = fields.put("labels", JSON.from(labels))
@@ -66,7 +69,7 @@ def add(words: List[String]) -> Result[Void]
 
   return ok() if not response.ok?
 
-  print_card(config, response.unwrap!)
+  Support.print_card(config, response.unwrap!)
   ok()
 end
 
@@ -88,7 +91,7 @@ def list(words: List[String]) -> Result[Void]
 
   parsed = try OP.parse(parser, words)
   config = try Settings.load(Settings.read_flags(parsed))
-  board = board_of(config)
+  board = Support.board_of(config)
   pairs: List[Pair] = []
   column = OP.optional_string(parsed, "column")
   if column.some?
@@ -180,13 +183,13 @@ def update(words: List[String]) -> Result[Void]
 
   parsed = try OP.parse(parser, words)
   config = try Settings.load(Settings.read_flags(parsed))
-  require_agent(config)
+  Support.require_agent(config)
   body = try Input.text(OP.optional_string(parsed, "body"), OP.optional_string(parsed, "body-file"))
   fields: Map[String, Json] = {}
-  fields = put(fields, "title", OP.optional_string(parsed, "title"))
-  fields = put(fields, "body", body)
-  fields = put(fields, "branch", OP.optional_string(parsed, "branch"))
-  fields = put(fields, "worktree", OP.optional_string(parsed, "worktree"))
+  fields = Support.put(fields, "title", OP.optional_string(parsed, "title"))
+  fields = Support.put(fields, "body", body)
+  fields = Support.put(fields, "branch", OP.optional_string(parsed, "branch"))
+  fields = Support.put(fields, "worktree", OP.optional_string(parsed, "worktree"))
   labels = Input.csv(OP.optional_string(parsed, "label"))
   if not labels.empty?
     fields = fields.put("labels", JSON.from(labels))
@@ -212,36 +215,6 @@ def update(words: List[String]) -> Result[Void]
 
   return ok() if not response.ok?
 
-  print_card(config, response.unwrap!)
+  Support.print_card(config, response.unwrap!)
   ok()
-end
-
-def print_card(config: Settings.Config, response: HttpResponse) -> Void
-  if config.json
-    puts(Output.body(response))
-    return
-  end
-
-  Output.print_card(response)
-end
-
-def put(fields: Map[String, Json], name: String, value: Optional[String]) -> Map[String, Json]
-  case value
-    none -> fields
-    some(text) -> fields.put(name, JSON.from(text))
-  end
-end
-
-def board_of(config: Settings.Config) -> String
-  if config.board.empty?
-    Output.fail(config.json, "INVALID", "board is required: pass --board or set KANBAN_BOARD", 2)
-  end
-
-  config.board
-end
-
-def require_agent(config: Settings.Config) -> Void
-  if config.agent.empty?
-    Output.fail(config.json, "INVALID", "KANBAN_AGENT is required for writes", 2)
-  end
 end

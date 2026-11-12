@@ -3,6 +3,7 @@ import Client from "client"
 import Input from "input"
 import Output from "output"
 import Settings from "settings"
+import Support from "support"
 import {Arg, Kind, Opt} from "std/option_parser"
 
 export def run(words: List[String]) -> Result[Void]
@@ -25,7 +26,7 @@ def claim(words: List[String]) -> Result[Void]
   parser = OP.new("kanban card claim", "Claim a card", [Arg(name: "id", kind: Kind.Int)], Settings.common_opts())
   parsed = try OP.parse(parser, words)
   config = try Settings.load(Settings.read_flags(parsed))
-  require_agent(config)
+  Support.require_agent(config)
   response = Output.expect(
     Client.post(Client.from(config), "/api/cards/#{OP.int(parsed, "id")}/claim", "{}"),
     config.json,
@@ -33,7 +34,7 @@ def claim(words: List[String]) -> Result[Void]
 
   return ok() if not response.ok?
 
-  print_card(config, response.unwrap!)
+  Support.print_card(config, response.unwrap!)
   ok()
 end
 
@@ -47,11 +48,11 @@ def next(words: List[String]) -> Result[Void]
 
   parsed = try OP.parse(parser, words)
   config = try Settings.load(Settings.read_flags(parsed))
-  require_agent(config)
-  board = board_of(config)
+  Support.require_agent(config)
+  board = Support.board_of(config)
   fields: Map[String, Json] = {}
-  fields = put(fields, "column", OP.optional_string(parsed, "column"))
-  fields = put(fields, "label", OP.optional_string(parsed, "label"))
+  fields = Support.put(fields, "column", OP.optional_string(parsed, "column"))
+  fields = Support.put(fields, "label", OP.optional_string(parsed, "label"))
   response = Output.expect(
     Client.post(Client.from(config), "/api/boards/#{board}/claim-next", JSON.encode(JSON.object(fields))),
     config.json,
@@ -59,7 +60,7 @@ def next(words: List[String]) -> Result[Void]
 
   return ok() if not response.ok?
 
-  print_card(config, response.unwrap!)
+  Support.print_card(config, response.unwrap!)
   ok()
 end
 
@@ -73,10 +74,10 @@ def release(words: List[String]) -> Result[Void]
 
   parsed = try OP.parse(parser, words)
   config = try Settings.load(Settings.read_flags(parsed))
-  require_agent(config)
+  Support.require_agent(config)
   fields: Map[String, Json] = {}
-  fields = put(fields, "column", OP.optional_string(parsed, "to"))
-  fields = force(fields, parsed)
+  fields = Support.put(fields, "column", OP.optional_string(parsed, "to"))
+  fields = Support.force(fields, parsed)
   response = Output.expect(
     Client.post(Client.from(config), "/api/cards/#{OP.int(parsed, "id")}/release", JSON.encode(JSON.object(fields))),
     config.json,
@@ -84,7 +85,7 @@ def release(words: List[String]) -> Result[Void]
 
   return ok() if not response.ok?
 
-  print_card(config, response.unwrap!)
+  Support.print_card(config, response.unwrap!)
   ok()
 end
 
@@ -98,14 +99,14 @@ def move(words: List[String]) -> Result[Void]
 
   parsed = try OP.parse(parser, words)
   config = try Settings.load(Settings.read_flags(parsed))
-  require_agent(config)
+  Support.require_agent(config)
   fields: Map[String, Json] = {"column": JSON.from(OP.string(parsed, "column"))}
   position = OP.optional_int(parsed, "position")
   if position.some?
     fields = fields.put("position", JSON.from(position.unwrap!))
   end
 
-  fields = force(fields, parsed)
+  fields = Support.force(fields, parsed)
   response = Output.expect(
     Client.post(Client.from(config), "/api/cards/#{OP.int(parsed, "id")}/move", JSON.encode(JSON.object(fields))),
     config.json,
@@ -113,7 +114,7 @@ def move(words: List[String]) -> Result[Void]
 
   return ok() if not response.ok?
 
-  print_card(config, response.unwrap!)
+  Support.print_card(config, response.unwrap!)
   ok()
 end
 
@@ -127,9 +128,9 @@ def done(words: List[String]) -> Result[Void]
 
   parsed = try OP.parse(parser, words)
   config = try Settings.load(Settings.read_flags(parsed))
-  require_agent(config)
+  Support.require_agent(config)
   fields: Map[String, Json] = {}
-  fields = force(fields, parsed)
+  fields = Support.force(fields, parsed)
   response = Output.expect(
     Client.post(Client.from(config), "/api/cards/#{OP.int(parsed, "id")}/done", JSON.encode(JSON.object(fields))),
     config.json,
@@ -137,7 +138,7 @@ def done(words: List[String]) -> Result[Void]
 
   return ok() if not response.ok?
 
-  print_card(config, response.unwrap!)
+  Support.print_card(config, response.unwrap!)
   ok()
 end
 
@@ -145,16 +146,18 @@ def comment(words: List[String]) -> Result[Void]
   parser = OP.new(
     "kanban card comment",
     "Comment on a card",
-    [Arg(name: "id", kind: Kind.Int), Arg(name: "text")],
+    [Arg(name: "id", kind: Kind.Int)],
     [Opt(name: "file")] + Settings.common_opts(),
+    "TEXT",
   )
 
   parsed = try OP.parse(parser, words)
   config = try Settings.load(Settings.read_flags(parsed))
-  require_agent(config)
-  text = some(OP.string(parsed, "text"))
-  if OP.optional_string(parsed, "file").some?
-    text = none
+  Support.require_agent(config)
+  rest = OP.rest(parsed)
+  text: Optional[String] = none
+  if not rest.empty?
+    text = some(rest.join(" "))
   end
 
   body = try Input.text(text, OP.optional_string(parsed, "file"))
@@ -200,7 +203,7 @@ def dep_add(words: List[String]) -> Result[Void]
 
   parsed = try OP.parse(parser, words)
   config = try Settings.load(Settings.read_flags(parsed))
-  require_agent(config)
+  Support.require_agent(config)
   body = JSON.encode(JSON.object({"depends_on": JSON.from(OP.int(parsed, "depends-on"))}))
   response = Output.expect(
     Client.post(Client.from(config), "/api/cards/#{OP.int(parsed, "id")}/deps", body),
@@ -209,7 +212,7 @@ def dep_add(words: List[String]) -> Result[Void]
 
   return ok() if not response.ok?
 
-  print_card(config, response.unwrap!)
+  Support.print_card(config, response.unwrap!)
   ok()
 end
 
@@ -223,7 +226,7 @@ def dep_remove(words: List[String]) -> Result[Void]
 
   parsed = try OP.parse(parser, words)
   config = try Settings.load(Settings.read_flags(parsed))
-  require_agent(config)
+  Support.require_agent(config)
   response = Output.expect(
     Client.delete(Client.from(config), "/api/cards/#{OP.int(parsed, "id")}/deps/#{OP.int(parsed, "depends-on")}"),
     config.json,
@@ -231,42 +234,6 @@ def dep_remove(words: List[String]) -> Result[Void]
 
   return ok() if not response.ok?
 
-  print_card(config, response.unwrap!)
+  Support.print_card(config, response.unwrap!)
   ok()
-end
-
-def print_card(config: Settings.Config, response: HttpResponse) -> Void
-  if config.json
-    puts(Output.body(response))
-    return
-  end
-
-  Output.print_card(response)
-end
-
-def force(fields: Map[String, Json], parsed: OP.Parsed) -> Map[String, Json]
-  return fields if not OP.flag(parsed, "force")
-
-  fields.put("force", JSON.from(true))
-end
-
-def put(fields: Map[String, Json], name: String, value: Optional[String]) -> Map[String, Json]
-  case value
-    none -> fields
-    some(text) -> fields.put(name, JSON.from(text))
-  end
-end
-
-def board_of(config: Settings.Config) -> String
-  if config.board.empty?
-    Output.fail(config.json, "INVALID", "board is required: pass --board or set KANBAN_BOARD", 2)
-  end
-
-  config.board
-end
-
-def require_agent(config: Settings.Config) -> Void
-  if config.agent.empty?
-    Output.fail(config.json, "INVALID", "KANBAN_AGENT is required for writes", 2)
-  end
 end

@@ -3,6 +3,7 @@ import URI from "std/uri"
 import Client from "client"
 import Output from "output"
 import Settings from "settings"
+import Support from "support"
 import {Pair} from "std/uri"
 import {Kind, Opt} from "std/option_parser"
 
@@ -17,7 +18,7 @@ export def run(words: List[String]) -> Result[Void]
 
   parsed = try OP.parse(parser, words)
   config = try Settings.load(Settings.read_flags(parsed))
-  board = board_of(config)
+  board = Support.board_of(config)
   pairs: List[Pair] = []
   after = OP.optional_int(parsed, "after")
   if after.some?
@@ -26,7 +27,7 @@ export def run(words: List[String]) -> Result[Void]
 
   card = OP.optional_int(parsed, "card")
   if card.some?
-    pairs = pairs.push(Pair(name: "card_id", value: card.unwrap!.to_s))
+    pairs = pairs.push(Pair(name: "card", value: card.unwrap!.to_s))
   end
 
   limit = OP.optional_int(parsed, "limit")
@@ -49,12 +50,4 @@ export def run(words: List[String]) -> Result[Void]
   end
 
   ok()
-end
-
-def board_of(config: Settings.Config) -> String
-  if config.board.empty?
-    Output.fail(config.json, "INVALID", "board is required: pass --board or set KANBAN_BOARD", 2)
-  end
-
-  config.board
 end

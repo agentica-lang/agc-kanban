@@ -1,3 +1,4 @@
+import OP from "std/option_parser"
 import Board from "src/kanban_cli/board"
 import Prime from "src/kanban_cli/prime"
 import CardActions from "src/kanban_cli/card_actions"
@@ -16,7 +17,12 @@ export def main() -> Void
 
   result = dispatch(words)
   if not result.ok?
-    Output.fail(Output.json_requested?(words), "INVALID", result.message, 2)
+    if OP.help?(result.message)
+      puts(OP.message(result.message))
+      return
+    end
+
+    Output.fail(Output.json_requested?(words), "INVALID", OP.message(result.message), 2)
   end
 end
 

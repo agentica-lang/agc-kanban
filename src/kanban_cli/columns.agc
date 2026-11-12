@@ -2,6 +2,7 @@ import OP from "std/option_parser"
 import Client from "client"
 import Output from "output"
 import Settings from "settings"
+import Support from "support"
 import {Arg, Kind, Opt} from "std/option_parser"
 
 struct ColumnLine
@@ -47,8 +48,8 @@ def add(words: List[String]) -> Result[Void]
 
   parsed = try OP.parse(parser, words)
   config = try Settings.load(Settings.read_flags(parsed))
-  require_agent(config)
-  board = board_of(config)
+  Support.require_agent(config)
+  board = Support.board_of(config)
   fields: Map[String, Json] = {"name": JSON.from(OP.string(parsed, "name"))}
   position = OP.optional_int(parsed, "position")
   if position.some?
@@ -85,7 +86,7 @@ def rename(words: List[String]) -> Result[Void]
 
   parsed = try OP.parse(parser, words)
   config = try Settings.load(Settings.read_flags(parsed))
-  require_agent(config)
+  Support.require_agent(config)
   client = Client.from(config)
   id = column_id(client, config, OP.string(parsed, "column"))
   body = JSON.encode(JSON.object({"name": JSON.from(OP.string(parsed, "name"))}))
@@ -106,7 +107,7 @@ def move(words: List[String]) -> Result[Void]
 
   parsed = try OP.parse(parser, words)
   config = try Settings.load(Settings.read_flags(parsed))
-  require_agent(config)
+  Support.require_agent(config)
   client = Client.from(config)
   id = column_id(client, config, OP.string(parsed, "column"))
   body = JSON.encode(JSON.object({"position": JSON.from(OP.int(parsed, "position"))}))
@@ -121,7 +122,7 @@ def remove(words: List[String]) -> Result[Void]
   parser = OP.new("kanban column remove", "Remove an empty column", [Arg(name: "column")], Settings.common_opts())
   parsed = try OP.parse(parser, words)
   config = try Settings.load(Settings.read_flags(parsed))
-  require_agent(config)
+  Support.require_agent(config)
   client = Client.from(config)
   name = OP.string(parsed, "column")
   id = column_id(client, config, name)
@@ -138,8 +139,10 @@ def remove(words: List[String]) -> Result[Void]
 end
 
 def column_id(client: Client.Client, config: Settings.Config, reference: String) -> Int
-  board = board_of(config)
+  board = Support.board_of(config)
   response = Output.expect(Client.get(client, "/api/boards/#{board}"), config.json)
+  return 0 if not response.ok?
+
   snapshot = JSON.decode(Output.body(response.unwrap!), Snapshot)
   if not snapshot.ok?
     Output.fail(config.json, "UNAVAILABLE", "invalid board answer", 3)
@@ -167,18 +170,4 @@ def print_column(config: Settings.Config, response: HttpResponse, verb: String) 
 
   column = decoded.unwrap!.column
   puts("#{verb}\t#{column.name}\t#{column.position}")
-end
-
-def board_of(config: Settings.Config) -> String
-  if config.board.empty?
-    Output.fail(config.json, "INVALID", "board is required: pass --board or set KANBAN_BOARD", 2)
-  end
-
-  config.board
-end
-
-def require_agent(config: Settings.Config) -> Void
-  if config.agent.empty?
-    Output.fail(config.json, "INVALID", "KANBAN_AGENT is required for writes", 2)
-  end
 end

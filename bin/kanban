@@ -1,4 +1,13 @@
 #!/bin/sh
 set -eu
-root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+# Follow the symlink that `make install-cli` creates, then find the repo.
+self=$0
+while [ -L "$self" ]; do
+  target=$(readlink "$self")
+  case $target in
+    /*) self=$target ;;
+    *) self=$(dirname -- "$self")/$target ;;
+  esac
+done
+root=$(CDPATH= cd -- "$(dirname -- "$self")/.." && pwd)
 exec agentica run -- "$root/dist/kanban.agcb" "$@"
