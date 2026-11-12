@@ -375,8 +375,9 @@ clients agree.
 
 The CLI is `cli.agc`, compiled to `dist/kanban.agcb` by `make cli`.
 `bin/kanban` runs it with `agentica run -- dist/kanban.agcb "$@"`.
-`make install-cli` copies the wrapper to `~/.local/bin/kanban`. Commands and
-flags use `std/option_parser`, one parser per command.
+`make install-cli` symlinks the wrapper into `~/.local/bin/kanban`; the
+wrapper follows the link to find the repo, so it runs the current build.
+Commands and flags use `std/option_parser`, one parser per command.
 
 ### Configuration
 

@@ -5,19 +5,21 @@ description: Install and drive the agc-kanban board from a shell with the `kanba
 
 # kanban CLI
 
-`kanban` is a thin client over the REST API: it holds no state, and every
-command is one request (plus a board read when a column name has to become an
-id).
+`kanban` is a thin client over the REST API: it holds no state. Most commands
+are one request; a column command first reads the board to turn a name into an
+id, `whoami` checks health and auth, and `prime` calls nothing.
 
 ## Install
 
-Requires Agentica 0.30 or newer and a running server.
+Requires Agentica 0.30.1 (the version the server and the Docker image pin) and
+a running server.
 
 ```sh
 make cli            # compiles dist/kanban.agcb
 make install-cli    # symlinks bin/kanban into ~/.local/bin/kanban
-kanban whoami
 ```
+
+Then configure, and check with `kanban whoami`.
 
 `bin/kanban` is a `/bin/sh` wrapper that finds the repo from its own path, so
 the symlink keeps working after the sources change. Without installing, run
@@ -40,6 +42,7 @@ The API key is environment or file only, never a flag:
 ```toml
 # ~/.config/agc-kanban/config.toml
 url = "http://172.28.0.10:4580"
+api_key = "7b95…"
 agent = "claude-code"
 board = "project"
 ```
@@ -63,12 +66,13 @@ kanban board show [BOARD]
 kanban column add Review --position 2 [--done] [--wip 3]
 kanban column rename Review Check
 kanban column move Check 1
-kanban column remove Check             # only when the column has no cards
+kanban column remove Check             # refused when it has cards or is the done column
 
 kanban card add "Fix login" --label api,ui --priority 1 --body-file task.md
-kanban card list [--column Todo] [--ready] [--mine] [--label api] [--all]
+kanban card list [--column Todo] [--ready] [--mine] [--claimed-by NAME] [--label api] [--all]
 kanban card show 12
-kanban card update 12 --title "Fix login again" --label api [--force]
+kanban card update 12 [--title T] [--body T | --body-file F] [--label L] \
+                     [--priority N] [--branch B] [--worktree W] [--force]
 
 kanban card claim 12                   # 4 when somebody else holds it
 kanban card next [--column Todo] [--label api]
@@ -87,13 +91,16 @@ Long text: `--body`, `--body-file PATH`, or `-` to read standard input
 comma-separated list.
 
 Card ids are global, so `card show`, `claim`, `comment`, `done` and `dep` need
-no board. `--board` is required by `board show`, `column *`, `card add`,
-`card list`, `card next` and `events`.
+no board. `--board` is required by `column *`, `card add`, `card list`,
+`card next` and `events`; `board show` takes the board as a positional
+argument or from `KANBAN_BOARD`.
 
 ## Output
 
-Text is one line per record, tab separated; `--json` prints the server answer
-verbatim.
+Boards, columns and comments print one tab-separated line each; card lines and
+events use two spaces (`#12  Doing  claude-code  Fix login [api]`), so a card
+line can be read with `cut -d' ' -f1` on the id. `card show` is a short
+multi-line page. `--json` prints the server answer verbatim.
 
 ```
 $ kanban card list
@@ -106,13 +113,15 @@ $ kanban card list
 | Code | Meaning |
 | --- | --- |
 | 0 | done |
-| 1 | the server refused: `NOT_FOUND`, `INVALID`, `CONFLICT`, `CYCLE`, `DONE` |
+| 1 | the server refused: `NOT_FOUND`, `INVALID`, `CONFLICT`, `CYCLE`, `NOT_CLAIMER`, `NO_READY_CARD` |
 | 2 | usage: unknown command, missing argument, missing agent or board |
-| 3 | no server, `UNAUTHORIZED`, or `BUSY` after the retries |
-| 4 | lost the race: `CLAIMED`, `NOT_CLAIMER`, `BLOCKED` |
+| 3 | no server, `UNAUTHORIZED`, `BUSY` after the retries, or any other failure |
+| 4 | lost the race: `CLAIMED`, `BLOCKED`, `DONE` |
 
-The client retries a connection failure or `503` after 200, 400 and 800 ms and
-then exits 3, so a short restart of the server is invisible.
+The client retries a `503` after 200, 400 and 800 ms and then exits 3, so a
+short restart of the server is invisible. A failed write is never repeated
+because the request may have arrived; only `GET` is retried on a connection
+failure.
 
 ## A full loop
 
