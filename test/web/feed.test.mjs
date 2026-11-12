@@ -28,6 +28,55 @@ test("an older move without the source shows the target only", function () {
   assert.deepEqual([one.from, one.to], ["", "Review"]);
 });
 
+test("a move inside one column reads as a reorder of that column", function () {
+  var event = moved();
+  event.data.card.column = "Doing";
+  event.data.card.column_id = 2;
+  event.data.from = { id: 2, name: "Doing" };
+  var one = entry(event, {});
+  assert.deepEqual([one.verb, one.reordered, one.from, one.to, one.group], ["reordered", true, "", "Doing", "move"]);
+});
+
+test("a release that keeps the card in its column drops from and to, and one into another column keeps them", function () {
+  var event = moved({ kind: "card.released" });
+  event.data.card.column = "Doing";
+  event.data.card.column_id = 2;
+  event.data.from = { id: 2, name: "Doing" };
+  var same = entry(event, {});
+  assert.deepEqual([same.verb, same.from, same.to, same.reordered], ["released", "", "", false]);
+  event.data.card.column = "Todo";
+  event.data.card.column_id = 1;
+  var back = entry(event, {});
+  assert.deepEqual([back.from, back.to], ["Doing", "Todo"]);
+});
+
+test("a close into the done column marks the entry done", function () {
+  var event = moved({ kind: "card.done" });
+  event.data.card.column = "Done";
+  event.data.card.column_id = 4;
+  event.data.card.done = true;
+  event.data.from = { id: 2, name: "Doing" };
+  var one = entry(event, {});
+  assert.deepEqual([one.verb, one.group, one.from, one.to, one.toDone], ["closed", "done", "Doing", "Done", true]);
+});
+
+test("column names are cut like titles", function () {
+  var event = moved();
+  event.data.card.column = "x".repeat(2000);
+  event.data.from = { id: 2, name: "y".repeat(2000) };
+  var one = entry(event, {});
+  assert.equal(Array.from(one.to).length, 60);
+  assert.equal(Array.from(one.from).length, 60);
+  assert.ok(one.to.endsWith("…") && one.from.endsWith("…"));
+});
+
+test("a title with emoji is kept whole, and a cut never leaves half of a family emoji", function () {
+  var family = "\u{1F468}\u200D\u{1F469}\u200D\u{1F467}\u200D\u{1F466}";
+  assert.equal(entry(moved(), { 12: "Ship it \u{1F680} \u{1F389}" }).title, "Ship it \u{1F680} \u{1F389}");
+  var cutTitle = entry(moved(), { 12: "x".repeat(58) + family + "yy" }).title;
+  assert.equal(cutTitle, "x".repeat(58) + family + "…");
+});
+
 test("the board's title wins, the event's is the fallback for a card gone since, and a long one is cut", function () {
   assert.equal(entry(moved(), { 12: "Renamed" }).title, "Renamed");
   assert.equal(entry(moved(), {}).title, "Fix login");
