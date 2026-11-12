@@ -1,6 +1,6 @@
 import Bond from "pkg/bond/bond"
-import Regex from "std/regex"
 import Failure from "failure"
+import Regex from "std/regex"
 
 export def authorize(conn: Bond.Conn, key: String) -> Result[Bond.Conn]
   # Public by name, never by prefix: a page added later must opt in explicitly.
