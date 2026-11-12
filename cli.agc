@@ -1,5 +1,7 @@
 import Board from "src/kanban_cli/board"
+import Prime from "src/kanban_cli/prime"
 import CardActions from "src/kanban_cli/card_actions"
+import Events from "src/kanban_cli/events"
 import Cards from "src/kanban_cli/cards"
 import Columns from "src/kanban_cli/columns"
 import Output from "src/kanban_cli/output"
@@ -33,6 +35,8 @@ def dispatch(words: List[String]) -> Result[Void]
     "board" -> Board.run(rest)
     "column" -> Columns.run(rest)
     "card" -> card(rest)
+    "events" -> Events.run(rest)
+    "prime" -> Prime.run()
     "whoami" -> Whoami.run(rest)
     _ -> error("unknown command #{words[0]}")
   end
