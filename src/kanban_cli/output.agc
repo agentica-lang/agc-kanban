@@ -48,6 +48,52 @@ struct Snapshot
   last_event_id: Int
 end
 
+struct CardLines
+  cards: List[CardLine]
+end
+
+struct CardAnswer
+  card: CardLine
+end
+
+struct CommentLine
+  author: String
+  body: String
+end
+
+struct CardDetail
+  id: Int
+  column: String
+  title: String
+  body: String
+  labels: List[String]
+  priority: Int
+  claimed_by: Optional[String]
+  branch: Optional[String]
+  worktree: Optional[String]
+  depends_on: List[Int]
+  blocks: List[Int]
+  ready: Bool
+  done: Bool
+end
+
+struct DetailAnswer
+  card: CardDetail
+  comments: List[CommentLine]
+end
+
+struct EventLine
+  id: Int
+  kind: String
+  actor: String
+  card_id: Optional[Int]
+end
+
+struct EventsAnswer
+  events: List[EventLine]
+  last_event_id: Int
+end
+
 export def body(response: HttpResponse) -> String = HTTP.text(response.body, response.headers).unwrap_or("")
 
 # A connection failure is a 3 and a refused answer exits with its own code;
@@ -128,9 +174,81 @@ export def print_board(response: HttpResponse) -> Void
   end
 end
 
+export def print_cards(response: HttpResponse) -> Void
+  decoded = JSON.decode(body(response), CardLines)
+  if not decoded.ok?
+    puts(body(response))
+    return
+  end
+
+  for card in decoded.unwrap!.cards
+    puts("#{card_line(card)}")
+  end
+end
+
+export def print_card(response: HttpResponse) -> Void
+  decoded = JSON.decode(body(response), CardAnswer)
+  if not decoded.ok?
+    puts(body(response))
+    return
+  end
+
+  puts("#{card_line(decoded.unwrap!.card)}")
+end
+
+export def print_card_detail(response: HttpResponse) -> Void
+  decoded = JSON.decode(body(response), DetailAnswer)
+  if not decoded.ok?
+    puts(body(response))
+    return
+  end
+
+  detail = decoded.unwrap!
+  card = detail.card
+  puts("##{card.id}  #{card.column}  #{card.claimed_by.unwrap_or("free")}  #{card.title}#{labels_text(card.labels)}")
+  puts("priority: #{card.priority}  ready: #{card.ready}  done: #{card.done}")
+  if not card.depends_on.empty?
+    puts("depends on: #{card.depends_on.map do |id| id.to_s end.join(", ")}")
+  end
+
+  if not card.blocks.empty?
+    puts("blocks: #{card.blocks.map do |id| id.to_s end.join(", ")}")
+  end
+
+  if card.branch.some?
+    puts("branch: #{card.branch.unwrap!}")
+  end
+
+  if card.worktree.some?
+    puts("worktree: #{card.worktree.unwrap!}")
+  end
+
+  if not card.body.empty?
+    puts("")
+    puts(card.body)
+  end
+
+  for comment in detail.comments
+    puts("-- #{comment.author}: #{comment.body}")
+  end
+end
+
+export def print_events(response: HttpResponse) -> Void
+  decoded = JSON.decode(body(response), EventsAnswer)
+  if not decoded.ok?
+    puts(body(response))
+    return
+  end
+
+  for event in decoded.unwrap!.events
+    card = event.card_id.unwrap_or(0)
+    puts("#{event.id}  #{event.kind}  #{event.actor}  #{card}")
+  end
+end
+
 def card_line(card: CardLine) -> String
   holder = card.claimed_by.unwrap_or("free")
-  "#{card.id}\t#{card.column}\t#{holder}\t#{card.title}#{labels_text(card.labels)}"
+  "##{card.id}  #{card.column}  #{holder}  #{card.title}#{labels_text(card.labels)}"
 end
 
 def labels_text(labels: List[String]) -> String

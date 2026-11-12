@@ -54,6 +54,7 @@ def main() -> Void
     BDD.step("I run kanban {string}", &run_kanban),
     BDD.step("kanban exits with code {int}", &kanban_status),
     BDD.step("kanban output contains {string}", &kanban_output),
+    BDD.step("kanban output does not contain {string}", &kanban_output_lacks),
     BDD.step("I run whoami with key {string}", &whoami),
     BDD.step("whoami exits with code {int}", &whoami_status),
     BDD.step("I run whoami as JSON with key {string}", &whoami_json),
@@ -566,4 +567,9 @@ end
 def kanban_output(ctx: BDD.Context, args: List[String]) -> BDD.Context
   output = JSON.string(BDD.get(ctx, "kanban_output").unwrap!).unwrap!
   BDD.assert(ctx, output.include?(args[0]), "output was #{output}")
+end
+
+def kanban_output_lacks(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  output = JSON.string(BDD.get(ctx, "kanban_output").unwrap!).unwrap!
+  BDD.assert(ctx, not output.include?(args[0]), "output was #{output}")
 end
