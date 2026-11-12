@@ -15,3 +15,9 @@ Feature: CLI wrapper
     Then kanban exits with code 0
     When I run kanban "card show 1"
     Then kanban output contains "a note through the wrapper"
+
+  Scenario: QUIT stops the CLI with the wrapper
+    When I send QUIT to the kanban wrapper while it waits
+    Then kanban exits with code 131
+    And kanban stdout contains "child gone"
+    And kanban stdout contains "temp gone"
