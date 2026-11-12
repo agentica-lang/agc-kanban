@@ -1,7 +1,7 @@
 // `make test` runs this with `node --test`: the filters of the board view, from the URL and back.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { active, matches, options, parse, search, toggleClaimer, toggleLabel, toggleReady, NO_FILTERS } from "../../app/javascript/filters.js";
+import { active, activeChips, cardSearch, count, matches, options, parse, search, toggleClaimer, toggleLabel, toggleReady, NO_FILTERS } from "../../app/javascript/filters.js";
 
 function card(extra) {
   return Object.assign({ id: 1, labels: [], claimed_by: null, ready: true }, extra);
@@ -50,4 +50,26 @@ test("toggles turn one filter on and off and leave the rest", function () {
   assert.equal(toggleClaimer(toggleClaimer(NO_FILTERS, "x"), "x").claimer, "");
   assert.equal(active(toggleReady(on)), true);
   assert.equal(active(NO_FILTERS), false);
+});
+
+test("the URL as the drawer rewrites it (URLSearchParams: + for a space, the commas escaped) reads the same", function () {
+  assert.deepEqual(parse("?card=3&label=two+words%2Ca%26b%2C%2Bplus").labels, ["two words", "a&b", "+plus"]);
+});
+
+test("the active filters: their count for the button and one chip each to take it off, in a fixed order", function () {
+  var on = { labels: ["b", "a"], claimer: "line1", ready: true };
+  assert.equal(count(on), 4);
+  assert.equal(count(NO_FILTERS), 0);
+  assert.deepEqual(activeChips(on), [
+    { kind: "ready", name: "", text: "Ready" },
+    { kind: "claimer", name: "line1", text: "Agent: line1" },
+    { kind: "label", name: "b", text: "b" },
+    { kind: "label", name: "a", text: "a" },
+  ]);
+  assert.deepEqual(activeChips(NO_FILTERS), []);
+});
+
+test("the link of a card keeps the filters, so a new tab opens the same view", function () {
+  assert.equal(cardSearch({ labels: ["a b"], claimer: "", ready: true }, 3), "?card=3&label=a%20b&ready=1");
+  assert.equal(cardSearch(NO_FILTERS, 3), "?card=3");
 });

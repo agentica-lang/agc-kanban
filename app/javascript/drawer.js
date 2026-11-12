@@ -24,21 +24,29 @@ function cardInUrl() {
   return Number.isInteger(id) && id > 0 ? id : null;
 }
 
-// The right-side drawer of the board page shows one panel at a time: `panel` is "activity" (the feed), "card" (the
-// detail of `card`) or "" while it is closed. Only the activity choice is kept in localStorage; with nothing kept, it
-// is closed. The open card is in the URL, so a reload or a shared link opens it again; closing it shows the activity
-// again when that was open.
+// The right-side drawer of the board page shows one panel at a time: `panel` is "filters" (the filter choices), "card"
+// (the detail of `card`), "activity" (the feed) or "" while it is closed. Only the activity choice is kept in
+// localStorage; with nothing kept, it is closed. The open card is in the URL, so a reload or a shared link opens it
+// again. Closing the card or the filters shows the activity again when that was open; opening a card closes the
+// filters.
 export function useDrawer() {
   var activity = ref(saved() === "activity");
   var card = ref(cardInUrl());
+  var filters = ref(false);
   var panel = computed(function () {
     if (card.value !== null) {
       return "card";
+    }
+    if (filters.value) {
+      return "filters";
     }
     return activity.value ? "activity" : "";
   });
 
   function showCard(id) {
+    if (id !== null) {
+      filters.value = false;
+    }
     card.value = id;
     var url = new URL(location.href);
     if (id === null) {
@@ -63,12 +71,23 @@ export function useDrawer() {
         showActivity(false);
       } else {
         showCard(null);
+        filters.value = false;
         showActivity(true);
+      }
+    },
+    toggleFilters: function () {
+      if (panel.value === "filters") {
+        filters.value = false;
+      } else {
+        showCard(null);
+        filters.value = true;
       }
     },
     close: function () {
       if (card.value !== null) {
         showCard(null);
+      } else if (filters.value) {
+        filters.value = false;
       } else {
         showActivity(false);
       }

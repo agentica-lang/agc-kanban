@@ -37,6 +37,17 @@
   &[aria-expanded="true"] { background: var(--panel); color: var(--text); }
 }
 
+// The Filters button has a word, and a count when filters are on.
+.toggle-text {
+  width: auto;
+  padding: 0 0.5rem;
+  font: inherit;
+  font-size: 0.8rem;
+  white-space: nowrap;
+
+  &.on { color: var(--accent); border-color: var(--accent); }
+}
+
 .banner { flex: none; margin: 0 1rem var(--gap); color: var(--warn); }
 
 // The drawer is positioned against this box on a narrow screen.
