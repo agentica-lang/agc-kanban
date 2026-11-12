@@ -143,3 +143,19 @@ Feature: Card dependencies
     And the response contains "\"blocked_by\":[2]"
     When I get card 2
     Then the response contains "\"done\":false"
+
+  Scenario: A dependency on a done card of another board does not block marking a column done
+    Given the database server is running
+    When I post a board named "Project" with slug "project" as "agent-1"
+    And I post a board named "Other" with slug "other" as "agent-1"
+    And I add a card titled "Closed" to board "other"
+    And agent "agent-1" claims card 1
+    And agent "agent-1" marks card 1 done
+    And I add a card titled "Waiting"
+    And I make card 2 depend on card 1
+    And I move card 2 to "Review"
+    And I mark column 3 as done
+    Then the response status is 200
+    When I get card 2
+    Then the response contains "\"done\":true"
+

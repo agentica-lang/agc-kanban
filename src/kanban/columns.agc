@@ -223,14 +223,15 @@ def update_open(conn: Db.Connection, input: Update) -> Result[Boards.Column]
   affected: List[Int] = []
   if done and not current.done
     # The cards of the column become done, so none of them may wait for a card that is not. After the flip this is the
-    # only done column (the old one is demoted below), so every dependency outside it is open, even one in the old
-    # done column; a card that waits for another one of this column is fine, both close together. `force` skips it, as
+    # only done column of the board (the old one is demoted below), so every dependency outside it is open, even one
+    # in the old done column, but a dependency on another board keeps its own done flag; a card that waits for another
+    # one of this column is fine, both close together. `force` skips it, as
     # it does for `done`.
     if not input.force
       waiting = try Db.query(
         conn,
-        "select c.id from cards c where c.column_id = ? and c.archived_at is null and exists (select 1 from card_deps d join cards dep on dep.id = d.depends_on_id join columns dc on dc.id = dep.column_id where d.card_id = c.id and dc.id != ?) order by c.id",
-        [Db.Value.Int(input.id), Db.Value.Int(input.id)],
+        "select c.id from cards c where c.column_id = ? and c.archived_at is null and exists (select 1 from card_deps d join cards dep on dep.id = d.depends_on_id join columns dc on dc.id = dep.column_id where d.card_id = c.id and dc.id != ? and (dc.done = 0 or dc.board_id = ?)) order by c.id",
+        [Db.Value.Int(input.id), Db.Value.Int(input.id), Db.Value.Int(board_id)],
       )
 
       return error("BLOCKED:#{waiting.map do |row| int_of(row, "id").to_s end.join(",")}") if not waiting.empty?

@@ -57,6 +57,7 @@ def main() -> Void
       BDD.step("I delete column {int}", &delete_column),
       BDD.step("I mark column {int} as done", &mark_column_done),
       BDD.step("I forcibly mark column {int} as done", &force_column_done),
+      BDD.step("I add a card titled {string} to board {string}", &add_card_to_board),
       BDD.step("I add a card titled {string} in column {string} depending on card {int}", &add_card_waiting),
       BDD.step("agent {string} forcibly removes the dependency of card {int} on card {int}", &force_remove_dependency),
       BDD.step("I get board events for {string} after {int}", &board_events),
@@ -618,6 +619,10 @@ end
 def mark_column_done(ctx: BDD.Context, args: List[String]) -> BDD.Context
   body = JSON.encode(JSON.from({"done": true}))
   api_request(ctx, "PATCH", "/api/columns/#{args[0]}", body)
+end
+
+def add_card_to_board(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  api_request(ctx, "POST", "/api/boards/#{args[1]}/cards", JSON.encode(JSON.from({"title": args[0]})))
 end
 
 def force_column_done(ctx: BDD.Context, args: List[String]) -> BDD.Context
