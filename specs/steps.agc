@@ -725,6 +725,7 @@ end
 # child, so no exit path (90, 91 or the normal one) leaves them behind. A zombie
 # counts as gone: with no init to reap it, `kill -0` would still succeed. The
 # state is read after the last `)` of the stat line, which a command name may contain.
+# The last line clears `child` once it is gone, so the trap cannot kill a reused PID.
 # Linux and GNU only: `env --default-signal`, `/proc` and `pgrep -P -x`.
 def quit_wrapper(ctx: BDD.Context, _args: List[String]) -> BDD.Context
   script = (

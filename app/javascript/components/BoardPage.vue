@@ -3,10 +3,13 @@ import { computed, onBeforeUnmount, provide, watch } from "vue";
 import { useBoard } from "../board_store.js";
 import { useCard } from "../card_store.js";
 import { useDrawer } from "../drawer.js";
+import { useFilters } from "../filter_store.js";
+import { active, matches } from "../filters.js";
 import { useTheme } from "../theme.js";
 import CardPanel from "./CardPanel.vue";
 import Column from "./Column.vue";
 import Drawer from "./Drawer.vue";
+import FilterBar from "./FilterBar.vue";
 import Feed from "./Feed.vue";
 
 var props = defineProps({ slug: String });
@@ -24,6 +27,11 @@ watch(drawer.card, card.show, { immediate: true });
 // A card on the board opens its detail; the open one is marked.
 provide("openCard", drawer.showCard);
 provide("openCardId", drawer.card);
+
+// The filters hide cards on the board only: the feed stays the whole history of the board, and the card named by `?card=`
+// opens even when it is hidden. A hidden card still counts for the blocked marks below.
+var filter = useFilters();
+provide("filter", filter);
 
 // Escape closes the panel that is open.
 function onKey(event) {
@@ -53,12 +61,18 @@ var blocked = computed(function () {
 
 var columns = computed(function () {
   return state.board.columns.slice().sort(function (a, b) { return a.position - b.position; }).map(function (column) {
-    var cards = state.cards
-      .filter(function (card) { return card.column_id === column.id; })
+    var all = state.cards.filter(function (card) { return card.column_id === column.id; });
+    var cards = all
+      .filter(function (card) { return matches(card, filter.filters.value); })
       .sort(function (a, b) { return a.position - b.position; });
-    return { column: column, cards: cards };
+    return { column: column, cards: cards, total: all.length };
   });
 });
+
+var shown = computed(function () {
+  return columns.value.reduce(function (sum, entry) { return sum + entry.cards.length; }, 0);
+});
+var filtering = computed(function () { return active(filter.filters.value); });
 </script>
 
 <template>
@@ -80,9 +94,10 @@ var columns = computed(function () {
       </button>
     </header>
     <p v-if="state.error" class="banner">Could not refresh the board: {{ state.error }}</p>
+    <FilterBar :store="filter" :cards="state.cards" :shown="shown" />
     <div class="board-body">
       <main class="board">
-        <Column v-for="entry in columns" :key="entry.column.id" :column="entry.column" :cards="entry.cards" :blocked="blocked" :flash="state.flash" />
+        <Column v-for="entry in columns" :key="entry.column.id" :column="entry.column" :cards="entry.cards" :total="entry.total" :filtering="filtering" :blocked="blocked" :flash="state.flash" />
         <p v-if="!columns.length" class="empty">This board has no columns.</p>
       </main>
       <div v-if="panel !== ''" class="backdrop" aria-hidden="true" @click="drawer.close()"></div>
