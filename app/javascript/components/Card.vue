@@ -1,5 +1,6 @@
 <script setup>
 import { computed, inject, nextTick, ref, watch } from "vue";
+import { plainClick } from "../drawer.js";
 import { cardSearch, selectable } from "../filters.js";
 
 var props = defineProps({ card: Object, blocked: Boolean, flash: Number });
@@ -13,7 +14,7 @@ var href = computed(function () { return cardSearch(filter.filters.value, props.
 
 // A plain click opens the detail in the drawer; a click with a modifier keeps the link (a new tab with `?card=`).
 function onClick(event) {
-  if (event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) {
+  if (plainClick(event)) {
     event.preventDefault();
     openCard(props.card.id);
   }

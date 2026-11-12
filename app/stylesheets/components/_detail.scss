@@ -27,6 +27,9 @@
     color: var(--accent);
     border: 0;
     cursor: pointer;
+    text-decoration: none;
+
+    &:hover { text-decoration: underline; }
   }
 
   .section-title { margin: 0; font-size: 0.8rem; text-transform: uppercase; color: var(--muted); }
