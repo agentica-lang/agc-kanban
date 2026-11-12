@@ -5,9 +5,13 @@ import Migrations from "migrations"
 
 export type Pool = DbPool.Pool
 
-export def open(dir: String) -> Result[Pool]
+export def open(dir: String, busy_timeout: Int = 0) -> Result[Pool]
   try prepare_dir(dir)
   url = "sqlite:#{dir}/kanban.sqlite3"
+  if busy_timeout > 0
+    url = "#{url}?busy_timeout=#{busy_timeout}"
+  end
+
   conn = try Db.open(url)
   applied = Migrate.up(conn, Migrations.all())
   Db.close(conn)

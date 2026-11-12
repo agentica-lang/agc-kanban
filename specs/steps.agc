@@ -1,4 +1,5 @@
 import BDD from "std/bdd"
+import Db from "pkg/db/db"
 import HTTP from "std/http"
 
 struct RaceReply
@@ -10,6 +11,8 @@ def main() -> Void
   BDD.run([
     BDD.step("the test server is running", &start_server),
     BDD.step("the database server is running", &start_database_server),
+    BDD.step("a database server with a short busy timeout is running", &start_busy_database_server),
+    BDD.step("I post a board while the database is locked", &post_board_locked),
     BDD.step("I post a board named {string} with slug {string} as {string}", &post_board),
     BDD.step("I list boards", &list_boards),
     BDD.step("I get the project snapshot", &project_snapshot),
@@ -17,6 +20,8 @@ def main() -> Void
     BDD.step("agent {string} retitles card {int} to {string}", &retitle_card),
     BDD.step("agent {string} forces a new title on card {int} to {string}", &force_retitle_card),
     BDD.step("agent {string} comments on card {int} with {string}", &comment_card),
+    BDD.step("I read boards with key {string} and agent {string}", &read_boards_as),
+    BDD.step("I create a board named {string} with key {string} and agent {string}", &create_board_as),
     BDD.step("I get card {int}", &get_card),
     BDD.step("I make card {int} depend on card {int}", &add_dependency),
     BDD.step("I remove the dependency of card {int} on card {int}", &remove_dependency),
@@ -160,7 +165,20 @@ def start_database_server(ctx: BDD.Context, _args: List[String]) -> BDD.Context
   started = BDD.given_program(configured, "fixtures/database_server.agc")
   hooked = BDD.after(started) do |last| cleanup_database(last, dir) end
   port = BDD.read_line(hooked, 30000).unwrap!.to_i!
-  BDD.set(hooked, "port", JSON.from(port))
+  stored = BDD.set(hooked, "data_dir", JSON.from(dir))
+  BDD.set(stored, "port", JSON.from(port))
+end
+
+def start_busy_database_server(ctx: BDD.Context, _args: List[String]) -> BDD.Context
+  home = System.env("HOME").unwrap!
+  Dir.mkdir("#{home}/.cache").unwrap!
+  dir = "#{home}/.cache/kanban-bdd-busy-#{System.pid()}"
+  configured = BDD.given_env(ctx, "KANBAN_DATA_DIR", dir)
+  started = BDD.given_program(configured, "fixtures/busy_database_server.agc")
+  hooked = BDD.after(started) do |last| cleanup_database(last, dir) end
+  port = BDD.read_line(hooked, 30000).unwrap!.to_i!
+  stored = BDD.set(hooked, "data_dir", JSON.from(dir))
+  BDD.set(stored, "port", JSON.from(port))
 end
 
 def post_board(ctx: BDD.Context, args: List[String]) -> BDD.Context
@@ -263,19 +281,25 @@ def api_request(ctx: BDD.Context, method: String, path: String, body: String) ->
 end
 
 def api_request_as(ctx: BDD.Context, agent: String, method: String, path: String, body: String) -> BDD.Context
+  raw_request(ctx, "01234567890123456789012345678901", method, path, body, agent)
+end
+
+def raw_request(
+  ctx: BDD.Context,
+  key: String,
+  method: String,
+  path: String,
+  body: String,
+  agent: String,
+) -> BDD.Context
+  fields = [Header(name: "apikey", value: key)]
+  if not agent.empty?
+    fields = fields.push(Header(name: "X-Kanban-Agent", value: agent))
+  end
+
   port = JSON.int(BDD.get(ctx, "port").unwrap!).unwrap!
   client = HTTP.client().unwrap!
-  response = HTTP.request(
-    client,
-    method,
-    "http://127.0.0.1:#{port}#{path}",
-    body.bytes,
-    [
-      Header(name: "apikey", value: "01234567890123456789012345678901"),
-      Header(name: "X-Kanban-Agent", value: agent),
-      Header(name: "Content-Type", value: "application/json"),
-    ],
-  ).unwrap!
+  response = HTTP.request(client, method, "http://127.0.0.1:#{port}#{path}", body.bytes, fields).unwrap!
 
   HTTP.close_client(client)
   stored = BDD.set(ctx, "status", JSON.from(response.status))
@@ -466,4 +490,24 @@ end
 def comment_card(ctx: BDD.Context, args: List[String]) -> BDD.Context
   body = JSON.encode(JSON.from({"body": args[2]}))
   api_request_as(ctx, args[0], "POST", "/api/cards/#{args[1]}/comments", body)
+end
+
+def read_boards_as(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  raw_request(ctx, args[0], "GET", "/api/boards", "", args[1])
+end
+
+def create_board_as(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  body = JSON.encode(JSON.from({"name": args[0]}))
+  raw_request(ctx, args[1], "POST", "/api/boards", body, args[2])
+end
+
+# A write lock from another connection makes the server wait out its busy timeout and answer BUSY.
+def post_board_locked(ctx: BDD.Context, _args: List[String]) -> BDD.Context
+  dir = JSON.string(BDD.get(ctx, "data_dir").unwrap!).unwrap!
+  conn = Db.open("sqlite:#{dir}/kanban.sqlite3").unwrap!
+  _ = Db.execute(conn, "begin immediate", []).unwrap!
+  answered = post_board(ctx, ["Project", "project", "agent-1"])
+  _ = Db.execute(conn, "rollback", []).unwrap!
+  Db.close(conn)
+  answered
 end
