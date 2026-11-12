@@ -1,6 +1,7 @@
 import Db from "pkg/db/db"
 import Regex from "std/regex"
 import Database from "repo/database"
+import Times from "times"
 
 export struct Card
   id: Int
@@ -39,6 +40,7 @@ end
 export struct Detail
   card: Card
   comments: List[Comment]
+  times: Times.Times
 end
 
 export struct Create
@@ -113,7 +115,9 @@ export def show(pool: Database.Pool, id: Int) -> Result[Detail]
         )
       end
 
-      ok(Detail(card: card, comments: comments))
+      now = Time.now_ms()
+      steps = (try steps_of(tx, id)).map do |step| named(step, card) end
+      ok(Detail(card: card, comments: comments, times: Times.build(steps, card.done, now)))
     end
   end
 end
@@ -448,4 +452,28 @@ def bool_int(flag: Bool) -> Db.Value
   else
     Db.Value.Int(0)
   end
+end
+
+# Every event of the card that carries the card names its column: `column_id` at the top (created, claimed, updated)
+# or under `card` (moved, released, done), with the column's name at that time. The name of the column table is only
+# for an event without one, and only from the card's board: the id of a removed column can be reused.
+def steps_of(conn: Db.Connection, id: Int) -> Result[List[Times.Step]]
+  rows = try Db.query(
+    conn,
+    "select s.at, s.column_id, coalesce(s.name, col.name) as name from (select id, created_at as at, coalesce(json_extract(data, '$.column_id'), json_extract(data, '$.card.column_id')) as column_id, coalesce(json_extract(data, '$.column'), json_extract(data, '$.card.column')) as name from events where card_id = ?) s left join columns col on col.id = s.column_id and col.board_id = (select board_id from cards where id = ?) where s.column_id is not null order by s.id",
+    [Db.Value.Int(id), Db.Value.Int(id)],
+  )
+
+  ok(
+    rows.map do |row|
+      Times.Step(at: number(row, "at"), column_id: number(row, "column_id"), name: text(row, "name"))
+    end,
+  )
+end
+
+# The column the card is in now goes by its name now, so a stay in a column renamed since says the name it has.
+def named(step: Times.Step, card: Card) -> Times.Step
+  return step if step.column_id != card.column_id
+
+  Times.Step(at: step.at, column_id: step.column_id, name: card.column)
 end

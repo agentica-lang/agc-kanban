@@ -1,5 +1,5 @@
 import { reactive } from "vue";
-import { getJSON } from "./api.js";
+import { getJSON, latest } from "./api.js";
 import { subscribe } from "./cable.js";
 
 var REFETCH_MS = 80; // a burst of events (a claim and a move) is one fetch
@@ -17,7 +17,10 @@ var FLASH_MS = 1700; // a little longer than the CSS flash
 // The feed is the events by id, newest first, with no duplicates (an event can come from the cable and from a fetch).
 // The last PAGE events load first, `before` the oldest shown gives the older ones, and what happened since the newest
 // one seen is read forward with `after`.
-export function useBoard(slug) {
+//
+// `listener(cardId)` hears each event of a card, and `listener(null)` each confirmation (anything may have been
+// missed): the open card panel fetches again then.
+export function useBoard(slug, listener) {
   var events = "/api/boards/" + encodeURIComponent(slug) + "/events?limit=";
   var state = reactive({
     board: null,
@@ -31,8 +34,6 @@ export function useBoard(slug) {
     loadMore: loadMore,
   });
   var timer = null;
-  var requests = 0; // the number of the last snapshot request sent
-  var applied = 0; // the number of the snapshot request whose answer is shown (a failure does not move it)
   var synced = 0; // the newest event id that the feed is known to hold with nothing missing before it
 
   function same(a, b) {
@@ -58,23 +59,21 @@ export function useBoard(slug) {
     state.feed = Object.keys(byId).map(function (id) { return byId[id]; }).sort(function (a, b) { return b.id - a.id; });
   }
 
-  // A failed refetch keeps the board that is shown and sets `error` (a banner); the next success clears it. An answer
-  // is shown when it is newer than the one shown, so only an answer that a newer one overtook is dropped: a steady
-  // stream of events faster than the fetch still shows each answer, and a failure never hides a valid board.
+  // A failed refetch keeps the board that is shown and sets `error` (a banner); a later success clears it.
+  var fetchSnapshot = latest(function () {
+    return getJSON("/api/boards/" + encodeURIComponent(slug));
+  }, function (snapshot, fresh) {
+    if (fresh) {
+      state.error = "";
+    }
+    reconcile(snapshot);
+  }, function (error) {
+    state.error = error.message;
+  });
+
   function load() {
     timer = null;
-    var mine = ++requests;
-    return getJSON("/api/boards/" + encodeURIComponent(slug)).then(function (snapshot) {
-      if (applied < mine) {
-        applied = mine;
-        state.error = "";
-        reconcile(snapshot);
-      }
-    }, function (error) {
-      if (applied < mine) {
-        state.error = error.message;
-      }
-    });
+    return fetchSnapshot();
   }
 
   // Runs `task` again once, after a pause, when it fails: a blip of the network must not leave a hole in the feed.
@@ -135,6 +134,7 @@ export function useBoard(slug) {
     merge([{ id: message.event_id, kind: message.type, card_id: message.card_id, actor: message.actor }]);
     if (message.card_id !== null) {
       flash(message.card_id);
+      listener(message.card_id);
     }
     if (timer === null) {
       timer = setTimeout(load, REFETCH_MS);
@@ -145,6 +145,7 @@ export function useBoard(slug) {
   // confirmation was not broadcast to this client.
   function onSubscribed() {
     load();
+    listener(null);
     catchUp().catch(function () {});
   }
 
