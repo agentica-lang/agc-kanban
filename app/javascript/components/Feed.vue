@@ -26,9 +26,10 @@ var entries = computed(function () {
 });
 
 var agents = computed(function () {
-  var seen = {};
-  entries.value.forEach(function (one) { seen[one.actor] = true; });
-  return Object.keys(seen).sort();
+  // A Set, not an object: an agent named `__proto__` is a name like another.
+  var seen = new Set();
+  entries.value.forEach(function (one) { seen.add(one.actor); });
+  return Array.from(seen).sort();
 });
 
 var days = computed(function () {
@@ -67,6 +68,7 @@ function onClick(event, card) {
         <option v-for="pair in GROUPS" :key="pair[0]" :value="pair[0]">{{ pair[1] }}</option>
       </select>
     </div>
+    <p v-if="state.more && (agent !== '' || group !== '')" class="feed-note">The filter applies to the events loaded; "Ver más" loads older ones.</p>
     <p v-if="!state.feed.length" class="empty">No activity yet.</p>
     <p v-else-if="!days.length" class="empty">Nothing matches the filter.</p>
     <section v-for="one in days" :key="one.key" class="feed-day">
@@ -77,7 +79,8 @@ function onClick(event, card) {
           <a v-if="item.card !== null" class="entry" :href="'?card=' + item.card" @click="onClick($event, item.card)">
             <span class="sentence">
               <b>{{ item.actor }}</b> {{ item.verb }} <b class="ref">#{{ item.card }}</b> <span v-if="item.title" class="title">{{ item.title }}</span>
-              <template v-if="item.from"> from {{ item.from }} &rarr; {{ item.to }}</template>
+              <template v-if="item.reordered"> in {{ item.to }}</template>
+              <template v-else-if="item.from"> from {{ item.from }} &rarr; {{ item.to }}</template>
               <template v-else-if="item.to"> to {{ item.to }}</template>
               <template v-if="item.excerpt">: <q>{{ item.excerpt }}</q></template>
             </span>
