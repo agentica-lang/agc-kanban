@@ -1,6 +1,7 @@
 <script setup>
 import { computed, inject, onBeforeUnmount, ref } from "vue";
 import { GROUPS, byDay, entry, relative } from "../feed.js";
+import { plainClick } from "../drawer.js";
 import { cardSearch } from "../filters.js";
 
 var TICK_MS = 30000; // how often "5 min ago" is worked out again
@@ -56,7 +57,7 @@ function exact(ms) {
 
 // A plain click opens the card in the drawer; a click with a modifier keeps the link (a new tab with `?card=`).
 function onClick(event, card) {
-  if (event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) {
+  if (plainClick(event)) {
     event.preventDefault();
     openCard(card);
   }

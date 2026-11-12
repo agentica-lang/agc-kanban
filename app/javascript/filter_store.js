@@ -1,4 +1,4 @@
-import { ref } from "vue";
+import { getCurrentScope, onScopeDispose, ref } from "vue";
 import { NO_FILTERS, parse, search, toggleClaimer, toggleLabel, toggleReady } from "./filters.js";
 
 // The filters of the board page, read from the URL when the page opens and written back (without a history entry, as the
@@ -11,6 +11,22 @@ export function useFilters() {
     var url = new URL(location.href);
     url.search = search(location.search, next);
     history.replaceState(history.state, "", url);
+  }
+
+  // Back and Forward land on an entry whose URL may be older than the filters (they are written to the entry that was
+  // current when they changed): the filters stay as they are, and the URL takes them back.
+  function onPopState() {
+    var inUrl = parse(location.search);
+    if (JSON.stringify(inUrl) === JSON.stringify(filters.value)) {
+      return;
+    }
+    var url = new URL(location.href);
+    url.search = search(location.search, filters.value);
+    history.replaceState(history.state, "", url);
+  }
+  window.addEventListener("popstate", onPopState);
+  if (getCurrentScope()) {
+    onScopeDispose(function () { window.removeEventListener("popstate", onPopState); });
   }
 
   return {

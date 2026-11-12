@@ -4,10 +4,10 @@ import { getJSON, latest } from "./api.js";
 var REFETCH_MS = 80; // a burst of events of the card is one fetch
 
 // The detail of the open card (`/api/cards/:id`: the card, its comments and its time in each column). `show(id)`
-// fetches a card, `changed(id)` fetches it again when an event names it (or names no card: after a reconnect).
+// fetches a card (`gone` is true when the server has no such card), `changed(id)` fetches it again when an event names it (or names no card: after a reconnect).
 // `receivedAt` is the local time of the answer, from which the panel counts the time of an open card on.
 export function useCard() {
-  var state = reactive({ id: null, detail: null, error: "", receivedAt: 0 });
+  var state = reactive({ id: null, detail: null, error: "", gone: false, receivedAt: 0 });
   var fetchCard = null; // the fetch of the card shown; a new one on each `show`
   var timer = null;
 
@@ -17,6 +17,7 @@ export function useCard() {
     state.id = id;
     state.detail = null;
     state.error = "";
+    state.gone = false;
     if (id === null) {
       fetchCard = null;
       return;
@@ -37,6 +38,8 @@ export function useCard() {
     }, function (error) {
       if (fetchCard === mine) {
         state.error = error.message;
+        // A card that does not exist (a stale `?card=`, an old history entry): the page closes the panel.
+        state.gone = error.status === 404;
       }
     });
     fetchCard = mine;

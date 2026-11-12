@@ -1,4 +1,4 @@
-import { computed, ref } from "vue";
+import { computed, getCurrentScope, onScopeDispose, ref } from "vue";
 
 var KEY = "agc-kanban.drawer";
 
@@ -16,6 +16,12 @@ function save(name) {
   } catch (error) {
     // No storage (a private window): the choice lasts until the reload.
   }
+}
+
+// Whether a click is a plain one on a link: the left button and no modifier. A click with a modifier (or the middle
+// button, which sends no click at all) is left to the browser, so a link opens in a new tab or window.
+export function plainClick(event) {
+  return event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey;
 }
 
 // The open card of the URL (`?card=12`), or null.
@@ -43,9 +49,14 @@ export function useDrawer() {
     return activity.value ? "activity" : "";
   });
 
+  // Opening or closing a card is a step in the history, so Back goes to the card shown before, then to the board; the
+  // URL keeps what else it holds (the filters). Showing what is shown already adds no entry.
   function showCard(id) {
     if (id !== null) {
       filters.value = false;
+    }
+    if (id === card.value) {
+      return;
     }
     card.value = id;
     var url = new URL(location.href);
@@ -54,7 +65,32 @@ export function useDrawer() {
     } else {
       url.searchParams.set("card", id);
     }
+    history.pushState(null, "", url);
+  }
+
+  // A `?card=` of a card that does not exist closes the panel without a trace: the entry takes the URL without it, so
+  // Back does not stop on a card that is not there.
+  function dismiss(id) {
+    if (id !== card.value) {
+      return;
+    }
+    card.value = null;
+    var url = new URL(location.href);
+    url.searchParams.delete("card");
     history.replaceState(history.state, "", url);
+  }
+
+  // Back and Forward change the URL without a click: the panel follows its `?card=`. The filters are view state that
+  // the page keeps in memory, so they do not come from the entry (an entry made before a filter was set has none).
+  function onPopState() {
+    card.value = cardInUrl();
+    if (card.value !== null) {
+      filters.value = false;
+    }
+  }
+  window.addEventListener("popstate", onPopState);
+  if (getCurrentScope()) {
+    onScopeDispose(function () { window.removeEventListener("popstate", onPopState); });
   }
 
   function showActivity(open) {
@@ -66,6 +102,7 @@ export function useDrawer() {
     panel: panel,
     card: card,
     showCard: showCard,
+    dismiss: dismiss,
     toggleActivity: function () {
       if (panel.value === "activity") {
         showActivity(false);

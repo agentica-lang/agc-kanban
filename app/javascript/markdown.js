@@ -1,4 +1,6 @@
-import { h } from "vue";
+import { h, hasInjectionContext, inject } from "vue";
+import { plainClick } from "./drawer.js";
+import { boardCardId } from "./links.js";
 
 // A small Markdown for card bodies and comments, drawn as Vue nodes: every piece of the text is a text node, so no
 // markup of the text ever reaches the page (no v-html). It reads fenced code, headings, lists, quotes and paragraphs
@@ -115,15 +117,27 @@ export function blocks(text) {
 
 // `<Markdown :text="..." />`
 export var Markdown = {
-  props: { text: String },
+  props: { text: String, board: String },
   setup: function (props) {
+    // A plain click on a link to a card of `board` opens that card in the panel (a step in the history, as a click on
+    // a card does). Any other click, and a click with a modifier, is the browser's.
+    var openCard = hasInjectionContext() ? inject("openCard", null) : null;
+    function onClick(event) {
+      var anchor = event.target instanceof Element ? event.target.closest("a[href]") : null;
+      var id = anchor && props.board && openCard && plainClick(event) ?
+        boardCardId(anchor.href, location.origin, props.board) : null;
+      if (id !== null) {
+        event.preventDefault();
+        openCard(id);
+      }
+    }
     return function () {
       var text = props.text || "";
       var nodes = blocks(capped(text));
       if (text.length > MAX_CHARS) {
         nodes.push(h("p", { class: "empty" }, "\u2026 truncated: " + (text.length - capped(text).length) + " more characters"));
       }
-      return h("div", { class: "md" }, nodes);
+      return h("div", { class: "md", onClick: onClick }, nodes);
     };
   },
 };

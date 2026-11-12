@@ -1,5 +1,7 @@
 <script setup>
-import { computed } from "vue";
+import { computed, inject } from "vue";
+import { plainClick } from "../drawer.js";
+import { cardSearch } from "../filters.js";
 import { cardLink } from "../links.js";
 import { Markdown } from "../markdown.js";
 import CardTimes from "./CardTimes.vue";
@@ -7,7 +9,21 @@ import CardTimes from "./CardTimes.vue";
 // The detail of the open card, read-only. A dependency opens that card in the same panel. A card of another board
 // (a dependency, or `?card=` by hand) gets only a link to its board: the live events of this page are not its own.
 var props = defineProps({ state: Object, slug: String });
-defineEmits(["open"]);
+var emit = defineEmits(["open"]);
+// The filters, so the link of a card opens the same view in a new tab, as the cards of the board do.
+var boardFilter = inject("filter");
+
+function refHref(id) {
+  return cardSearch(boardFilter.filters.value, id);
+}
+
+// A plain click opens the card in the panel (a step in the history); a click with a modifier keeps the link.
+function onRef(event, id) {
+  if (plainClick(event)) {
+    event.preventDefault();
+    emit("open", id);
+  }
+}
 
 // The newest comment first, so a live one shows at the top. The API (and `kanban card show`) keep the oldest first.
 var comments = computed(function () {
@@ -56,18 +72,18 @@ function when(ms) {
       </template>
       <template v-if="state.detail.card.depends_on.length">
         <dt>Depends on</dt>
-        <dd><button v-for="id in state.detail.card.depends_on" :key="id" type="button" class="ref" @click="$emit('open', id)">#{{ id }}</button></dd>
+        <dd><a v-for="id in state.detail.card.depends_on" :key="id" class="ref" :href="refHref(id)" @click="onRef($event, id)">#{{ id }}</a></dd>
       </template>
       <template v-if="state.detail.card.blocks.length">
         <dt>Blocks</dt>
-        <dd><button v-for="id in state.detail.card.blocks" :key="id" type="button" class="ref" @click="$emit('open', id)">#{{ id }}</button></dd>
+        <dd><a v-for="id in state.detail.card.blocks" :key="id" class="ref" :href="refHref(id)" @click="onRef($event, id)">#{{ id }}</a></dd>
       </template>
       <template v-if="state.detail.times">
         <dt>Time</dt>
         <dd><CardTimes :times="state.detail.times" :received-at="state.receivedAt" /></dd>
       </template>
     </dl>
-    <Markdown v-if="state.detail.card.body" :text="state.detail.card.body" />
+    <Markdown v-if="state.detail.card.body" :text="state.detail.card.body" :board="slug" />
     <template v-if="links.length">
       <h4 class="section-title">Links ({{ links.length }})</h4>
       <ul class="links">
@@ -81,7 +97,7 @@ function when(ms) {
     <ol class="comments">
       <li v-for="comment in comments" :key="comment.id">
         <div class="by"><b>{{ comment.author }}</b> <time :datetime="new Date(comment.created_at).toISOString()">{{ when(comment.created_at) }}</time></div>
-        <Markdown :text="comment.body" />
+        <Markdown :text="comment.body" :board="slug" />
       </li>
     </ol>
   </div>

@@ -6,7 +6,9 @@ export function getJSON(path) {
       return new Promise(function () {});
     }
     if (!res.ok) {
-      throw new Error(path + " answered " + res.status);
+      var error = new Error(path + " answered " + res.status);
+      error.status = res.status;
+      throw error;
     }
     return res.json();
   });
