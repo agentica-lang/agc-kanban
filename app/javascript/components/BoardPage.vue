@@ -6,6 +6,7 @@ import { useDrawer } from "../drawer.js";
 import { useFilters } from "../filter_store.js";
 import { closesPanel } from "../outside.js";
 import { active, count, matches } from "../filters.js";
+import { useSearch } from "../search_store.js";
 import { useTheme } from "../theme.js";
 import { useWide } from "../wide.js";
 import CardPanel from "./CardPanel.vue";
@@ -53,6 +54,8 @@ provide("openCardId", drawer.card);
 // opens even when it is hidden. A hidden card still counts for the blocked marks below.
 var filter = useFilters();
 provide("filter", filter);
+var search = useSearch(props.slug, function () { return state.cards; });
+var filterPanel = ref(null);
 
 // When a panel closes (Escape, ✕, its button, a click or tap beside it) and the focus was in it or nowhere, the focus
 // goes back to where the panel came from: the Filters or the Activity button, or the card's link on the board (when the
@@ -118,10 +121,21 @@ function onOutside(event) {
 document.addEventListener("click", onOutside);
 onBeforeUnmount(function () { document.removeEventListener("click", onOutside); });
 
-// Escape closes the panel that is open.
+// Escape closes the panel that is open. `/` opens the filters and puts the cursor in the search box, unless the key is
+// meant for a field or a combination of the browser.
+function typing(target) {
+  return target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName));
+}
+
 function onKey(event) {
   if (event.key === "Escape" && panel.value !== "") {
     drawer.close();
+  } else if (event.key === "/" && !event.ctrlKey && !event.metaKey && !event.altKey && !typing(event.target) && !modal.value) {
+    event.preventDefault();
+    if (panel.value !== "filters") {
+      drawer.toggleFilters();
+    }
+    nextTick(function () { filterPanel.value && filterPanel.value.focus(); });
   }
 }
 document.addEventListener("keydown", onKey);
@@ -148,8 +162,8 @@ var columns = computed(function () {
   return state.board.columns.slice().sort(function (a, b) { return a.position - b.position; }).map(function (column) {
     var all = state.cards.filter(function (card) { return card.column_id === column.id; });
     var cards = all
-      .filter(function (card) { return matches(card, filter.filters.value); })
-      .sort(function (a, b) { return a.position - b.position; });
+      .filter(function (card) { return matches(card, filter.filters.value) && search.matches(card); })
+      .sort(function (a, b) { return search.on() ? search.rank(a) - search.rank(b) || a.position - b.position : a.position - b.position; });
     return { column: column, cards: cards, total: all.length };
   });
 });
@@ -157,9 +171,9 @@ var columns = computed(function () {
 var shown = computed(function () {
   return columns.value.reduce(function (sum, entry) { return sum + entry.cards.length; }, 0);
 });
-var filtering = computed(function () { return active(filter.filters.value); });
+var filtering = computed(function () { return active(filter.filters.value) || search.on(); });
 // The Filters button says how many are on: "Filters · 2".
-var filterCount = computed(function () { return count(filter.filters.value); });
+var filterCount = computed(function () { return count(filter.filters.value) + (search.q.value.trim() !== "" ? 1 : 0); });
 // A phone shows only the funnel and a badge, so the name says the count too.
 var filtersLabel = computed(function () { return filterCount.value ? "Filters · " + filterCount.value : "Filters"; });
 </script>
@@ -202,7 +216,7 @@ var filtersLabel = computed(function () { return filterCount.value ? "Filters ·
         <Feed :state="state" />
       </Drawer>
       <Drawer v-else-if="panel === 'filters'" title="Filters" focus @close="drawer.close()">
-        <FilterPanel :store="filter" :cards="state.cards" />
+        <FilterPanel ref="filterPanel" :store="filter" :cards="state.cards" :search="search" />
       </Drawer>
       <Drawer v-else-if="panel === 'card'" ref="cardDrawer" :title="'Card #' + drawer.card.value" modal :dialog="wide" focus @close="drawer.close()">
         <CardPanel :state="card" :slug="slug" @open="drawer.showCard" />

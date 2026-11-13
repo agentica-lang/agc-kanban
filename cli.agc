@@ -30,7 +30,7 @@ def card(words: List[String]) -> Result[Void]
   return Cards.run(words) if words.empty?
 
   case words[0]
-    "add", "list", "show", "update" -> Cards.run(words)
+    "add", "list", "search", "show", "update" -> Cards.run(words)
     _ -> CardActions.run(words)
   end
 end

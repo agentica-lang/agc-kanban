@@ -11,6 +11,7 @@ import Times from "times"
 # huge list never reaches `merged`, which is quadratic.
 LINK_MAX = 2048
 LINKS_MAX = 50
+SEARCH_LIMIT_MAX = 100
 
 export struct Card
   id: Int
@@ -90,6 +91,12 @@ export struct Update
   # no change: an update of links alone that changes none writes nothing (no version, no event).
   link: List[String] = []
   unlink: List[String] = []
+end
+
+# A card found by the search, with the text around the match: the words that matched sit between U+0002 and U+0003.
+export struct Hit
+  card: Card
+  snippet: String
 end
 
 export def create(pool: Database.Pool, input: Create) -> Result[Card]
@@ -190,6 +197,19 @@ export def list_open(conn: Db.Connection, board: String, filters: Filters) -> Re
   end
 
   ok(cards)
+end
+
+# The cards of a board that match `query`, best first (`bm25`, the title weighing ten times a word of the body), the
+# done ones only with `all`. Each word of the query is quoted and takes a `*`, so that `logi` finds `login` while the
+# user types and no FTS operator (`"`, `*`, `-`, `AND`, `NEAR`, a colon) in the input is ever read as syntax. A query
+# with no word in it matches nothing.
+export def search(pool: Database.Pool, board: String, query: String, all: Bool, limit: Int) -> Result[List[Hit]]
+  return error("INVALID:board") if board.empty?
+  return error("INVALID:limit") if limit < 1 or limit > SEARCH_LIMIT_MAX
+
+  Database.with_connection(pool) do |conn|
+    Db.transaction(conn) do |tx| search_open(tx, board, query, all, limit) end
+  end
 end
 
 export def update(pool: Database.Pool, input: Update) -> Result[Card]
@@ -591,4 +611,36 @@ def named(step: Times.Step, card: Card) -> Times.Step
   return step if step.column_id != card.column_id
 
   Times.Step(at: step.at, column_id: step.column_id, name: card.column)
+end
+
+def match_of(query: String) -> String
+  words = query.split(" ").select do |word| Regex.match?(word, /[A-Za-z0-9\x{80}-\x{10ffff}]/) end
+  words.map { |word| "\"#{word.replace("\"", "\"\"")}\"*" }.join(" ")
+end
+
+def search_open(conn: Db.Connection, board: String, query: String, all: Bool, limit: Int) -> Result[List[Hit]]
+  found = try Db.query(
+    conn,
+    "select id from boards where slug = ? or cast(id as text) = ? order by case when slug = ? then 0 else 1 end limit 1",
+    [Db.Value.Text(board), Db.Value.Text(board), Db.Value.Text(board)],
+  )
+
+  return error("NOT_FOUND:board") if found.empty?
+
+  match = match_of(query)
+  return ok([]) if match.empty?
+
+  rows = try Db.query(
+    conn,
+    "select c.id, snippet(card_search, -1, char(2), char(3), '...', 12) as snippet from card_search join cards c on c.id = card_search.rowid join columns col on col.id = c.column_id where card_search match ? and c.board_id = ? and c.archived_at is null and (? = 1 or col.done = 0) order by bm25(card_search, 10.0, 1.0, 3.0, 1.0), c.id limit ?",
+    [Db.Value.Text(match), Db.Value.Int(number(found[0], "id")), bool_int(all), Db.Value.Int(limit)],
+  )
+
+  now = Time.now_ms()
+  hits: List[Hit] = []
+  for row in rows
+    hits = hits.push(Hit(card: try load_at(conn, number(row, "id"), now), snippet: text(row, "snippet")))
+  end
+
+  ok(hits)
 end

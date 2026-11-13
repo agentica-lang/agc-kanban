@@ -25,6 +25,7 @@ var server = await createServer({
 after(function () { return server.close(); });
 var Card = (await server.ssrLoadModule("/app/javascript/components/Card.vue")).default;
 var CardPanel = (await server.ssrLoadModule("/app/javascript/components/CardPanel.vue")).default;
+var FilterPanel = (await server.ssrLoadModule("/app/javascript/components/FilterPanel.vue")).default;
 var FilterBar = (await server.ssrLoadModule("/app/javascript/components/FilterBar.vue")).default;
 var Drawer = (await server.ssrLoadModule("/app/javascript/components/Drawer.vue")).default;
 var BoardPage = (await server.ssrLoadModule("/app/javascript/components/BoardPage.vue")).default;
@@ -195,4 +196,16 @@ test("the header has a Reload board button, enabled while the board is not being
   assert.ok(tag, "no reload button");
   assert.ok(tag[0].includes('title="Reload board"'));
   assert.equal(tag[0].includes("disabled"), false);
+});
+
+test("the filters drawer has a search box that keeps its text, and says how many cards were found", async function () {
+  var search = { q: ref("logi"), failed: ref(false), set: function () {}, clear: function () {}, on: function () { return true; }, count: function () { return 1; } };
+  var html = await draw(FilterPanel, { cards: [], search: search }, "");
+  var box = only(html, "search-input");
+  assert.equal(box.tag, "input");
+  assert.equal(box.attrs.type, "search");
+  assert.equal(box.attrs["aria-label"], "Search cards");
+  assert.equal(box.attrs.value, "logi");
+  assert.ok(html.includes("1 card found, best first"));
+  assert.ok(html.includes(">Clear all</button>"), "a search counts as something to clear");
 });

@@ -20,7 +20,9 @@ This skill is only the rules.
    another agent's.
 2. Use the card you were given, or take one with `kanban card next`, which
    claims it for you.
-3. Read it with `kanban card show ID`: body, dependencies and comments.
+3. Read it with `kanban card show ID`: body, dependencies and comments. To
+   find a card by its words, `kanban card search "login"` (title, body, labels
+   and comments, best match first, done cards only with `--all`).
 
 ## Rules
 

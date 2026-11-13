@@ -12,7 +12,7 @@ import {Pair} from "std/uri"
 export def run(words: List[String]) -> Result[Void]
   if words.empty?
     return error(
-      "card needs a command: add, list, show, update, claim, next, release, move, done, archive, comment or dep",
+      "card needs a command: add, list, search, show, update, claim, next, release, move, done, archive, comment or dep",
     )
   end
 
@@ -22,6 +22,7 @@ export def run(words: List[String]) -> Result[Void]
     "list" -> list(rest)
     "show" -> show(rest)
     "update" -> update(rest)
+    "search" -> search(rest)
     _ -> error("unknown card command #{words[0]}")
   end
 end
@@ -152,6 +153,44 @@ def list(words: List[String]) -> Result[Void]
     Output.print_cards_tsv(response.unwrap!)
   else
     Output.print_cards(response.unwrap!)
+  end
+
+  ok()
+end
+
+# Read-only, so it needs no agent name. The order is the server's: best match first.
+def search(words: List[String]) -> Result[Void]
+  parser = OP.new(
+    "kanban card search",
+    "Find the cards of a board by their title, body, labels and comments, best match first",
+    [Arg(name: "query")],
+    [
+      Opt(name: "all", kind: Kind.Flag, help: "include the cards in a done column"),
+      Opt(name: "limit", kind: Kind.Int, default: "20", help: "at most this many cards (1 to 100)"),
+    ] +
+    Settings.common_opts(),
+  )
+
+  parsed = try OP.parse(parser, words)
+  config = try Settings.load(Settings.read_flags(parsed))
+  board = Support.board_of(config)
+  pairs = [
+    Pair(name: "q", value: OP.string(parsed, "query")),
+    Pair(name: "limit", value: OP.int(parsed, "limit").to_s),
+  ]
+
+  if OP.flag(parsed, "all")
+    pairs = pairs.push(Pair(name: "all", value: "1"))
+  end
+
+  path = "/api/boards/#{board}/search?#{URI.encode_www_form(pairs)}"
+  response = Output.expect(Client.get(Client.from(config), path), config.json)
+  return ok() if not response.ok?
+
+  if config.json
+    puts(Output.body(response.unwrap!))
+  else
+    Output.print_hits(response.unwrap!)
   end
 
   ok()

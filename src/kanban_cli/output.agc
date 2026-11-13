@@ -92,6 +92,15 @@ struct CardLines
   cards: List[CardLine]
 end
 
+struct HitLine
+  card: CardLine
+  snippet: String
+end
+
+struct HitLines
+  results: List[HitLine]
+end
+
 struct CardAnswer
   card: CardLine
 end
@@ -255,6 +264,24 @@ export def print_cards(response: HTTP.Response) -> Void
 
   for card in decoded.unwrap!.cards
     puts("#{card_line(card)}")
+  end
+end
+
+# The cards of a search, best first: the card line, then the text around the match under it, the words that matched
+# between square brackets (the server marks them with U+0002 and U+0003, which `one_line` would blank, so they
+# change first).
+export def print_hits(response: HTTP.Response) -> Void
+  decoded = JSON.decode(body(response), HitLines)
+  if not decoded.ok?
+    puts(body(response))
+    return
+  end
+
+  for hit in decoded.unwrap!.results
+    puts("#{card_line(hit.card)}")
+    marked = Regex.replace(Regex.replace(hit.snippet, /\x02/, "[").unwrap!, /\x03/, "]").unwrap!
+    text = squeeze(marked)
+    puts("    #{text}")
   end
 end
 
