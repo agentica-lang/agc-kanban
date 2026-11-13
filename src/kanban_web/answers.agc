@@ -1,5 +1,5 @@
 import Cards from "../kanban/cards"
 
-export struct CardAnswer
+struct CardAnswer
   card: Cards.Card
 end

@@ -4,15 +4,7 @@ import Comments from "../../kanban/comments"
 import Database from "../../kanban/repo/database"
 import Failure from "../failure"
 
-struct CommentInput
-  body: String
-end
-
-struct CommentAnswer
-  comment: Cards.Comment
-end
-
-export def add(conn: Bond.Conn, pool: Optional[Database.Pool], lease_minutes: Int) -> Result[Bond.Conn]
+def add(conn: Bond.Conn, pool: Optional[Database.Pool], lease_minutes: Int) -> Result[Bond.Conn]
   return ok(Failure.reject(conn, 503, "BUSY", "database unavailable")) if not pool.some?
 
   id = Bond.param_int(conn, "id")
@@ -35,4 +27,14 @@ export def add(conn: Bond.Conn, pool: Optional[Database.Pool], lease_minutes: In
   return ok(Failure.answer(conn, result.message)) if not result.ok?
 
   ok(Bond.json_as(conn, 201, CommentAnswer.codec, CommentAnswer(comment: result.unwrap!)))
+end
+
+private
+
+struct CommentInput
+  body: String
+end
+
+struct CommentAnswer
+  comment: Cards.Comment
 end

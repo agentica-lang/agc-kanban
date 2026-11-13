@@ -3,13 +3,13 @@ import Regex from "std/regex"
 import Cards from "cards"
 import Database from "repo/database"
 
-export struct Action
+struct Action
   id: Int
   actor: String
   force: Bool
 end
 
-export struct Move
+struct Move
   id: Int
   actor: String
   force: Bool
@@ -18,27 +18,14 @@ export struct Move
   lease_minutes: Int
 end
 
-export struct Release
+struct Release
   id: Int
   actor: String
   force: Bool
   column: Optional[String]
 end
 
-# The column a card left, so the feed can say "from Doing to Review". Events written before it have no `from`.
-struct Source
-  id: Int
-  name: String
-end
-
-# The data of the card.moved, card.released and card.done events: the card after the change and where it was before.
-struct EventData
-  card: Cards.Card
-  from: Source
-  forced: Bool
-end
-
-export def finish(pool: Database.Pool, input: Action) -> Result[Cards.Card]
+def finish(pool: Database.Pool, input: Action) -> Result[Cards.Card]
   return error("INVALID:id") if input.id <= 0
   return error("INVALID:agent") if not Regex.match?(input.actor, /^[A-Za-z0-9._@\/-]{1,64}$/)
 
@@ -48,14 +35,14 @@ end
 ## Hides a card from the board and the lists: it stays in the database and the journal, and `show` still reads it. It
 ## follows the rules of the other writes: a card that somebody else holds needs `force`. Archiving an archived card
 ## changes nothing and writes no event. The claim is dropped, so an archived card holds nothing.
-export def archive(pool: Database.Pool, input: Action) -> Result[Cards.Card]
+def archive(pool: Database.Pool, input: Action) -> Result[Cards.Card]
   return error("INVALID:id") if input.id <= 0
   return error("INVALID:agent") if not Regex.match?(input.actor, /^[A-Za-z0-9._@\/-]{1,64}$/)
 
   Database.with_connection(pool) do |conn| Db.transaction(conn) do |tx| archive_open(tx, input) end end
 end
 
-export def move(pool: Database.Pool, input: Move) -> Result[Cards.Card]
+def move(pool: Database.Pool, input: Move) -> Result[Cards.Card]
   return error("INVALID:id") if input.id <= 0
   return error("INVALID:agent") if not Regex.match?(input.actor, /^[A-Za-z0-9._@\/-]{1,64}$/)
   return error("INVALID:column") if input.column.empty?
@@ -65,7 +52,7 @@ export def move(pool: Database.Pool, input: Move) -> Result[Cards.Card]
   Database.with_connection(pool) do |conn| Db.transaction(conn) do |tx| move_open(tx, input, false) end end
 end
 
-export def release(pool: Database.Pool, input: Release) -> Result[Cards.Card]
+def release(pool: Database.Pool, input: Release) -> Result[Cards.Card]
   return error("INVALID:id") if input.id <= 0
   return error("INVALID:agent") if not Regex.match?(input.actor, /^[A-Za-z0-9._@\/-]{1,64}$/)
   return error("INVALID:column") if input.column.some? and input.column.unwrap!.empty?
@@ -80,6 +67,21 @@ export def release(pool: Database.Pool, input: Release) -> Result[Cards.Card]
   )
 
   Database.with_connection(pool) do |conn| Db.transaction(conn) do |tx| move_open(tx, move, true) end end
+end
+
+private
+
+# The column a card left, so the feed can say "from Doing to Review". Events written before it have no `from`.
+struct Source
+  id: Int
+  name: String
+end
+
+# The data of the card.moved, card.released and card.done events: the card after the change and where it was before.
+struct EventData
+  card: Cards.Card
+  from: Source
+  forced: Bool
 end
 
 def finish_open(conn: Db.Connection, input: Action) -> Result[Cards.Card]

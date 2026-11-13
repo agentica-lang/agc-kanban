@@ -5,27 +5,7 @@ import Database from "../../kanban/repo/database"
 import Failure from "../failure"
 import Transitions from "../../kanban/transitions"
 
-struct MoveInput
-  column: String
-  position: Optional[Int]
-  force: Optional[Bool]
-end
-
-struct ReleaseInput
-  column: Optional[String]
-  force: Optional[Bool]
-end
-
-struct ForceInput
-  force: Optional[Bool]
-end
-
-struct ClaimNext
-  column: Optional[String]
-  label: Optional[String]
-end
-
-export def claim(conn: Bond.Conn, pool: Optional[Database.Pool], lease_minutes: Int) -> Result[Bond.Conn]
+def claim(conn: Bond.Conn, pool: Optional[Database.Pool], lease_minutes: Int) -> Result[Bond.Conn]
   return ok(Failure.reject(conn, 503, "BUSY", "database unavailable")) if not pool.some?
 
   id = Bond.param_int(conn, "id")
@@ -46,7 +26,7 @@ export def claim(conn: Bond.Conn, pool: Optional[Database.Pool], lease_minutes: 
   ok(Bond.json_as(conn, 200, Answers.CardAnswer.codec, Answers.CardAnswer(card: result.unwrap!)))
 end
 
-export def next_card(conn: Bond.Conn, pool: Optional[Database.Pool], lease_minutes: Int) -> Result[Bond.Conn]
+def next_card(conn: Bond.Conn, pool: Optional[Database.Pool], lease_minutes: Int) -> Result[Bond.Conn]
   return ok(Failure.reject(conn, 503, "BUSY", "database unavailable")) if not pool.some?
 
   body = Bond.body_text(conn)
@@ -70,7 +50,7 @@ export def next_card(conn: Bond.Conn, pool: Optional[Database.Pool], lease_minut
   ok(Bond.json_as(conn, 200, Answers.CardAnswer.codec, Answers.CardAnswer(card: result.unwrap!)))
 end
 
-export def release(conn: Bond.Conn, pool: Optional[Database.Pool]) -> Result[Bond.Conn]
+def release(conn: Bond.Conn, pool: Optional[Database.Pool]) -> Result[Bond.Conn]
   return ok(Failure.reject(conn, 503, "BUSY", "database unavailable")) if not pool.some?
 
   id = Bond.param_int(conn, "id")
@@ -95,7 +75,7 @@ export def release(conn: Bond.Conn, pool: Optional[Database.Pool]) -> Result[Bon
   ok(Bond.json_as(conn, 200, Answers.CardAnswer.codec, Answers.CardAnswer(card: result.unwrap!)))
 end
 
-export def move(conn: Bond.Conn, pool: Optional[Database.Pool], lease_minutes: Int) -> Result[Bond.Conn]
+def move(conn: Bond.Conn, pool: Optional[Database.Pool], lease_minutes: Int) -> Result[Bond.Conn]
   return ok(Failure.reject(conn, 503, "BUSY", "database unavailable")) if not pool.some?
 
   id = Bond.param_int(conn, "id")
@@ -122,7 +102,7 @@ export def move(conn: Bond.Conn, pool: Optional[Database.Pool], lease_minutes: I
   ok(Bond.json_as(conn, 200, Answers.CardAnswer.codec, Answers.CardAnswer(card: result.unwrap!)))
 end
 
-export def done(conn: Bond.Conn, pool: Optional[Database.Pool]) -> Result[Bond.Conn]
+def done(conn: Bond.Conn, pool: Optional[Database.Pool]) -> Result[Bond.Conn]
   return ok(Failure.reject(conn, 503, "BUSY", "database unavailable")) if not pool.some?
 
   id = Bond.param_int(conn, "id")
@@ -146,7 +126,7 @@ export def done(conn: Bond.Conn, pool: Optional[Database.Pool]) -> Result[Bond.C
   ok(Bond.json_as(conn, 200, Answers.CardAnswer.codec, Answers.CardAnswer(card: result.unwrap!)))
 end
 
-export def archive(conn: Bond.Conn, pool: Optional[Database.Pool]) -> Result[Bond.Conn]
+def archive(conn: Bond.Conn, pool: Optional[Database.Pool]) -> Result[Bond.Conn]
   return ok(Failure.reject(conn, 503, "BUSY", "database unavailable")) if not pool.some?
 
   id = Bond.param_int(conn, "id")
@@ -168,4 +148,26 @@ export def archive(conn: Bond.Conn, pool: Optional[Database.Pool]) -> Result[Bon
   return ok(Failure.answer(conn, result.message, some(id.unwrap!))) if not result.ok?
 
   ok(Bond.json_as(conn, 200, Answers.CardAnswer.codec, Answers.CardAnswer(card: result.unwrap!)))
+end
+
+private
+
+struct MoveInput
+  column: String
+  position: Optional[Int]
+  force: Optional[Bool]
+end
+
+struct ReleaseInput
+  column: Optional[String]
+  force: Optional[Bool]
+end
+
+struct ForceInput
+  force: Optional[Bool]
+end
+
+struct ClaimNext
+  column: Optional[String]
+  label: Optional[String]
 end

@@ -7,13 +7,7 @@ import HTTP from "std/http"
 import Regex from "std/regex"
 import AssetNames from "../src/kanban_web/asset_names"
 
-KEY = "01234567890123456789012345678901"
-# Relative to the working directory of the steps, the project folder.
-CLIENT = "specs/fixtures/ws_client/cable_client.agc"
-# Frames that a step skips on the way to the one it waits for (the confirmation, the ping).
-SKIPPED_FRAMES = 50
-
-export def steps() -> List[BDD.Step]
+def steps() -> List[BDD.Step]
   [
     BDD.step("I sign in with the key {string}", &sign_in),
     BDD.step("I get the page {string}", &get_page),
@@ -33,6 +27,16 @@ export def steps() -> List[BDD.Step]
     BDD.step("the live client receives a frame containing {string}", &live_receives),
   ]
 end
+
+private
+
+KEY = "01234567890123456789012345678901"
+
+# Relative to the working directory of the steps, the project folder.
+CLIENT = "specs/fixtures/ws_client/cable_client.agc"
+
+# Frames that a step skips on the way to the one it waits for (the confirmation, the ping).
+SKIPPED_FRAMES = 50
 
 def port_of(ctx: BDD.Context) -> Int = JSON.int(BDD.get(ctx, "port").unwrap!).unwrap!
 
@@ -127,7 +131,7 @@ def names_assets(ctx: BDD.Context, _args: List[String]) -> BDD.Context
   BDD.assert(ctx, fingerprinted and named, "the page was #{page}")
 end
 
-def serving(f: Fn[Json, Result[Json]]) -> Fn[Json, Result[Json]] = f
+def serving(f: Fn[JSON.Value, Result[JSON.Value]]) -> Fn[JSON.Value, Result[JSON.Value]] = f
 
 # Starts the live client and keeps it behind a service: a request `{"timeout_ms": N}` answers its next line.
 def subscribe(ctx: BDD.Context, cookie: String, board: String) -> BDD.Context
@@ -136,7 +140,7 @@ def subscribe(ctx: BDD.Context, cookie: String, board: String) -> BDD.Context
   BDD.keep(ctx, "live", service)
 end
 
-def next_line(process: Process, request: Json) -> Result[Json]
+def next_line(process: Process, request: JSON.Value) -> Result[JSON.Value]
   wait = JSON.int(JSON.get(request, "timeout_ms").unwrap!).unwrap!
   ok(JSON.from(try Process.read_line(process, wait)))
 end

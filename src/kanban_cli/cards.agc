@@ -9,7 +9,7 @@ import Support from "support"
 import {Arg, Kind, Opt} from "std/option_parser"
 import {Pair} from "std/uri"
 
-export def run(words: List[String]) -> Result[Void]
+def run(words: List[String]) -> Result[Void]
   if words.empty?
     return error(
       "card needs a command: add, list, search, show, update, claim, next, release, move, done, archive, comment or dep",
@@ -26,6 +26,8 @@ export def run(words: List[String]) -> Result[Void]
     _ -> error("unknown card command #{words[0]}")
   end
 end
+
+private
 
 def add(words: List[String]) -> Result[Void]
   opts = [
@@ -45,7 +47,7 @@ def add(words: List[String]) -> Result[Void]
   Support.require_agent(config)
   board = Support.board_of(config)
   body = try Input.text(OP.optional_string(parsed, "body"), OP.optional_string(parsed, "body-file"))
-  fields: Map[String, Json] = {"title": JSON.from(OP.string(parsed, "title"))}
+  fields: Map[String, JSON.Value] = {"title": JSON.from(OP.string(parsed, "title"))}
   fields = Support.put(fields, "body", body)
   fields = Support.put(fields, "column", OP.optional_string(parsed, "column"))
   labels = Input.csv(OP.optional_string(parsed, "label"))
@@ -239,7 +241,7 @@ def update(words: List[String]) -> Result[Void]
   config = try Settings.load(Settings.read_flags(parsed))
   Support.require_agent(config)
   body = try Input.text(OP.optional_string(parsed, "body"), OP.optional_string(parsed, "body-file"))
-  fields: Map[String, Json] = {}
+  fields: Map[String, JSON.Value] = {}
   fields = Support.put(fields, "title", OP.optional_string(parsed, "title"))
   fields = Support.put(fields, "body", body)
   fields = Support.put(fields, "branch", OP.optional_string(parsed, "branch"))

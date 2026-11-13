@@ -2,7 +2,7 @@ import Db from "pkg/db/db"
 import Regex from "std/regex"
 import Database from "repo/database"
 
-export struct Column
+struct Column
   id: Int
   name: String
   position: Int
@@ -10,7 +10,7 @@ export struct Column
   wip_limit: Optional[Int]
 end
 
-export struct BoardSummary
+struct BoardSummary
   id: Int
   slug: String
   name: String
@@ -18,7 +18,7 @@ export struct BoardSummary
   updated_at: Int
 end
 
-export struct Board
+struct Board
   id: Int
   slug: String
   name: String
@@ -27,7 +27,7 @@ export struct Board
   columns: List[Column]
 end
 
-export def create(pool: Database.Pool, name: String, slug: String, actor: String, names: List[String]) -> Result[Board]
+def create(pool: Database.Pool, name: String, slug: String, actor: String, names: List[String]) -> Result[Board]
   return error("INVALID:name") if name.strip.empty?
   return error("INVALID:slug") if not Regex.match?(slug, /^[a-z0-9-]{1,40}$/)
   return error("INVALID:agent") if not Regex.match?(actor, /^[A-Za-z0-9._@\/-]{1,64}$/)
@@ -42,14 +42,14 @@ export def create(pool: Database.Pool, name: String, slug: String, actor: String
   Database.with_connection(pool) do |conn| Db.transaction(conn) do |tx| insert(tx, name, slug, actor, names) end end
 end
 
-export def list(pool: Database.Pool) -> Result[List[BoardSummary]]
+def list(pool: Database.Pool) -> Result[List[BoardSummary]]
   Database.with_connection(pool) do |conn|
     rows = try Db.query(conn, "select id, slug, name, created_at, updated_at from boards order by id", [])
     ok(rows.map do |row| summary(row) end)
   end
 end
 
-export def get_open(conn: Db.Connection, reference: String) -> Result[Board]
+def get_open(conn: Db.Connection, reference: String) -> Result[Board]
   return error("INVALID:board") if reference.empty?
 
   rows = try Db.query(
@@ -70,6 +70,8 @@ export def get_open(conn: Db.Connection, reference: String) -> Result[Board]
   columns = found.map do |row| read_column(row) end
   ok(board(rows[0], columns))
 end
+
+private
 
 def insert(conn: Db.Connection, name: String, slug: String, actor: String, names: List[String]) -> Result[Board]
   exists = try Db.query(conn, "select id from boards where slug = ?", [Db.Value.Text(slug)])

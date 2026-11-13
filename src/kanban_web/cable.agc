@@ -18,28 +18,14 @@ import Database from "../kanban/repo/database"
 import Publisher from "publisher"
 import Routes from "routes"
 
-BOARD_CHANNEL = "BoardChannel"
-NAME = "publisher"
-PENDING = "pending"
-TICK_MS = 5_000
-# The address of the publisher: a restart gives a new actor a new address, so the writes look it up on each nudge.
-NAMES: ATS[String, Address[Msg]] = ATS.new()
-# Set while a `Nudge` is in the inbox, so a burst of writes is one flush and not one read of the journal per write.
-FLAGS: ATS[String, Int] = ATS.new()
-
-enum Msg
-  Nudge
-  Tick
-end
-
 ## What the writes need: the hub of the channels. The publisher is reached by name.
-export struct Cable
+struct Cable
   hub: Channels.Hub
 end
 
 ## Starts the hub and, with a database, the publisher under a supervisor and its timer. Call it from the main task:
 ## the supervisor and the timer are its children.
-export def start(pool: Optional[Database.Pool]) -> Cable
+def start(pool: Optional[Database.Pool]) -> Cable
   hub = Channels.start_hub().unwrap!
   if pool.some?
     cursor: ATS[String, Int] = ATS.new()
@@ -57,13 +43,13 @@ export def start(pool: Optional[Database.Pool]) -> Cable
 end
 
 ## Mounts `/cable`.
-export def mount(app: Bond.App, cable: Cable) -> Bond.App
+def mount(app: Bond.App, cable: Cable) -> Bond.App
   options = Channels.MountOptions(connect: &connect, handlers: {BOARD_CHANNEL: Channels.handler(&board_subscribed)})
   Channels.mount(app, Routes.CABLE, cable.hub, options).unwrap!
 end
 
 ## Tells the publisher that a write may have added events. Only the nudge that sets the flag is sent.
-export def nudge(_cable: Cable) -> Void
+def nudge(_cable: Cable) -> Void
   return if not NAMES.get(NAME).ok?
 
   if FLAGS.put_new(PENDING, 1)
@@ -73,6 +59,24 @@ export def nudge(_cable: Cable) -> Void
   end
 end
 
+private
+
+BOARD_CHANNEL = "BoardChannel"
+NAME = "publisher"
+PENDING = "pending"
+TICK_MS = 5_000
+
+# The address of the publisher: a restart gives a new actor a new address, so the writes look it up on each nudge.
+NAMES: ATS[String, Address[Msg]] = ATS.new()
+
+# Set while a `Nudge` is in the inbox, so a burst of writes is one flush and not one read of the journal per write.
+FLAGS: ATS[String, Int] = ATS.new()
+
+enum Msg
+  Nudge
+  Tick
+end
+
 # The session was checked at the handshake: no session is an `unauthorized` disconnect, and the client stays out.
 def connect(conn: Bond.Conn) -> Result[Channels.Identity]
   return error("no session") if not Auth.signed_in?(conn)
@@ -80,7 +84,7 @@ def connect(conn: Bond.Conn) -> Result[Channels.Identity]
   ok(Channels.Identity(id: "owner", data: JSON.from("owner")))
 end
 
-def board_subscribed(session: Channels.Session, params: Json) -> Result[Channels.Subscription]
+def board_subscribed(session: Channels.Session, params: JSON.Value) -> Result[Channels.Subscription]
   board = try JSON.string(try JSON.get(params, "board"))
   return error("board is empty") if board.empty?
 

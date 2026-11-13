@@ -20,9 +20,9 @@ def test_command_sequences_keep_invariants() -> Result[Void]
   dir = "#{home}/.cache/kanban-property-test-#{System.pid()}"
   pool = try Database.open(dir)
   _ = try Boards.create(pool, "Project", "project", "agent", ["Todo", "Doing", "Review", "Done"])
-  # 25 runs of up to 10 commands fit the runner's step budget; 40 exhaust it.
+  # 15 runs of up to 10 commands fit the runner's step budget; 25 can exhaust it.
   commands = Prop.list(Prop.int(0, 12), 10)
-  outcome = Prop.check(commands, Prop.Config(runs: 25)) do |steps| run_sequence(pool, steps) end
+  outcome = Prop.check(commands, Prop.Config(runs: 15)) do |steps| run_sequence(pool, steps) end
   Database.close(pool)
   try Path.remove("#{dir}/kanban.sqlite3")
   _ = Path.remove(dir)

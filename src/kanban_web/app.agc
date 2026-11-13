@@ -5,13 +5,10 @@ import Database from "../kanban/repo/database"
 import Router from "router"
 import Routes from "routes"
 
-# The scripts and styles are small and named by their digest: a year in the cache, never revalidated.
-ASSET_MAX_BYTES = 4_194_304
-
 ## The app: the session, the API key filter, the pages and the API, the assets of `assets_dir` and `/cable`. With a
 ## database, every write to the API wakes the publisher of the live events. `secure_cookie` marks the session cookie
 ## Secure (behind HTTPS).
-export def build(
+def build(
   key: String,
   pool: Optional[Database.Pool] = none,
   lease_minutes: Int = 0,
@@ -31,6 +28,11 @@ export def build(
 
   Cable.mount(app, cable)
 end
+
+private
+
+# The scripts and styles are small and named by their digest: a year in the cache, never revalidated.
+ASSET_MAX_BYTES = 4_194_304
 
 # After a write to the API the events are committed: nudge the publisher. A failed write nudges it too (one query
 # that finds nothing); a read and a page do not.

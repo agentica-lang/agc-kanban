@@ -3,14 +3,14 @@ import Regex from "std/regex"
 import Cards from "cards"
 import Database from "repo/database"
 
-export struct Add
+struct Add
   card_id: Int
   body: String
   actor: String
   lease_minutes: Int
 end
 
-export def add(pool: Database.Pool, input: Add) -> Result[Cards.Comment]
+def add(pool: Database.Pool, input: Add) -> Result[Cards.Comment]
   return error("INVALID:id") if input.card_id <= 0
   return error("INVALID:body") if input.body.strip.empty?
   return error("INVALID:agent") if not Regex.match?(input.actor, /^[A-Za-z0-9._@\/-]{1,64}$/)
@@ -18,6 +18,8 @@ export def add(pool: Database.Pool, input: Add) -> Result[Cards.Comment]
 
   Database.with_connection(pool) do |conn| Db.transaction(conn) do |tx| add_open(tx, input) end end
 end
+
+private
 
 def add_open(conn: Db.Connection, input: Add) -> Result[Cards.Comment]
   now = Time.now_ms()

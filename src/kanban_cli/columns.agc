@@ -6,6 +6,21 @@ import Settings from "settings"
 import Support from "support"
 import {Arg, Kind, Opt} from "std/option_parser"
 
+def run(words: List[String]) -> Result[Void]
+  return error("column needs a command: add, rename, move or remove") if words.empty?
+
+  rest = List.drop(words, 1)
+  case words[0]
+    "add" -> add(rest)
+    "rename" -> rename(rest)
+    "move" -> move(rest)
+    "remove" -> remove(rest)
+    _ -> error("unknown column command #{words[0]}")
+  end
+end
+
+private
+
 struct ColumnLine
   id: Int
   name: String
@@ -30,19 +45,6 @@ struct ColumnAnswer
   column: ColumnLine
 end
 
-export def run(words: List[String]) -> Result[Void]
-  return error("column needs a command: add, rename, move or remove") if words.empty?
-
-  rest = List.drop(words, 1)
-  case words[0]
-    "add" -> add(rest)
-    "rename" -> rename(rest)
-    "move" -> move(rest)
-    "remove" -> remove(rest)
-    _ -> error("unknown column command #{words[0]}")
-  end
-end
-
 def add(words: List[String]) -> Result[Void]
   parser = OP.new(
     "kanban column add",
@@ -56,7 +58,7 @@ def add(words: List[String]) -> Result[Void]
   config = try Settings.load(Settings.read_flags(parsed))
   Support.require_agent(config)
   board = Support.board_of(config)
-  fields: Map[String, Json] = {"name": JSON.from(OP.string(parsed, "name"))}
+  fields: Map[String, JSON.Value] = {"name": JSON.from(OP.string(parsed, "name"))}
   position = OP.optional_int(parsed, "position")
   if position.some?
     fields = fields.put("position", JSON.from(position.unwrap!))

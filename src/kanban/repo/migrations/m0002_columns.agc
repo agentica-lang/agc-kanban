@@ -1,6 +1,6 @@
 import Migrate from "pkg/db/migrate"
 
-export def migration() -> Migrate.Migration
+def migration() -> Migrate.Migration
   Migrate.sql(
     2,
     "columns",

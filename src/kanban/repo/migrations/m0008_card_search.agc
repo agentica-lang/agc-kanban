@@ -5,7 +5,7 @@ import Migrate from "pkg/db/migrate"
 # external-content table over `cards` because the comments column has no source column there; the triggers write the
 # row again from `cards` and `comments` after each change that touches an indexed text, so the application code never
 # has to remember to. The last statement builds the rows of the cards that exist before this migration.
-export def migration() -> Migrate.Migration
+def migration() -> Migrate.Migration
   Migrate.sql(
     8,
     "card_search",
@@ -19,6 +19,8 @@ export def migration() -> Migrate.Migration
     ],
   )
 end
+
+private
 
 def refresh(id: String) -> String
   (

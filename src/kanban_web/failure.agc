@@ -1,44 +1,7 @@
 import Bond from "pkg/bond/bond"
 import Database from "../kanban/repo/database"
 
-struct ApiError
-  code: String
-  message: String
-  field: Optional[String]
-end
-
-struct ClaimedError
-  code: String
-  message: String
-  card_id: Int
-  claimed_by: String
-end
-
-struct ClaimedAnswer
-  error: ClaimedError
-end
-
-struct BlockedError
-  code: String
-  message: String
-  blocked_by: List[Int]
-end
-
-struct BlockedAnswer
-  error: BlockedError
-end
-
-struct ErrorAnswer
-  error: ApiError
-end
-
-export def reject(
-  conn: Bond.Conn,
-  status: Int,
-  code: String,
-  message: String,
-  field: Optional[String] = none,
-) -> Bond.Conn
+def reject(conn: Bond.Conn, status: Int, code: String, message: String, field: Optional[String] = none) -> Bond.Conn
   Bond.json_as(
     conn,
     status,
@@ -47,7 +10,7 @@ export def reject(
   ).with(halted: true)
 end
 
-export def answer(conn: Bond.Conn, message: String, card_id: Optional[Int] = none) -> Bond.Conn
+def answer(conn: Bond.Conn, message: String, card_id: Optional[Int] = none) -> Bond.Conn
   if message.start_with?("INVALID:")
     return reject(conn, 400, "INVALID", message, some(message.slice(8, message.length - 8)))
   end
@@ -81,4 +44,37 @@ export def answer(conn: Bond.Conn, message: String, card_id: Optional[Int] = non
   return reject(conn, 503, "BUSY", "database busy") if Database.busy?(message)
 
   reject(conn, 500, "INTERNAL", "internal error")
+end
+
+private
+
+struct ApiError
+  code: String
+  message: String
+  field: Optional[String]
+end
+
+struct ClaimedError
+  code: String
+  message: String
+  card_id: Int
+  claimed_by: String
+end
+
+struct ClaimedAnswer
+  error: ClaimedError
+end
+
+struct BlockedError
+  code: String
+  message: String
+  blocked_by: List[Int]
+end
+
+struct BlockedAnswer
+  error: BlockedError
+end
+
+struct ErrorAnswer
+  error: ApiError
 end
