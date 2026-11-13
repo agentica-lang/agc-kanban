@@ -24,6 +24,7 @@ after(function () { return server.close(); });
 var Card = (await server.ssrLoadModule("/app/javascript/components/Card.vue")).default;
 var CardPanel = (await server.ssrLoadModule("/app/javascript/components/CardPanel.vue")).default;
 var FilterBar = (await server.ssrLoadModule("/app/javascript/components/FilterBar.vue")).default;
+var Drawer = (await server.ssrLoadModule("/app/javascript/components/Drawer.vue")).default;
 
 // The page code reads the filters from `location`; a plain object stands in for it.
 function filtersAt(search) {
@@ -91,4 +92,11 @@ test("the panel of an archived card says it is archived, and the panel of any ot
   assert.match(archived, /<dt>Archived<\/dt>/);
   var open = await draw(CardPanel, { state: detail({ archived_at: null }), slug: "p" }, "");
   assert.equal(open.includes("Archived"), false);
+});
+
+test("the card drawer is a modal dialog and the other drawers are plain panels", async function () {
+  var modal = await draw(Drawer, { title: "Card #7", modal: true }, "");
+  assert.match(modal, /<aside[^>]*class="drawer drawer-modal"[^>]*role="dialog"[^>]*aria-modal="true"/);
+  var plain = await draw(Drawer, { title: "Activity" }, "");
+  assert.doesNotMatch(plain, /drawer-modal|role=|aria-modal/);
 });

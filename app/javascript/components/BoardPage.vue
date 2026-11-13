@@ -163,14 +163,14 @@ var filtersLabel = computed(function () { return filterCount.value ? "Filters ·
         <Column v-for="entry in columns" :key="entry.column.id" :column="entry.column" :cards="entry.cards" :total="entry.total" :filtering="filtering" :blocked="blocked" :flash="state.flash" />
         <p v-if="!columns.length" class="empty">This board has no columns.</p>
       </main>
-      <div v-if="panel !== ''" class="backdrop" aria-hidden="true" @click="drawer.close()"></div>
+      <div v-if="panel !== ''" class="backdrop" :class="{ 'backdrop-modal': panel === 'card' }" aria-hidden="true" @click="drawer.close()"></div>
       <Drawer v-if="panel === 'activity'" title="Activity" @close="drawer.close()">
         <Feed :state="state" />
       </Drawer>
       <Drawer v-else-if="panel === 'filters'" title="Filters" focus @close="drawer.close()">
         <FilterPanel :store="filter" :cards="state.cards" />
       </Drawer>
-      <Drawer v-else-if="panel === 'card'" :title="'Card #' + drawer.card.value" @close="drawer.close()">
+      <Drawer v-else-if="panel === 'card'" :title="'Card #' + drawer.card.value" modal focus @close="drawer.close()">
         <CardPanel :state="card" :slug="slug" @open="drawer.showCard" />
       </Drawer>
     </div>
