@@ -71,6 +71,21 @@ Feature: Card archive
     When agent "bob" claims card 2
     And agent "bob" archives card 2
     Then the response status is 200
+    When I get board events for "project" with query "after=0&card=1"
+    Then the response contains "\"kind\":\"card.archived\""
+    And the response contains "\"forced\":true"
+    When I get board events for "project" with query "after=0&card=2"
+    Then the response contains "\"forced\":false"
+
+  Scenario: A claim whose lease ran out is free, so another agent archives the card without force
+    Given the database server is running
+    When I post a board named "Project" with slug "project" as "agent-1"
+    And I add a card titled "Alpha"
+    And agent "bob" claims card 1
+    And the lease of card 1 has run out
+    And agent "agent-1" archives card 1
+    Then the response status is 200
+    And the response contains "\"claimed_by\":null"
 
   Scenario: An archived card refuses every write like a missing card
     Given the database server is running
@@ -133,8 +148,10 @@ Feature: Card archive
     And I add a card titled "Alpha"
     And I add a card titled "Beta"
     And I add a card titled "Gamma"
+    And I add a card titled "Delta"
     And I make card 2 depend on card 1
     And I make card 3 depend on card 1
+    And I make card 4 depend on card 1
     And I run kanban "card list --board project --ready"
     Then kanban output does not contain "Beta"
     When agent "agent-1" claims card 2
@@ -150,7 +167,10 @@ Feature: Card archive
     Then the response status is 200
     When agent "agent-1" archives card 3
     And I get card 1
-    Then the response contains "\"blocks\":[2]"
+    Then the response contains "\"blocks\":[2,4]"
+    When I remove the dependency of card 4 on card 1
+    Then the response status is 200
+    And the response contains "\"depends_on\":[]"
 
   Scenario: Archiving a card on another board changes only that board
     Given the database server is running
@@ -178,6 +198,66 @@ Feature: Card archive
     Then the response status is 200
     When I get card 2
     Then the response contains "\"done\":true"
+
+  Scenario: The home page does not count an archived dependency as blocking
+    Given the database server is running
+    When I post a board named "Project" with slug "project" as "agent-1"
+    And I add a card titled "Alpha"
+    And I add a card titled "Beta"
+    And I make card 2 depend on card 1
+    And I sign in with the key "01234567890123456789012345678901"
+    And I get the page "/boards" with the session
+    Then the response contains "1 blocked"
+    When agent "agent-1" archives card 1
+    And I get the page "/boards" with the session
+    Then the response does not contain "blocked"
+    And the response contains "<b>1</b> <span>Todo</span>"
+
+  Scenario: A column whose only card is archived can be removed, and the card is still readable
+    Given the database server is running
+    When I post a board named "Project" with slug "project" as "agent-1"
+    And I add a card titled "Alpha"
+    And I add a card titled "Beta"
+    And I move card 1 to "Review"
+    And I run kanban "column remove Review --board project"
+    Then kanban exits with code 1
+    And kanban stderr contains "CONFLICT"
+    When agent "agent-1" archives card 1
+    And I run kanban "column remove Review --board project"
+    Then kanban exits with code 0
+    When I get the project snapshot
+    Then the response does not contain "Review"
+    When I run kanban "card show 1"
+    Then kanban exits with code 0
+    And kanban output contains "Alpha"
+    And kanban output contains "archived: true"
+    And kanban output contains "Todo"
+    When I get board events for "project" with query "after=0&card=1"
+    Then the response contains "card.archived"
+    And the response contains "\"from\":{\"id\":3,\"name\":\"Review\"}"
+
+  Scenario: Making a column the done column leaves the archived cards alone
+    Given the database server is running
+    When I post a board named "Project" with slug "project" as "agent-1"
+    And I add a card titled "Alpha"
+    And I add a card titled "Beta"
+    And I add a card titled "Gamma"
+    And I move card 1 to "Done"
+    And agent "agent-1" archives card 1
+    And agent "agent-1" archives card 2
+    And I mark column 1 as done
+    Then the response status is 200
+    When I get card 1
+    Then the response contains "\"version\":3}"
+    And the response does not contain "\"done_at\":null"
+    When I get card 2
+    Then the response contains "\"version\":3}"
+    And the response contains "\"done_at\":null"
+    When I run kanban "column add Shipped --done --board project"
+    Then kanban exits with code 0
+    When I get card 1
+    Then the response contains "\"version\":3}"
+    And the response does not contain "\"done_at\":null"
 
   Scenario: A live board hears the archive
     Given the database server is running

@@ -106,10 +106,11 @@ at once), and `card show 12` still prints it, with `archived: true` on the secon
 The web has no archive button. The server checks no role, so it is the coordinator's by agreement, like `done`:
 any named agent may run it, and a card that another agent holds needs `--force`, as for the other writes. The
 archive drops the claim. Archiving an archived card is not an error: it prints the same line and writes no
-second event. An archived card refuses a claim, a move, a comment or a dependency with `NOT_FOUND` (exit 1), as
+second event. An archived card refuses a claim, a move, a comment or a new dependency with `NOT_FOUND` (exit 1), as
 a card that does not exist does. A dependency on an archived card no longer blocks: the card that waited for
-it becomes ready (its `depends on:` line still names the archived one). A column that holds an archived card
-cannot be removed (`CONFLICT`).
+it becomes ready (its `depends on:` line still names the archived one). Only `card dep add` refuses an archived
+card (`NOT_FOUND`); `dep remove` still works when the archived card is the one that was waited for, as cleanup. An archived card does not keep a column from
+being removed: `column remove` moves it, still archived, to the first column that stays.
 
 `--link` and `--unlink` repeat (not after `--`). A link is an http(s) URL (a PR,
 an issue, a CI run) in printable ASCII (an IDN host as punycode, a path
