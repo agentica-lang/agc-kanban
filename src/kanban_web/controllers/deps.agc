@@ -5,12 +5,7 @@ import Deps from "../../kanban/deps"
 import Failure from "../failure"
 import Params from "../params"
 
-struct DependencyInput
-  depends_on: Int
-  force: Optional[Bool]
-end
-
-export def add(conn: Bond.Conn, pool: Optional[Database.Pool], lease_minutes: Int) -> Result[Bond.Conn]
+def add(conn: Bond.Conn, pool: Optional[Database.Pool], lease_minutes: Int) -> Result[Bond.Conn]
   return ok(Failure.reject(conn, 503, "BUSY", "database unavailable")) if not pool.some?
 
   id = Bond.param_int(conn, "id")
@@ -36,7 +31,7 @@ export def add(conn: Bond.Conn, pool: Optional[Database.Pool], lease_minutes: In
   ok(Bond.json_as(conn, 201, Answers.CardAnswer.codec, Answers.CardAnswer(card: result.unwrap!)))
 end
 
-export def remove(conn: Bond.Conn, pool: Optional[Database.Pool], lease_minutes: Int) -> Result[Bond.Conn]
+def remove(conn: Bond.Conn, pool: Optional[Database.Pool], lease_minutes: Int) -> Result[Bond.Conn]
   return ok(Failure.reject(conn, 503, "BUSY", "database unavailable")) if not pool.some?
 
   id = Bond.param_int(conn, "id")
@@ -61,4 +56,11 @@ export def remove(conn: Bond.Conn, pool: Optional[Database.Pool], lease_minutes:
   return ok(Failure.answer(conn, result.message)) if not result.ok?
 
   ok(Bond.json_as(conn, 200, Answers.CardAnswer.codec, Answers.CardAnswer(card: result.unwrap!)))
+end
+
+private
+
+struct DependencyInput
+  depends_on: Int
+  force: Optional[Bool]
 end

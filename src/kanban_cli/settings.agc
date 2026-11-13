@@ -2,19 +2,14 @@ import OP from "std/option_parser"
 import Toml from "std/toml"
 import {Kind, Opt, Parsed} from "std/option_parser"
 
-CONFIG_FILE = ".config/agc-kanban/config.toml"
-DEFAULT_URL = "http://127.0.0.1:4580"
-ENV_NAMES = ["KANBAN_URL", "KANBAN_API_KEY", "KANBAN_AGENT", "KANBAN_BOARD"]
-FILE_NAMES = ["url", "api_key", "agent", "board"]
-
-export struct Flags
+struct Flags
   url: Optional[String]
   agent: Optional[String]
   board: Optional[String]
   json: Bool
 end
 
-export struct Config
+struct Config
   url: String
   key: String
   agent: String
@@ -22,7 +17,7 @@ export struct Config
   json: Bool
 end
 
-export def common_opts() -> List[Opt]
+def common_opts() -> List[Opt]
   [
     Opt(name: "url", help: "server url"),
     Opt(name: "agent", help: "agent name sent on writes"),
@@ -31,7 +26,7 @@ export def common_opts() -> List[Opt]
   ]
 end
 
-export def read_flags(parsed: Parsed) -> Flags
+def read_flags(parsed: Parsed) -> Flags
   Flags(
     url: OP.optional_string(parsed, "url"),
     agent: OP.optional_string(parsed, "agent"),
@@ -40,7 +35,7 @@ export def read_flags(parsed: Parsed) -> Flags
   )
 end
 
-export def load(flags: Flags) -> Result[Config]
+def load(flags: Flags) -> Result[Config]
   from_file = try file_settings()
   if from_file.get("agent").some?
     IO.warn("kanban: warning: the agent key of the config file is ignored; set KANBAN_AGENT or --agent")
@@ -53,7 +48,7 @@ end
 # The agent name has no file value and no default: a name shared by every
 # session would let two agents act as one, so only a flag or the environment
 # names the agent.
-export def resolve(flags: Flags, env: Map[String, String], file: Map[String, String]) -> Config
+def resolve(flags: Flags, env: Map[String, String], file: Map[String, String]) -> Config
   Config(
     url: pick(flags.url, env.get("KANBAN_URL"), file.get("url"), DEFAULT_URL),
     key: pick(none, env.get("KANBAN_API_KEY"), file.get("api_key"), ""),
@@ -62,6 +57,13 @@ export def resolve(flags: Flags, env: Map[String, String], file: Map[String, Str
     json: flags.json,
   )
 end
+
+private
+
+CONFIG_FILE = ".config/agc-kanban/config.toml"
+DEFAULT_URL = "http://127.0.0.1:4580"
+ENV_NAMES = ["KANBAN_URL", "KANBAN_API_KEY", "KANBAN_AGENT", "KANBAN_BOARD"]
+FILE_NAMES = ["url", "api_key", "agent", "board"]
 
 def pick(flag: Optional[String], env: Optional[String], file: Optional[String], default: String) -> String
   return flag.unwrap! if flag.some?

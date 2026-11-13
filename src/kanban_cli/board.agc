@@ -5,17 +5,7 @@ import Settings from "settings"
 import Support from "support"
 import {Arg, Opt} from "std/option_parser"
 
-struct BoardLine
-  id: Int
-  slug: String
-  name: String
-end
-
-struct BoardAnswer
-  board: BoardLine
-end
-
-export def run(words: List[String]) -> Result[Void]
+def run(words: List[String]) -> Result[Void]
   return error("board needs a command: list, create or show") if words.empty?
 
   rest = List.drop(words, 1)
@@ -25,6 +15,18 @@ export def run(words: List[String]) -> Result[Void]
     "show" -> show(rest)
     _ -> error("unknown board command #{words[0]}")
   end
+end
+
+private
+
+struct BoardLine
+  id: Int
+  slug: String
+  name: String
+end
+
+struct BoardAnswer
+  board: BoardLine
 end
 
 def list(words: List[String]) -> Result[Void]
@@ -106,8 +108,8 @@ def show(words: List[String]) -> Result[Void]
   ok()
 end
 
-def payload(parsed: OP.Parsed, config: Settings.Config) -> Map[String, Json]
-  fields: Map[String, Json] = {"name": JSON.from(OP.string(parsed, "name"))}
+def payload(parsed: OP.Parsed, config: Settings.Config) -> Map[String, JSON.Value]
+  fields: Map[String, JSON.Value] = {"name": JSON.from(OP.string(parsed, "name"))}
   # Creating the board the caller is configured for is the common case.
   slug = OP.optional_string(parsed, "slug")
   if slug.none? and not config.board.empty?

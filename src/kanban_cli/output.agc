@@ -2,6 +2,248 @@ import HTTP from "std/http"
 import Regex from "std/regex"
 import Times from "../kanban/times"
 
+def body(response: HTTP.Response) -> String = HTTP.text(response.body, response.headers).unwrap_or("")
+
+# A connection failure is a 3 and a refused answer exits with its own code;
+# only a 2xx comes back.
+# The response whatever it says, so a command can decide what a refusal means.
+def answered(result: Result[HTTP.Response], json: Bool) -> HTTP.Response
+  if not result.ok?
+    fail(json, "UNAVAILABLE", result.message, 3)
+  end
+
+  result.unwrap!
+end
+
+def code_of(response: HTTP.Response) -> Optional[String] = error_code(response)
+
+def expect(result: Result[HTTP.Response], json: Bool) -> Result[HTTP.Response]
+  if not result.ok?
+    fail(json, "UNAVAILABLE", result.message, 3)
+  end
+
+  response = result.unwrap!
+  if response.status < 200 or response.status > 299
+    refuse(json, response)
+  end
+
+  ok(response)
+end
+
+def json_requested?(words: List[String]) -> Bool
+  for word in words
+    return false if word == "--"
+    return true if word == "--json"
+  end
+
+  false
+end
+
+def fail(json: Bool, code: String, message: String, exit_code: Int) -> Void
+  if json
+    puts(JSON.encode(JSON.from(ErrorOutput(error: Failure(code: code, message: message)))))
+  else
+    IO.warn("kanban: #{code}: #{message}")
+  end
+
+  System.exit(exit_code)
+end
+
+# Turns a refused answer into the documented exit code: 1 refused, 3 no server
+# or BUSY, 4 lost a race.
+def refuse(json: Bool, response: HTTP.Response) -> Void
+  code = error_code(response).unwrap_or("UNAVAILABLE")
+  case response.status
+    400, 404, 409 ->
+      lost = 1
+      if LOST_CODES.include?(code)
+        lost = 4
+      end
+
+      stop(json, response, code, lost)
+    401 -> stop(json, response, "UNAUTHORIZED", 3)
+    503 -> stop(json, response, "BUSY", 3)
+    _ -> stop(json, response, "UNAVAILABLE", 3)
+  end
+end
+
+def print_boards(response: HTTP.Response) -> Void
+  decoded = JSON.decode(body(response), BoardsAnswer)
+  if not decoded.ok?
+    puts(body(response))
+    return
+  end
+
+  for board in decoded.unwrap!.boards
+    puts("#{board.id}\t#{board.slug}\t#{board.name}")
+  end
+end
+
+def print_board(response: HTTP.Response) -> Void
+  decoded = JSON.decode(body(response), Snapshot)
+  if not decoded.ok?
+    puts(body(response))
+    return
+  end
+
+  snapshot = decoded.unwrap!
+  puts("#{snapshot.board.slug}\t#{snapshot.board.name}")
+  puts("columns: #{snapshot.board.columns.map { |column| column.name }.join(", ")}")
+  for card in snapshot.cards
+    puts("#{card_line(card)}")
+  end
+end
+
+def print_cards(response: HTTP.Response) -> Void
+  decoded = JSON.decode(body(response), CardLines)
+  if not decoded.ok?
+    puts(body(response))
+    return
+  end
+
+  for card in decoded.unwrap!.cards
+    puts("#{card_line(card)}")
+  end
+end
+
+# The cards of a search, best first: the card line, then the text around the match under it, the words that matched
+# between square brackets (the server marks them with U+0002 and U+0003, which `one_line` would blank, so they
+# change first).
+def print_hits(response: HTTP.Response) -> Void
+  decoded = JSON.decode(body(response), HitLines)
+  if not decoded.ok?
+    puts(body(response))
+    return
+  end
+
+  for hit in decoded.unwrap!.results
+    puts("#{card_line(hit.card)}")
+    marked = Regex.replace(Regex.replace(hit.snippet, /\x02/, "[").unwrap!, /\x03/, "]").unwrap!
+    text = squeeze(marked)
+    puts("    #{text}")
+  end
+end
+
+# One card per line, seven tab-separated fields in a fixed order, no header, so `cut -f` and `awk -F'\t'` read it:
+# id, column, claimed_by (empty when free), ready (1 or 0), priority, labels (comma-joined) and the title, last.
+# Every field goes through `one_line`, so a tab or a line break inside one becomes a space and cannot add a field or
+# a line. Unlike the text form, spaces are kept as they are: the tab is the separator, not the two spaces.
+def print_cards_tsv(response: HTTP.Response) -> Void
+  decoded = JSON.decode(body(response), TsvCards)
+  if not decoded.ok?
+    puts(body(response))
+    return
+  end
+
+  for card in decoded.unwrap!.cards
+    puts(tsv_line(card))
+  end
+end
+
+def print_card(response: HTTP.Response) -> Void
+  decoded = JSON.decode(body(response), CardAnswer)
+  if not decoded.ok?
+    puts(body(response))
+    return
+  end
+
+  puts("#{card_line(decoded.unwrap!.card)}")
+end
+
+def print_archived(response: HTTP.Response) -> Void
+  decoded = JSON.decode(body(response), ArchivedAnswer)
+  if not decoded.ok?
+    puts(body(response))
+    return
+  end
+
+  card = decoded.unwrap!.card
+  puts(one_line("archived\t#{card.id}\t#{card.title}"))
+end
+
+def print_card_detail(response: HTTP.Response) -> Void
+  decoded = JSON.decode(body(response), DetailAnswer)
+  if not decoded.ok?
+    puts(body(response))
+    return
+  end
+
+  detail = decoded.unwrap!
+  card = detail.card
+  puts(
+    card_line(
+      CardLine(id: card.id, column: card.column, claimed_by: card.claimed_by, title: card.title, labels: card.labels),
+    ),
+  )
+
+  marks = "priority: #{card.priority}  ready: #{card.ready}  done: #{card.done}"
+  if card.archived_at.some?
+    marks = "#{marks}  archived: true"
+  end
+
+  puts(marks)
+  if not card.depends_on.empty?
+    puts("depends on: #{card.depends_on.map { |id| id.to_s }.join(", ")}")
+  end
+
+  if not card.blocks.empty?
+    puts("blocks: #{card.blocks.map { |id| id.to_s }.join(", ")}")
+  end
+
+  if card.branch.some?
+    puts("branch: #{card.branch.unwrap!}")
+  end
+
+  if card.worktree.some?
+    puts("worktree: #{card.worktree.unwrap!}")
+  end
+
+  for url in card.links.unwrap_or([])
+    puts("link: #{url}")
+  end
+
+  if detail.times.some?
+    for line in Times.lines(detail.times.unwrap!)
+      puts("time: #{line}")
+    end
+  end
+
+  if not card.body.empty?
+    puts("")
+    puts(card.body)
+  end
+
+  for comment in detail.comments
+    puts("-- #{comment.author}: #{comment.body}")
+  end
+end
+
+def print_comment(response: HTTP.Response) -> Void
+  decoded = JSON.decode(body(response), CommentAnswer)
+  if not decoded.ok?
+    puts(body(response))
+    return
+  end
+
+  comment = decoded.unwrap!.comment
+  puts("comment\t#{comment.author}\t#{comment.body}")
+end
+
+def print_events(response: HTTP.Response) -> Void
+  decoded = JSON.decode(body(response), EventsAnswer)
+  if not decoded.ok?
+    puts(body(response))
+    return
+  end
+
+  for event in decoded.unwrap!.events
+    card = event.card_id.unwrap_or(0)
+    puts("#{event.id}  #{event.kind}  #{event.actor}  #{card}")
+  end
+end
+
+private
+
 LOST_CODES = ["CLAIMED", "BLOCKED", "DONE"]
 
 struct Failure
@@ -161,246 +403,6 @@ end
 struct EventsAnswer
   events: List[EventLine]
   last_event_id: Int
-end
-
-export def body(response: HTTP.Response) -> String = HTTP.text(response.body, response.headers).unwrap_or("")
-
-# A connection failure is a 3 and a refused answer exits with its own code;
-# only a 2xx comes back.
-# The response whatever it says, so a command can decide what a refusal means.
-export def answered(result: Result[HTTP.Response], json: Bool) -> HTTP.Response
-  if not result.ok?
-    fail(json, "UNAVAILABLE", result.message, 3)
-  end
-
-  result.unwrap!
-end
-
-export def code_of(response: HTTP.Response) -> Optional[String] = error_code(response)
-
-export def expect(result: Result[HTTP.Response], json: Bool) -> Result[HTTP.Response]
-  if not result.ok?
-    fail(json, "UNAVAILABLE", result.message, 3)
-  end
-
-  response = result.unwrap!
-  if response.status < 200 or response.status > 299
-    refuse(json, response)
-  end
-
-  ok(response)
-end
-
-export def json_requested?(words: List[String]) -> Bool
-  for word in words
-    return false if word == "--"
-    return true if word == "--json"
-  end
-
-  false
-end
-
-export def fail(json: Bool, code: String, message: String, exit_code: Int) -> Void
-  if json
-    puts(JSON.encode(JSON.from(ErrorOutput(error: Failure(code: code, message: message)))))
-  else
-    IO.warn("kanban: #{code}: #{message}")
-  end
-
-  System.exit(exit_code)
-end
-
-# Turns a refused answer into the documented exit code: 1 refused, 3 no server
-# or BUSY, 4 lost a race.
-export def refuse(json: Bool, response: HTTP.Response) -> Void
-  code = error_code(response).unwrap_or("UNAVAILABLE")
-  case response.status
-    400, 404, 409 ->
-      lost = 1
-      if LOST_CODES.include?(code)
-        lost = 4
-      end
-
-      stop(json, response, code, lost)
-    401 -> stop(json, response, "UNAUTHORIZED", 3)
-    503 -> stop(json, response, "BUSY", 3)
-    _ -> stop(json, response, "UNAVAILABLE", 3)
-  end
-end
-
-export def print_boards(response: HTTP.Response) -> Void
-  decoded = JSON.decode(body(response), BoardsAnswer)
-  if not decoded.ok?
-    puts(body(response))
-    return
-  end
-
-  for board in decoded.unwrap!.boards
-    puts("#{board.id}\t#{board.slug}\t#{board.name}")
-  end
-end
-
-export def print_board(response: HTTP.Response) -> Void
-  decoded = JSON.decode(body(response), Snapshot)
-  if not decoded.ok?
-    puts(body(response))
-    return
-  end
-
-  snapshot = decoded.unwrap!
-  puts("#{snapshot.board.slug}\t#{snapshot.board.name}")
-  puts("columns: #{snapshot.board.columns.map { |column| column.name }.join(", ")}")
-  for card in snapshot.cards
-    puts("#{card_line(card)}")
-  end
-end
-
-export def print_cards(response: HTTP.Response) -> Void
-  decoded = JSON.decode(body(response), CardLines)
-  if not decoded.ok?
-    puts(body(response))
-    return
-  end
-
-  for card in decoded.unwrap!.cards
-    puts("#{card_line(card)}")
-  end
-end
-
-# The cards of a search, best first: the card line, then the text around the match under it, the words that matched
-# between square brackets (the server marks them with U+0002 and U+0003, which `one_line` would blank, so they
-# change first).
-export def print_hits(response: HTTP.Response) -> Void
-  decoded = JSON.decode(body(response), HitLines)
-  if not decoded.ok?
-    puts(body(response))
-    return
-  end
-
-  for hit in decoded.unwrap!.results
-    puts("#{card_line(hit.card)}")
-    marked = Regex.replace(Regex.replace(hit.snippet, /\x02/, "[").unwrap!, /\x03/, "]").unwrap!
-    text = squeeze(marked)
-    puts("    #{text}")
-  end
-end
-
-# One card per line, seven tab-separated fields in a fixed order, no header, so `cut -f` and `awk -F'\t'` read it:
-# id, column, claimed_by (empty when free), ready (1 or 0), priority, labels (comma-joined) and the title, last.
-# Every field goes through `one_line`, so a tab or a line break inside one becomes a space and cannot add a field or
-# a line. Unlike the text form, spaces are kept as they are: the tab is the separator, not the two spaces.
-export def print_cards_tsv(response: HTTP.Response) -> Void
-  decoded = JSON.decode(body(response), TsvCards)
-  if not decoded.ok?
-    puts(body(response))
-    return
-  end
-
-  for card in decoded.unwrap!.cards
-    puts(tsv_line(card))
-  end
-end
-
-export def print_card(response: HTTP.Response) -> Void
-  decoded = JSON.decode(body(response), CardAnswer)
-  if not decoded.ok?
-    puts(body(response))
-    return
-  end
-
-  puts("#{card_line(decoded.unwrap!.card)}")
-end
-
-export def print_archived(response: HTTP.Response) -> Void
-  decoded = JSON.decode(body(response), ArchivedAnswer)
-  if not decoded.ok?
-    puts(body(response))
-    return
-  end
-
-  card = decoded.unwrap!.card
-  puts(one_line("archived\t#{card.id}\t#{card.title}"))
-end
-
-export def print_card_detail(response: HTTP.Response) -> Void
-  decoded = JSON.decode(body(response), DetailAnswer)
-  if not decoded.ok?
-    puts(body(response))
-    return
-  end
-
-  detail = decoded.unwrap!
-  card = detail.card
-  puts(
-    card_line(
-      CardLine(id: card.id, column: card.column, claimed_by: card.claimed_by, title: card.title, labels: card.labels),
-    ),
-  )
-
-  marks = "priority: #{card.priority}  ready: #{card.ready}  done: #{card.done}"
-  if card.archived_at.some?
-    marks = "#{marks}  archived: true"
-  end
-
-  puts(marks)
-  if not card.depends_on.empty?
-    puts("depends on: #{card.depends_on.map { |id| id.to_s }.join(", ")}")
-  end
-
-  if not card.blocks.empty?
-    puts("blocks: #{card.blocks.map { |id| id.to_s }.join(", ")}")
-  end
-
-  if card.branch.some?
-    puts("branch: #{card.branch.unwrap!}")
-  end
-
-  if card.worktree.some?
-    puts("worktree: #{card.worktree.unwrap!}")
-  end
-
-  for url in card.links.unwrap_or([])
-    puts("link: #{url}")
-  end
-
-  if detail.times.some?
-    for line in Times.lines(detail.times.unwrap!)
-      puts("time: #{line}")
-    end
-  end
-
-  if not card.body.empty?
-    puts("")
-    puts(card.body)
-  end
-
-  for comment in detail.comments
-    puts("-- #{comment.author}: #{comment.body}")
-  end
-end
-
-export def print_comment(response: HTTP.Response) -> Void
-  decoded = JSON.decode(body(response), CommentAnswer)
-  if not decoded.ok?
-    puts(body(response))
-    return
-  end
-
-  comment = decoded.unwrap!.comment
-  puts("comment\t#{comment.author}\t#{comment.body}")
-end
-
-export def print_events(response: HTTP.Response) -> Void
-  decoded = JSON.decode(body(response), EventsAnswer)
-  if not decoded.ok?
-    puts(body(response))
-    return
-  end
-
-  for event in decoded.unwrap!.events
-    card = event.card_id.unwrap_or(0)
-    puts("#{event.id}  #{event.kind}  #{event.actor}  #{card}")
-  end
 end
 
 # A card is always one line. The server takes any title, and a newline in it would print a second, forged

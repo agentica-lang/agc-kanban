@@ -3,17 +3,7 @@ import Regex from "std/regex"
 import Database from "repo/database"
 import Times from "times"
 
-# A link is untrusted text shown on the web and printed to terminals: http(s) only, a host with no credentials (no `@`
-# before the path), printable ASCII only (an IDN host as punycode, a path percent-encoded) and none of the characters
-# that end a URL in HTML or Markdown (quotes, angle brackets, backslash and the like), so it stays one plain URL
-# wherever it is printed. ASCII only, so LINK_MAX counts bytes. A card holds at most LINKS_MAX links, and a request
-# names at most LINKS_MAX to add and LINKS_MAX to remove, repeats included, checked before the transaction so that a
-# huge list never reaches `merged`, which is quadratic.
-LINK_MAX = 2048
-LINKS_MAX = 50
-SEARCH_LIMIT_MAX = 100
-
-export struct Card
+struct Card
   id: Int
   board: String
   column: String
@@ -42,7 +32,7 @@ export struct Card
   version: Int
 end
 
-export struct Comment
+struct Comment
   id: Int
   card_id: Int
   author: String
@@ -50,13 +40,13 @@ export struct Comment
   created_at: Int
 end
 
-export struct Detail
+struct Detail
   card: Card
   comments: List[Comment]
   times: Times.Times
 end
 
-export struct Create
+struct Create
   board: String
   title: String
   body: String
@@ -68,7 +58,7 @@ export struct Create
   links: List[String] = []
 end
 
-export struct Filters
+struct Filters
   column: Optional[String]
   ready: Optional[Bool]
   claimed_by: Optional[String]
@@ -76,7 +66,7 @@ export struct Filters
   done: Optional[Bool]
 end
 
-export struct Update
+struct Update
   id: Int
   title: Optional[String]
   body: Optional[String]
@@ -94,12 +84,12 @@ export struct Update
 end
 
 # A card found by the search, with the text around the match: the words that matched sit between U+0002 and U+0003.
-export struct Hit
+struct Hit
   card: Card
   snippet: String
 end
 
-export def create(pool: Database.Pool, input: Create) -> Result[Card]
+def create(pool: Database.Pool, input: Create) -> Result[Card]
   return error("INVALID:board") if input.board.empty?
   return error("INVALID:title") if input.title.strip.empty?
   return error("INVALID:priority") if input.priority < 0 or input.priority > 4
@@ -119,7 +109,7 @@ export def create(pool: Database.Pool, input: Create) -> Result[Card]
   Database.with_connection(pool) do |conn| Db.transaction(conn) do |tx| insert(tx, input) end end
 end
 
-export def show(pool: Database.Pool, id: Int) -> Result[Detail]
+def show(pool: Database.Pool, id: Int) -> Result[Detail]
   return error("INVALID:id") if id <= 0
 
   Database.with_connection(pool) do |conn|
@@ -149,13 +139,13 @@ export def show(pool: Database.Pool, id: Int) -> Result[Detail]
   end
 end
 
-export def list(pool: Database.Pool, board: String, filters: Filters) -> Result[List[Card]]
+def list(pool: Database.Pool, board: String, filters: Filters) -> Result[List[Card]]
   return error("INVALID:board") if board.empty?
 
   Database.with_connection(pool) do |conn| Db.transaction(conn) do |tx| list_open(tx, board, filters) end end
 end
 
-export def list_open(conn: Db.Connection, board: String, filters: Filters) -> Result[List[Card]]
+def list_open(conn: Db.Connection, board: String, filters: Filters) -> Result[List[Card]]
   found = try Db.query(
     conn,
     "select id from boards where slug = ? or cast(id as text) = ? order by case when slug = ? then 0 else 1 end limit 1",
@@ -203,7 +193,7 @@ end
 # done ones only with `all`. Each word of the query is quoted and takes a `*`, so that `logi` finds `login` while the
 # user types and no FTS operator (`"`, `*`, `-`, `AND`, `NEAR`, a colon) in the input is ever read as syntax. A query
 # with no word in it matches nothing.
-export def search(pool: Database.Pool, board: String, query: String, all: Bool, limit: Int) -> Result[List[Hit]]
+def search(pool: Database.Pool, board: String, query: String, all: Bool, limit: Int) -> Result[List[Hit]]
   return error("INVALID:board") if board.empty?
   return error("INVALID:limit") if limit < 1 or limit > SEARCH_LIMIT_MAX
 
@@ -212,7 +202,7 @@ export def search(pool: Database.Pool, board: String, query: String, all: Bool, 
   end
 end
 
-export def update(pool: Database.Pool, input: Update) -> Result[Card]
+def update(pool: Database.Pool, input: Update) -> Result[Card]
   return error("INVALID:id") if input.id <= 0
   return error("INVALID:title") if input.title.some? and input.title.unwrap!.strip.empty?
   if input.priority.some? and (input.priority.unwrap! < 0 or input.priority.unwrap! > 4)
@@ -236,7 +226,7 @@ end
 
 # The ids of the cards `id` depends on that are not done yet (in a column that is not a done column), lowest first.
 # A card that was archived no longer blocks: it left the board, so nobody can finish it.
-export def open_blockers(conn: Db.Connection, id: Int) -> Result[List[Int]]
+def open_blockers(conn: Db.Connection, id: Int) -> Result[List[Int]]
   rows = try Db.query(
     conn,
     "select dep.id from card_deps d join cards dep on dep.id = d.depends_on_id join columns col on col.id = dep.column_id where d.card_id = ? and dep.archived_at is null and col.done = 0 order by dep.id",
@@ -248,7 +238,7 @@ end
 
 # Of `ids`, the cards that are not done yet, once each, in the order given: what a new card in the done column would
 # wait for.
-export def open_among(conn: Db.Connection, ids: List[Int]) -> Result[List[Int]]
+def open_among(conn: Db.Connection, ids: List[Int]) -> Result[List[Int]]
   open: List[Int] = []
   for id in ids
     rows = try Db.query(
@@ -267,10 +257,23 @@ end
 
 # A card that is not archived. An archived card is `NOT_FOUND` here, so every write refuses it as it refuses a
 # missing one.
-export def load_at(conn: Db.Connection, id: Int, now: Int) -> Result[Card] = read_card(conn, id, now, false)
+def load_at(conn: Db.Connection, id: Int, now: Int) -> Result[Card] = read_card(conn, id, now, false)
 
 # A card, archived or not: for `show` and for the archive itself.
-export def load_any_at(conn: Db.Connection, id: Int, now: Int) -> Result[Card] = read_card(conn, id, now, true)
+def load_any_at(conn: Db.Connection, id: Int, now: Int) -> Result[Card] = read_card(conn, id, now, true)
+
+private
+
+# A link is untrusted text shown on the web and printed to terminals: http(s) only, a host with no credentials (no `@`
+# before the path), printable ASCII only (an IDN host as punycode, a path percent-encoded) and none of the characters
+# that end a URL in HTML or Markdown (quotes, angle brackets, backslash and the like), so it stays one plain URL
+# wherever it is printed. ASCII only, so LINK_MAX counts bytes. A card holds at most LINKS_MAX links, and a request
+# names at most LINKS_MAX to add and LINKS_MAX to remove, repeats included, checked before the transaction so that a
+# huge list never reaches `merged`, which is quadratic.
+LINK_MAX = 2048
+
+LINKS_MAX = 50
+SEARCH_LIMIT_MAX = 100
 
 def read_card(conn: Db.Connection, id: Int, now: Int, archived: Bool) -> Result[Card]
   rows = try Db.query(

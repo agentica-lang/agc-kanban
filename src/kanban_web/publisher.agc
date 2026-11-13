@@ -10,16 +10,16 @@ import Database from "../kanban/repo/database"
 import Events from "../kanban/events"
 import SendFailures from "send_failures"
 
-export LAST = "last"
-BATCH = 100
+LAST = "last"
+
 # The failures of one event that make it a poison event. A bad `data` row is a different case: the read returns an
 # error, which `flush` logs, and the cursor stays, so the live feed stops at that row until it is fixed (a client
 # still gets the event on a reload). Only the failure of a send is counted.
-export MAX_FAILURES = 5
+MAX_FAILURES = 5
 
 ## The state of the publisher. `send` is the seam of the tests. `bad` and `failures` are the event that failed last
 ## and its count in a row.
-export struct Publisher
+struct Publisher
   pool: Database.Pool
   hub: Channels.Hub
   cursor: ATS[String, Int]
@@ -29,7 +29,7 @@ export struct Publisher
 end
 
 ## A publisher that broadcasts on `hub`.
-export def new(pool: Database.Pool, hub: Channels.Hub, cursor: ATS[String, Int]) -> Publisher
+def new(pool: Database.Pool, hub: Channels.Hub, cursor: ATS[String, Int]) -> Publisher
   Publisher(pool: pool, hub: hub, cursor: cursor, send: &broadcast, bad: 0, failures: 0)
 end
 
@@ -37,7 +37,7 @@ end
 ## unset (replaying the journal from 0 would flood the clients), and the next message tries again. A seed that
 ## succeeds late starts at the newest event, so the events written while the read failed are not broadcast live: a
 ## reload shows them.
-export def seeded(job: Publisher) -> Publisher
+def seeded(job: Publisher) -> Publisher
   return job if job.cursor.get(LAST).ok?
 
   newest = Events.latest_id(job.pool)
@@ -52,7 +52,7 @@ end
 
 ## Sends the events after the cursor and moves it. A failed read keeps it, so the next tick tries again. A send that
 ## crashes stops the batch and keeps the cursor on that event: the next tick tries it again, until MAX_FAILURES.
-export def flush(job: Publisher) -> Publisher
+def flush(job: Publisher) -> Publisher
   last = job.cursor.get(LAST)
   return job if not last.ok?
 
@@ -85,6 +85,10 @@ export def flush(job: Publisher) -> Publisher
   state
 end
 
+private
+
+BATCH = 100
+
 # A failed broadcast is logged and dropped, and the cursor moves on: a client can miss that event in its feed until
 # it reloads. The journal still has it, and the board itself is fetched again after each event.
 def broadcast(hub: Channels.Hub, item: Events.Published) -> Result[Void]
@@ -96,7 +100,7 @@ def broadcast(hub: Channels.Hub, item: Events.Published) -> Result[Void]
   ok()
 end
 
-def payload(event: Events.Event) -> Json
+def payload(event: Events.Event) -> JSON.Value
   JSON.object({
     "type": JSON.from(event.kind),
     "event_id": JSON.from(event.id),

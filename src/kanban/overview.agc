@@ -5,13 +5,13 @@
 import Db from "pkg/db/db"
 import Database from "repo/database"
 
-export struct ColumnCount
+struct ColumnCount
   name: String
   done: Bool
   cards: Int
 end
 
-export struct Overview
+struct Overview
   id: Int
   slug: String
   name: String
@@ -23,9 +23,11 @@ end
 
 ## The boards in creation order. `now` decides which claims still hold: a claim whose lease ran out is not an active
 ## agent. The cards counted are the ones that are not archived, as on the board page.
-export def list(pool: Database.Pool, now: Int) -> Result[List[Overview]]
+def list(pool: Database.Pool, now: Int) -> Result[List[Overview]]
   Database.with_connection(pool) do |conn| Db.transaction(conn) do |tx| read(tx, now) end end
 end
+
+private
 
 def read(conn: Db.Connection, now: Int) -> Result[List[Overview]]
   # The last event comes from the index of `events` (board_id, id): one lookup per board, no scan of the table.

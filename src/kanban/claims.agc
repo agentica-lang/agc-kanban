@@ -3,7 +3,7 @@ import Regex from "std/regex"
 import Cards from "cards"
 import Database from "repo/database"
 
-export struct Next
+struct Next
   board: String
   column: Optional[String]
   label: Optional[String]
@@ -11,12 +11,7 @@ export struct Next
   lease_minutes: Int
 end
 
-struct Destination
-  column_id: Int
-  position: Int
-end
-
-export def claim(pool: Database.Pool, id: Int, actor: String, lease_minutes: Int) -> Result[Cards.Card]
+def claim(pool: Database.Pool, id: Int, actor: String, lease_minutes: Int) -> Result[Cards.Card]
   return error("INVALID:id") if id <= 0
   return error("INVALID:agent") if not Regex.match?(actor, /^[A-Za-z0-9._@\/-]{1,64}$/)
   return error("INVALID:lease") if lease_minutes < 0 or lease_minutes > 1000000000
@@ -24,12 +19,19 @@ export def claim(pool: Database.Pool, id: Int, actor: String, lease_minutes: Int
   Database.with_connection(pool) do |conn| Db.transaction(conn) do |tx| acquire(tx, id, actor, lease_minutes) end end
 end
 
-export def claim_next(pool: Database.Pool, input: Next) -> Result[Cards.Card]
+def claim_next(pool: Database.Pool, input: Next) -> Result[Cards.Card]
   return error("INVALID:board") if input.board.empty?
   return error("INVALID:agent") if not Regex.match?(input.actor, /^[A-Za-z0-9._@\/-]{1,64}$/)
   return error("INVALID:lease") if input.lease_minutes < 0 or input.lease_minutes > 1000000000
 
   Database.with_connection(pool) do |conn| Db.transaction(conn) do |tx| next_open(tx, input) end end
+end
+
+private
+
+struct Destination
+  column_id: Int
+  position: Int
 end
 
 def next_open(conn: Db.Connection, input: Next) -> Result[Cards.Card]

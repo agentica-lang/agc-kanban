@@ -7,27 +7,27 @@ import AssetNames from "asset_names"
 import Overview from "../kanban/overview"
 import Claimer from "claimer"
 
+## The login form, with a `note` about the last try ("" shows none).
+def login(note: String) -> String = layout("Sign in", "login", "", form(note))
+
+## The home page: what the app is, then one card per board. It is drawn here, not by the script, so a link is a real
+## link and the page needs no request after it. `now` is the time that "5 min ago" counts from.
+def boards(items: List[Overview.Overview], now: Int) -> String = layout("Boards", "boards", "", home(items, now))
+
+## The home page when the store cannot be read.
+def boards_unavailable() -> String = layout("Boards", "boards", "", unavailable())
+
+## The page of one board; the script reads `slug` from the page.
+def board(slug: String) -> String = layout(slug, "board", slug, "")
+
+private
+
 # The views that the script draws (application.js): only they get `#app` and its loading text.
 SCRIPTED_VIEWS = ["board"]
 
 MINUTE = 60000
 HOUR = 3600000
 DAY = 86400000
-
-## The login form, with a `note` about the last try ("" shows none).
-export def login(note: String) -> String = layout("Sign in", "login", "", form(note))
-
-## The home page: what the app is, then one card per board. It is drawn here, not by the script, so a link is a real
-## link and the page needs no request after it. `now` is the time that "5 min ago" counts from.
-export def boards(items: List[Overview.Overview], now: Int) -> String
-  layout("Boards", "boards", "", home(items, now))
-end
-
-## The home page when the store cannot be read.
-export def boards_unavailable() -> String = layout("Boards", "boards", "", unavailable())
-
-## The page of one board; the script reads `slug` from the page.
-export def board(slug: String) -> String = layout(slug, "board", slug, "")
 
 def unavailable() -> String
   <<~EAG

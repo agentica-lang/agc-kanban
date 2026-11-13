@@ -7,7 +7,7 @@ import Support from "support"
 import {Pair} from "std/uri"
 import {Kind, Opt} from "std/option_parser"
 
-export def run(words: List[String]) -> Result[Void]
+def run(words: List[String]) -> Result[Void]
   parser = OP.new(
     "kanban events",
     "Read the board journal",

@@ -1,30 +1,30 @@
 import Db from "pkg/db/db"
 import Database from "repo/database"
 
-export struct Event
+struct Event
   id: Int
   board_id: Int
   card_id: Optional[Int]
   kind: String
   actor: String
-  data: Json
+  data: JSON.Value
   created_at: Int
 end
 
-export struct Page
+struct Page
   events: List[Event]
   last_event_id: Int
 end
 
 ## An event with the slug of its board, which names the stream that the live web broadcasts it on.
-export struct Published
+struct Published
   event: Event
   slug: String
 end
 
 ## The events of a board. Forward: the ones after `after`, oldest first. With `before`: the ones before that id, newest
 ## first, and `last_event_id` is the oldest id read, the `before` of the next page. `before` and `after` do not mix.
-export def list(
+def list(
   pool: Database.Pool,
   board: String,
   after: Int,
@@ -44,7 +44,7 @@ export def list(
 end
 
 ## The id of the newest event, 0 for none: where the live broadcast starts, so that history is not replayed.
-export def latest_id(pool: Database.Pool) -> Result[Int]
+def latest_id(pool: Database.Pool) -> Result[Int]
   Database.with_connection(pool) do |conn|
     rows = try Db.query(conn, "select coalesce(max(id), 0) as id from events", [])
     ok(int_of(rows[0], "id"))
@@ -52,7 +52,7 @@ export def latest_id(pool: Database.Pool) -> Result[Int]
 end
 
 ## At most `limit` events after `last`, oldest first, for any board.
-export def published_after(pool: Database.Pool, last: Int, limit: Int) -> Result[List[Published]]
+def published_after(pool: Database.Pool, last: Int, limit: Int) -> Result[List[Published]]
   Database.with_connection(pool) do |conn|
     rows = try Db.query(
       conn,
@@ -68,6 +68,8 @@ export def published_after(pool: Database.Pool, last: Int, limit: Int) -> Result
     ok(published)
   end
 end
+
+private
 
 def read(
   conn: Db.Connection,

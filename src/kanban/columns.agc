@@ -4,7 +4,7 @@ import Boards from "boards"
 import Cards from "cards"
 import Database from "repo/database"
 
-export struct Add
+struct Add
   board: String
   name: String
   position: Optional[Int]
@@ -13,7 +13,7 @@ export struct Add
   actor: String
 end
 
-export struct Update
+struct Update
   id: Int
   name: Optional[String]
   position: Optional[Int]
@@ -23,22 +23,12 @@ export struct Update
   force: Bool = false
 end
 
-# The data of a column.updated event that a forced done flag made: the column and the `forced` mark.
-struct ForcedColumn
-  id: Int
-  name: String
-  position: Int
-  done: Bool
-  wip_limit: Optional[Int]
-  forced: Bool
-end
-
-export struct Remove
+struct Remove
   id: Int
   actor: String
 end
 
-export def add(pool: Database.Pool, input: Add) -> Result[Boards.Column]
+def add(pool: Database.Pool, input: Add) -> Result[Boards.Column]
   return error("INVALID:board") if input.board.empty?
   return error("INVALID:name") if input.name.strip.empty?
   return error("INVALID:position") if input.position.some? and input.position.unwrap! < 0
@@ -48,7 +38,7 @@ export def add(pool: Database.Pool, input: Add) -> Result[Boards.Column]
   Database.with_connection(pool) do |conn| Db.transaction(conn) do |tx| insert(tx, input) end end
 end
 
-export def update(pool: Database.Pool, input: Update) -> Result[Boards.Column]
+def update(pool: Database.Pool, input: Update) -> Result[Boards.Column]
   return error("INVALID:id") if input.id <= 0
   return error("INVALID:name") if input.name.some? and input.name.unwrap!.strip.empty?
   return error("INVALID:position") if input.position.some? and input.position.unwrap! < 0
@@ -58,11 +48,23 @@ export def update(pool: Database.Pool, input: Update) -> Result[Boards.Column]
   Database.with_connection(pool) do |conn| Db.transaction(conn) do |tx| update_open(tx, input) end end
 end
 
-export def remove(pool: Database.Pool, input: Remove) -> Result[Void]
+def remove(pool: Database.Pool, input: Remove) -> Result[Void]
   return error("INVALID:id") if input.id <= 0
   return error("INVALID:agent") if not Regex.match?(input.actor, /^[A-Za-z0-9._@\/-]{1,64}$/)
 
   Database.with_connection(pool) do |conn| Db.transaction(conn) do |tx| remove_open(tx, input) end end
+end
+
+private
+
+# The data of a column.updated event that a forced done flag made: the column and the `forced` mark.
+struct ForcedColumn
+  id: Int
+  name: String
+  position: Int
+  done: Bool
+  wip_limit: Optional[Int]
+  forced: Bool
 end
 
 def insert(conn: Db.Connection, input: Add) -> Result[Boards.Column]

@@ -2,23 +2,19 @@ import Bond from "pkg/bond/bond"
 import Failure from "failure"
 import Regex from "std/regex"
 
-SESSION_USER = "user"
-OWNER = "owner"
-SESSION_LABEL = "kanban session v1"
-
 ## The signing key of the session cookie, derived from the API key: one secret, and a new API key signs everyone out.
-export def session_secret(key: String) -> String = OpenSSL.HMAC.sha256_hexdigest(key.bytes, SESSION_LABEL.bytes)
+def session_secret(key: String) -> String = OpenSSL.HMAC.sha256_hexdigest(key.bytes, SESSION_LABEL.bytes)
 
 ## The API key given on the login form is the right one.
-export def key_matches?(given: String, key: String) -> Bool = OpenSSL.HMAC.secure_compare(given.bytes, key.bytes)
+def key_matches?(given: String, key: String) -> Bool = OpenSSL.HMAC.secure_compare(given.bytes, key.bytes)
 
 ## The connection carries a signed session that `sign_in` made.
-export def signed_in?(conn: Bond.Conn) -> Bool = Bond.get_session(conn, SESSION_USER).unwrap_or("") == OWNER
+def signed_in?(conn: Bond.Conn) -> Bool = Bond.get_session(conn, SESSION_USER).unwrap_or("") == OWNER
 
 ## The connection with a fresh session of the owner (nothing of an earlier session is kept).
-export def sign_in(conn: Bond.Conn) -> Bond.Conn = Bond.set_session(Bond.clear_session(conn), SESSION_USER, OWNER)
+def sign_in(conn: Bond.Conn) -> Bond.Conn = Bond.set_session(Bond.clear_session(conn), SESSION_USER, OWNER)
 
-export def authorize(conn: Bond.Conn, key: String) -> Result[Bond.Conn]
+def authorize(conn: Bond.Conn, key: String) -> Result[Bond.Conn]
   return ok(conn) if public?(conn.path)
   return ok(page_access(conn)) if not conn.path.start_with?("/api/")
 
@@ -38,6 +34,12 @@ export def authorize(conn: Bond.Conn, key: String) -> Result[Bond.Conn]
 
   ok(conn)
 end
+
+private
+
+SESSION_USER = "user"
+OWNER = "owner"
+SESSION_LABEL = "kanban session v1"
 
 # Public by name, never by prefix (but the assets folder): a page added later must opt in explicitly. `/cable` checks
 # the session itself, in `connect`, as a redirect on the handshake would make the client retry in a loop.

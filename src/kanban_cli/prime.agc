@@ -1,9 +1,11 @@
 # The few rules an agent needs before its first command. The long version is
 # the kanban-cli skill; this one fits in a prompt.
-export def run() -> Result[Void]
+def run() -> Result[Void]
   puts(rules())
   ok()
 end
+
+private
 
 def rules() -> String
   (

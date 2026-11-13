@@ -4,7 +4,7 @@ import Events from "../../kanban/events"
 import Failure from "../failure"
 import Params from "../params"
 
-export def index(conn: Bond.Conn, pool: Optional[Database.Pool]) -> Result[Bond.Conn]
+def index(conn: Bond.Conn, pool: Optional[Database.Pool]) -> Result[Bond.Conn]
   return ok(Failure.reject(conn, 503, "BUSY", "database unavailable")) if not pool.some?
 
   params = Bond.query_params(conn)
@@ -51,7 +51,9 @@ export def index(conn: Bond.Conn, pool: Optional[Database.Pool]) -> Result[Bond.
   )
 end
 
-def event_json(entry: Events.Event) -> Json
+private
+
+def event_json(entry: Events.Event) -> JSON.Value
   JSON.object({
     "id": JSON.from(entry.id),
     "board_id": JSON.from(entry.board_id),

@@ -1,27 +1,25 @@
 import HTTP from "std/http"
 import Settings from "settings"
 
-export struct Client
+struct Client
   url: String
   key: String
   agent: String
 end
 
-export def from(config: Settings.Config) -> Client = Client(url: config.url, key: config.key, agent: config.agent)
+def from(config: Settings.Config) -> Client = Client(url: config.url, key: config.key, agent: config.agent)
 
-export def get(client: Client, path: String) -> Result[HTTP.Response] = call(client, "GET", path, "")
+def get(client: Client, path: String) -> Result[HTTP.Response] = call(client, "GET", path, "")
 
-export def post(client: Client, path: String, body: String) -> Result[HTTP.Response] = call(client, "POST", path, body)
+def post(client: Client, path: String, body: String) -> Result[HTTP.Response] = call(client, "POST", path, body)
 
-export def patch(client: Client, path: String, body: String) -> Result[HTTP.Response]
-  call(client, "PATCH", path, body)
-end
+def patch(client: Client, path: String, body: String) -> Result[HTTP.Response] = call(client, "PATCH", path, body)
 
-export def delete(client: Client, path: String) -> Result[HTTP.Response] = call(client, "DELETE", path, "")
+def delete(client: Client, path: String) -> Result[HTTP.Response] = call(client, "DELETE", path, "")
 
 # Retries a BUSY answer three times (200, 400, 800 ms). A failed write is not
 # repeated: the request may have arrived, and only GET is safe to send twice.
-export def call(client: Client, method: String, path: String, body: String) -> Result[HTTP.Response]
+def call(client: Client, method: String, path: String, body: String) -> Result[HTTP.Response]
   result = request_once(client, method, path, body)
   for delay in [200, 400, 800]
     if result.ok?
@@ -36,6 +34,8 @@ export def call(client: Client, method: String, path: String, body: String) -> R
 
   result
 end
+
+private
 
 def request_once(client: Client, method: String, path: String, body: String) -> Result[HTTP.Response]
   handle = try HTTP.client(HTTP.ClientOptions(timeout_ms: 5000))

@@ -11,7 +11,7 @@ import Health from "health"
 import Pages from "controllers/pages"
 import Routes from "routes"
 
-export def install(app: Bond.App, pool: Optional[Database.Pool], lease_minutes: Int, key: String) -> Bond.App
+def install(app: Bond.App, pool: Optional[Database.Pool], lease_minutes: Int, key: String) -> Bond.App
   (
     app
     |> Bond.get(Routes.ROOT, &Pages.root)

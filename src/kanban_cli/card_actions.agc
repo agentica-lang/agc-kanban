@@ -6,15 +6,7 @@ import Settings from "settings"
 import Support from "support"
 import {Arg, Kind, Opt} from "std/option_parser"
 
-struct FreeCard
-  claimed_by: Optional[String]
-end
-
-struct FreeAnswer
-  card: FreeCard
-end
-
-export def run(words: List[String]) -> Result[Void]
+def run(words: List[String]) -> Result[Void]
   return error("card needs a command") if words.empty?
 
   rest = List.drop(words, 1)
@@ -29,6 +21,16 @@ export def run(words: List[String]) -> Result[Void]
     "dep" -> dep(rest)
     _ -> error("unknown card action #{words[0]}")
   end
+end
+
+private
+
+struct FreeCard
+  claimed_by: Optional[String]
+end
+
+struct FreeAnswer
+  card: FreeCard
 end
 
 def claim(words: List[String]) -> Result[Void]
@@ -59,7 +61,7 @@ def next(words: List[String]) -> Result[Void]
   config = try Settings.load(Settings.read_flags(parsed))
   Support.require_agent(config)
   board = Support.board_of(config)
-  fields: Map[String, Json] = {}
+  fields: Map[String, JSON.Value] = {}
   fields = Support.put(fields, "column", OP.optional_string(parsed, "column"))
   fields = Support.put(fields, "label", OP.optional_string(parsed, "label"))
   response = Output.expect(
@@ -84,7 +86,7 @@ def release(words: List[String]) -> Result[Void]
   parsed = try OP.parse(parser, words)
   config = try Settings.load(Settings.read_flags(parsed))
   Support.require_agent(config)
-  fields: Map[String, Json] = {}
+  fields: Map[String, JSON.Value] = {}
   fields = Support.put(fields, "column", OP.optional_string(parsed, "to"))
   fields = Support.force(fields, parsed)
   client = Client.from(config)
@@ -140,7 +142,7 @@ def move(words: List[String]) -> Result[Void]
   parsed = try OP.parse(parser, words)
   config = try Settings.load(Settings.read_flags(parsed))
   Support.require_agent(config)
-  fields: Map[String, Json] = {"column": JSON.from(OP.string(parsed, "column"))}
+  fields: Map[String, JSON.Value] = {"column": JSON.from(OP.string(parsed, "column"))}
   position = OP.optional_int(parsed, "position")
   if position.some?
     fields = fields.put("position", JSON.from(position.unwrap!))
@@ -169,7 +171,7 @@ def done(words: List[String]) -> Result[Void]
   parsed = try OP.parse(parser, words)
   config = try Settings.load(Settings.read_flags(parsed))
   Support.require_agent(config)
-  fields: Map[String, Json] = {}
+  fields: Map[String, JSON.Value] = {}
   fields = Support.force(fields, parsed)
   response = Output.expect(
     Client.post(Client.from(config), "/api/cards/#{OP.int(parsed, "id")}/done", JSON.encode(JSON.object(fields))),
@@ -195,7 +197,7 @@ def archive(words: List[String]) -> Result[Void]
   parsed = try OP.parse(parser, words)
   config = try Settings.load(Settings.read_flags(parsed))
   Support.require_agent(config)
-  fields: Map[String, Json] = {}
+  fields: Map[String, JSON.Value] = {}
   fields = Support.force(fields, parsed)
   response = Output.expect(
     Client.post(Client.from(config), "/api/cards/#{OP.int(parsed, "id")}/archive", JSON.encode(JSON.object(fields))),
@@ -236,7 +238,7 @@ def comment(words: List[String]) -> Result[Void]
     Output.fail(config.json, "USAGE", "a comment needs text or --file", 2)
   end
 
-  fields: Map[String, Json] = {"body": JSON.from(body.unwrap!)}
+  fields: Map[String, JSON.Value] = {"body": JSON.from(body.unwrap!)}
   response = Output.expect(
     Client.post(Client.from(config), "/api/cards/#{OP.int(parsed, "id")}/comments", JSON.encode(JSON.object(fields))),
     config.json,
@@ -275,7 +277,7 @@ def dep_add(words: List[String]) -> Result[Void]
   parsed = try OP.parse(parser, words)
   config = try Settings.load(Settings.read_flags(parsed))
   Support.require_agent(config)
-  fields: Map[String, Json] = {"depends_on": JSON.from(OP.int(parsed, "depends-on"))}
+  fields: Map[String, JSON.Value] = {"depends_on": JSON.from(OP.int(parsed, "depends-on"))}
   body = JSON.encode(JSON.object(Support.force(fields, parsed)))
   response = Output.expect(
     Client.post(Client.from(config), "/api/cards/#{OP.int(parsed, "id")}/deps", body),

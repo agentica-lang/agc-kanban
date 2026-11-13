@@ -4,24 +4,7 @@ import Client from "client"
 import Output from "output"
 import Settings from "settings"
 
-struct Health
-  ok: Bool
-  version: String
-end
-
-struct AuthResult
-  ok: Bool
-end
-
-# A session without a name has agent none (null in JSON): whoami does not need one.
-struct Identity
-  url: String
-  agent: Optional[String]
-  board: String
-  health: String
-end
-
-export def run(words: List[String]) -> Result[Void]
+def run(words: List[String]) -> Result[Void]
   parser = OP.new("kanban whoami", "Show the server, the agent and the board", [], Settings.common_opts())
   parsed = try OP.parse(parser, words)
   config = try Settings.load(Settings.read_flags(parsed))
@@ -40,6 +23,25 @@ export def run(words: List[String]) -> Result[Void]
   end
 
   ok()
+end
+
+private
+
+struct Health
+  ok: Bool
+  version: String
+end
+
+struct AuthResult
+  ok: Bool
+end
+
+# A session without a name has agent none (null in JSON): whoami does not need one.
+struct Identity
+  url: String
+  agent: Optional[String]
+  board: String
+  health: String
 end
 
 def check_health(client: Client.Client, json: Bool) -> Result[HTTP.Response]

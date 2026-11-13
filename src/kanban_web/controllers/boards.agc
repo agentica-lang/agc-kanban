@@ -5,21 +5,7 @@ import Failure from "../failure"
 import Regex from "std/regex"
 import Snapshots from "../../kanban/snapshots"
 
-struct CreateBoard
-  name: String
-  slug: Optional[String]
-  columns: Optional[List[String]]
-end
-
-struct BoardAnswer
-  board: Boards.Board
-end
-
-struct BoardsAnswer
-  boards: List[Boards.BoardSummary]
-end
-
-export def index(conn: Bond.Conn, pool: Optional[Database.Pool]) -> Result[Bond.Conn]
+def index(conn: Bond.Conn, pool: Optional[Database.Pool]) -> Result[Bond.Conn]
   return ok(Failure.reject(conn, 503, "BUSY", "database unavailable")) if not pool.some?
 
   boards = Boards.list(pool.unwrap!)
@@ -28,7 +14,7 @@ export def index(conn: Bond.Conn, pool: Optional[Database.Pool]) -> Result[Bond.
   ok(Bond.json_as(conn, 200, BoardsAnswer.codec, BoardsAnswer(boards: boards.unwrap!)))
 end
 
-export def create(conn: Bond.Conn, pool: Optional[Database.Pool]) -> Result[Bond.Conn]
+def create(conn: Bond.Conn, pool: Optional[Database.Pool]) -> Result[Bond.Conn]
   return ok(Failure.reject(conn, 503, "BUSY", "database unavailable")) if not pool.some?
 
   body = Bond.body_text(conn)
@@ -48,11 +34,27 @@ export def create(conn: Bond.Conn, pool: Optional[Database.Pool]) -> Result[Bond
   ok(Bond.json_as(conn, 201, BoardAnswer.codec, BoardAnswer(board: created.unwrap!)))
 end
 
-export def show(conn: Bond.Conn, pool: Optional[Database.Pool]) -> Result[Bond.Conn]
+def show(conn: Bond.Conn, pool: Optional[Database.Pool]) -> Result[Bond.Conn]
   return ok(Failure.reject(conn, 503, "BUSY", "database unavailable")) if not pool.some?
 
   result = Snapshots.get(pool.unwrap!, Bond.param(conn, "board").unwrap_or(""))
   return ok(Failure.answer(conn, result.message)) if not result.ok?
 
   ok(Bond.json_as(conn, 200, Snapshots.Snapshot.codec, result.unwrap!))
+end
+
+private
+
+struct CreateBoard
+  name: String
+  slug: Optional[String]
+  columns: Optional[List[String]]
+end
+
+struct BoardAnswer
+  board: Boards.Board
+end
+
+struct BoardsAnswer
+  boards: List[Boards.BoardSummary]
 end

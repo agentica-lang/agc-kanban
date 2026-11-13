@@ -8,7 +8,7 @@ import Columns from "src/kanban_cli/columns"
 import Output from "src/kanban_cli/output"
 import Whoami from "src/kanban_cli/whoami"
 
-export def main() -> Void
+def main() -> Void
   words = System.args()
   if words.empty? or words[0] == "--help" or words[0] == "-h"
     puts(usage())
@@ -25,6 +25,8 @@ export def main() -> Void
     Output.fail(Output.json_requested?(words), "USAGE", OP.message(result.message), 2)
   end
 end
+
+private
 
 def card(words: List[String]) -> Result[Void]
   return Cards.run(words) if words.empty?

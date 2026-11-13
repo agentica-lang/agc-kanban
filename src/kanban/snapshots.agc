@@ -3,17 +3,19 @@ import Boards from "boards"
 import Cards from "cards"
 import Database from "repo/database"
 
-export struct Snapshot
+struct Snapshot
   board: Boards.Board
   cards: List[Cards.Card]
   last_event_id: Int
 end
 
-export def get(pool: Database.Pool, reference: String) -> Result[Snapshot]
+def get(pool: Database.Pool, reference: String) -> Result[Snapshot]
   return error("INVALID:board") if reference.empty?
 
   Database.with_connection(pool) do |conn| Db.transaction(conn) do |tx| read(tx, reference) end end
 end
+
+private
 
 def read(conn: Db.Connection, reference: String) -> Result[Snapshot]
   board = try Boards.get_open(conn, reference)

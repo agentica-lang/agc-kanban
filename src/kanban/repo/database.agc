@@ -3,9 +3,9 @@ import DbPool from "pkg/db/db_pool"
 import Migrate from "pkg/db/migrate"
 import Migrations from "migrations"
 
-export type Pool = DbPool.Pool
+type Pool = DbPool.Pool
 
-export def open(dir: String, busy_timeout: Int = 0) -> Result[Pool]
+def open(dir: String, busy_timeout: Int = 0) -> Result[Pool]
   try prepare_dir(dir)
   url = "sqlite:#{dir}/kanban.sqlite3"
   if busy_timeout > 0
@@ -19,19 +19,21 @@ export def open(dir: String, busy_timeout: Int = 0) -> Result[Pool]
   DbPool.start(DbPool.Options(url: url, size: 0, checkout_ms: 3000))
 end
 
-export def close(pool: Pool) -> Void
+def close(pool: Pool) -> Void
   DbPool.close(pool, 1000)
 end
 
-export def with_connection[R](pool: Pool, body: Fn[Db.Connection, Result[R]]) -> Result[R] = DbPool.with(pool, body)
+def with_connection[R](pool: Pool, body: Fn[Db.Connection, Result[R]]) -> Result[R] = DbPool.with(pool, body)
 
-export def busy?(message: String) -> Bool
+def busy?(message: String) -> Bool
   return true if DbPool.timeout?(message)
   return true if message.include?("pool error: queue full")
   return true if message.include?("pool error: closed")
 
   message.include?("sqlite error 5:")
 end
+
+private
 
 def prepare_dir(dir: String) -> Result[Void]
   found = File.stat(dir)

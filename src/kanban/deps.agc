@@ -3,7 +3,7 @@ import Regex from "std/regex"
 import Cards from "cards"
 import Database from "repo/database"
 
-export struct Change
+struct Change
   card_id: Int
   depends_on: Int
   actor: String
@@ -11,20 +11,22 @@ export struct Change
   force: Bool = false
 end
 
-# The data of the dep.added and dep.removed events: the card after the change and whether `force` was given.
-struct EventData
-  card: Cards.Card
-  forced: Bool
-end
-
-export def add(pool: Database.Pool, input: Change) -> Result[Cards.Card]
+def add(pool: Database.Pool, input: Change) -> Result[Cards.Card]
   try validate(input)
   Database.with_connection(pool) do |conn| Db.transaction(conn) do |tx| change(tx, input, true) end end
 end
 
-export def remove(pool: Database.Pool, input: Change) -> Result[Cards.Card]
+def remove(pool: Database.Pool, input: Change) -> Result[Cards.Card]
   try validate(input)
   Database.with_connection(pool) do |conn| Db.transaction(conn) do |tx| change(tx, input, false) end end
+end
+
+private
+
+# The data of the dep.added and dep.removed events: the card after the change and whether `force` was given.
+struct EventData
+  card: Cards.Card
+  forced: Bool
 end
 
 def validate(input: Change) -> Result[Void]

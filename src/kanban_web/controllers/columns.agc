@@ -4,26 +4,7 @@ import Columns from "../../kanban/columns"
 import Database from "../../kanban/repo/database"
 import Failure from "../failure"
 
-struct CreateColumn
-  name: String
-  position: Optional[Int]
-  done: Optional[Bool]
-  wip_limit: Optional[Int]
-end
-
-struct UpdateColumn
-  force: Optional[Bool]
-  name: Optional[String]
-  position: Optional[Int]
-  done: Optional[Bool]
-  wip_limit: Optional[Int]
-end
-
-struct ColumnAnswer
-  column: Boards.Column
-end
-
-export def add(conn: Bond.Conn, pool: Optional[Database.Pool]) -> Result[Bond.Conn]
+def add(conn: Bond.Conn, pool: Optional[Database.Pool]) -> Result[Bond.Conn]
   return ok(Failure.reject(conn, 503, "BUSY", "database unavailable")) if not pool.some?
 
   body = Bond.body_text(conn)
@@ -48,7 +29,7 @@ export def add(conn: Bond.Conn, pool: Optional[Database.Pool]) -> Result[Bond.Co
   ok(Bond.json_as(conn, 201, ColumnAnswer.codec, ColumnAnswer(column: result.unwrap!)))
 end
 
-export def update(conn: Bond.Conn, pool: Optional[Database.Pool]) -> Result[Bond.Conn]
+def update(conn: Bond.Conn, pool: Optional[Database.Pool]) -> Result[Bond.Conn]
   return ok(Failure.reject(conn, 503, "BUSY", "database unavailable")) if not pool.some?
 
   id = Bond.param_int(conn, "id")
@@ -77,7 +58,7 @@ export def update(conn: Bond.Conn, pool: Optional[Database.Pool]) -> Result[Bond
   ok(Bond.json_as(conn, 200, ColumnAnswer.codec, ColumnAnswer(column: result.unwrap!)))
 end
 
-export def remove(conn: Bond.Conn, pool: Optional[Database.Pool]) -> Result[Bond.Conn]
+def remove(conn: Bond.Conn, pool: Optional[Database.Pool]) -> Result[Bond.Conn]
   return ok(Failure.reject(conn, 503, "BUSY", "database unavailable")) if not pool.some?
 
   id = Bond.param_int(conn, "id")
@@ -88,4 +69,25 @@ export def remove(conn: Bond.Conn, pool: Optional[Database.Pool]) -> Result[Bond
   return ok(Failure.answer(conn, result.message)) if not result.ok?
 
   ok(Bond.status(conn, 204))
+end
+
+private
+
+struct CreateColumn
+  name: String
+  position: Optional[Int]
+  done: Optional[Bool]
+  wip_limit: Optional[Int]
+end
+
+struct UpdateColumn
+  force: Optional[Bool]
+  name: Optional[String]
+  position: Optional[Int]
+  done: Optional[Bool]
+  wip_limit: Optional[Int]
+end
+
+struct ColumnAnswer
+  column: Boards.Column
 end
