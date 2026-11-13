@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { compile, compileString } from "sass";
 import { lightChip } from "../../app/javascript/claimer.js";
+import { WIDE } from "../../app/javascript/wide.js";
 
 var ROOT = new URL("../../app/stylesheets/", import.meta.url).pathname;
 var built = compile(ROOT + "application.scss", { style: "expanded" }).css;
@@ -275,4 +276,56 @@ test("a selector the check cannot read stops it instead of passing unseen", func
     var css = built + compileString(extra).css;
     assert.throws(function () { winner(rules(css), CLAIMER, "color"); }, /does not read/, extra);
   });
+});
+
+// The theme tokens of the built stylesheet: the light ones in `:root`, the dark ones in `:root[data-theme=dark]`.
+function tokens(css, head) {
+  var start = css.startsWith(head + " {") ? 0 : css.indexOf("\n" + head + " {");
+  assert.ok(start >= 0, head);
+  var map = {};
+  css.slice(start, css.indexOf("}", start)).replace(/--([\w-]+): (#[0-9a-f]+);/g, function (all, name, value) { map[name] = value; });
+  return map;
+}
+
+// The facts panel of the card window (`<div class="detail-side">`) and what is in it, as the drawer of a wide screen has
+// them: the rules of `@media (min-width: ...)` count as matching, as in the cascade check above.
+var INSIDE = ["drawer", "drawer-modal", "drawer-body", "detail", "detail-side"];
+var SIDE = { tag: "div", classes: ["detail-side"], ancestors: INSIDE.slice(0, 4) };
+var NAME = { tag: "dt", classes: [], ancestors: INSIDE };
+var LINK = { tag: "a", classes: ["ref"], ancestors: INSIDE };
+var CHIP = { tag: "span", classes: ["label"], ancestors: INSIDE };
+
+function token(value) {
+  var found = /^var\(--([\w-]+)\)$/.exec(value);
+  assert.ok(found, "a theme token: " + value);
+  return found[1];
+}
+
+// The lowest contrast, in both themes, of the muted names and the links on the panel and of the text on a chip.
+function sideContrast(css) {
+  var list = rules(css);
+  var panel = token(winner(list, SIDE, "background").value);
+  var chip = token(winner(list, CHIP, "background").value);
+  var name = token(winner(list, NAME, "color").value);
+  var link = token(winner(list, LINK, "color").value);
+  return [tokens(css, ":root"), tokens(css, ":root[data-theme=dark]")].map(function (theme) {
+    return Math.min(contrast(hexRgb(theme[name]), hexRgb(theme[panel])), contrast(hexRgb(theme[link]), hexRgb(theme[panel])),
+      contrast(hexRgb(theme.text), hexRgb(theme[chip])));
+  });
+}
+
+test("the facts panel of the card window keeps 4.5:1 for the muted names, the links and the chips, in both themes", function () {
+  sideContrast(built).forEach(function (ratio, theme) {
+    assert.ok(ratio >= 4.5, ["light", "dark"][theme] + " has " + ratio.toFixed(2) + ":1");
+  });
+});
+
+test("the check fails the old panel: the muted names and the links on the panel color", function () {
+  var old = built + compileString(".drawer-modal .detail .detail-side { background: var(--panel); }").css;
+  assert.ok(sideContrast(old)[0] < 4.5);
+});
+
+test("the stylesheet and wide.js have the same width for the card window, and no range leaves a gap at 700 px", function () {
+  assert.ok(built.includes(WIDE), WIDE);
+  assert.equal(built.includes("701px"), false);
 });

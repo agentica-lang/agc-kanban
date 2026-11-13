@@ -7,6 +7,7 @@ import { useFilters } from "../filter_store.js";
 import { closesPanel } from "../outside.js";
 import { active, count, matches } from "../filters.js";
 import { useTheme } from "../theme.js";
+import { useWide } from "../wide.js";
 import CardPanel from "./CardPanel.vue";
 import Column from "./Column.vue";
 import Drawer from "./Drawer.vue";
@@ -22,6 +23,24 @@ var themeLabel = computed(function () {
   return theme.theme.value === "dark" ? "Switch to light theme" : "Switch to dark theme";
 });
 var panel = drawer.panel;
+// The card is a modal window only on a wide screen (on a phone it is a drawer beside the board): then the page behind it
+// is `inert`, so the keyboard cannot leave the window and a screen reader does not read what is behind it. The Sign out
+// form is not part of this app (the layout places it), so it gets the attribute here.
+var wide = useWide();
+var modal = computed(function () { return panel.value === "card" && wide.value; });
+var cardDrawer = ref(null);
+watch(modal, function (on) {
+  var logout = document.querySelector(".logout");
+  if (logout) {
+    logout.inert = on;
+  }
+}, { immediate: true });
+onBeforeUnmount(function () {
+  var logout = document.querySelector(".logout");
+  if (logout) {
+    logout.inert = false;
+  }
+});
 var card = useCard();
 var state = useBoard(props.slug, card.changed);
 
@@ -39,7 +58,9 @@ provide("filter", filter);
 // goes back to where the panel came from: the Filters or the Activity button, or the card's link on the board (when the
 // filters hide it, the focus stays where it is). Also when another panel shows again behind it. A card that opens keeps
 // the focus in its panel, and a click on another header button keeps it on that button. After a click beside the panel
-// the focus moves without scrolling, so the board stays where the mouse left it; Escape and ✕ scroll to the target.
+// the focus moves without scrolling, so the board stays where the mouse left it (the backdrop is such a click too);
+// Escape and ✕ scroll to the target. A link to another card inside the card's panel takes its title (the link is gone
+// when the card changes, and the focus would fall to the page).
 var filtersButton = ref(null);
 var activityButton = ref(null);
 var closedByPointer = false;
@@ -58,6 +79,10 @@ watch([panel, drawer.card], function (now, before) {
   var closed = before[0];
   var quiet = closedByPointer;
   closedByPointer = false;
+  if (now[0] === "card" && closed === "card" && now[1] !== before[1]) {
+    nextTick(function () { cardDrawer.value && cardDrawer.value.focusTitle(); });
+    return;
+  }
   if (closed === "" || closed === now[0] || now[0] === "card") {
     return;
   }
@@ -69,6 +94,12 @@ watch([panel, drawer.card], function (now, before) {
     }
   });
 });
+
+// A tap or click on the backdrop closes the panel like a click beside it: the board stays where it is.
+function closeByPointer() {
+  closedByPointer = true;
+  drawer.close();
+}
 
 // A click beside the open panel closes it on a wide screen too (outside.js says which clicks). The end of a drag that
 // selected text is no such click, wherever it started (in the panel, on a column header); a plain click collapses the
@@ -140,7 +171,7 @@ var filtersLabel = computed(function () { return filterCount.value ? "Filters ·
   </main>
   <p v-else-if="!state.board" class="empty">Loading...</p>
   <div v-else class="board-page">
-    <header class="top">
+    <header class="top" :inert="modal">
       <a href="/boards">Boards</a>
       <h1>{{ state.board.name }}</h1>
       <button type="button" class="toggle" :aria-label="themeLabel" :title="themeLabel" @click="theme.toggle()">
@@ -156,21 +187,21 @@ var filtersLabel = computed(function () { return filterCount.value ? "Filters ·
         <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M2 3h1.5v1.5H2zM5 3h9v1.5H5zM2 7.25h1.5v1.5H2zM5 7.25h9v1.5H5zM2 11.5h1.5V13H2zM5 11.5h9V13H5z" fill="currentColor" /></svg>
       </button>
     </header>
-    <p v-if="state.error" class="banner">Could not refresh the board: {{ state.error }}</p>
-    <FilterBar :store="filter" :shown="shown" />
+    <p v-if="state.error" class="banner" :inert="modal">Could not refresh the board: {{ state.error }}</p>
+    <FilterBar :store="filter" :shown="shown" :inert="modal" />
     <div class="board-body">
-      <main class="board">
+      <main class="board" :inert="modal">
         <Column v-for="entry in columns" :key="entry.column.id" :column="entry.column" :cards="entry.cards" :total="entry.total" :filtering="filtering" :blocked="blocked" :flash="state.flash" />
         <p v-if="!columns.length" class="empty">This board has no columns.</p>
       </main>
-      <div v-if="panel !== ''" class="backdrop" :class="{ 'backdrop-modal': panel === 'card' }" aria-hidden="true" @click="drawer.close()"></div>
+      <div v-if="panel !== ''" class="backdrop" :class="{ 'backdrop-modal': panel === 'card' }" aria-hidden="true" @click="closeByPointer()"></div>
       <Drawer v-if="panel === 'activity'" title="Activity" @close="drawer.close()">
         <Feed :state="state" />
       </Drawer>
       <Drawer v-else-if="panel === 'filters'" title="Filters" focus @close="drawer.close()">
         <FilterPanel :store="filter" :cards="state.cards" />
       </Drawer>
-      <Drawer v-else-if="panel === 'card'" :title="'Card #' + drawer.card.value" modal focus @close="drawer.close()">
+      <Drawer v-else-if="panel === 'card'" ref="cardDrawer" :title="'Card #' + drawer.card.value" modal :dialog="wide" focus @close="drawer.close()">
         <CardPanel :state="card" :slug="slug" @open="drawer.showCard" />
       </Drawer>
     </div>

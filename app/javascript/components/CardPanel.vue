@@ -48,10 +48,29 @@ function when(ms) {
     Card #{{ state.detail.card.id }} is not on this board:
     <a :href="'/boards/' + encodeURIComponent(state.detail.card.board) + '?card=' + state.detail.card.id">open it on {{ state.detail.card.board }}</a>.
   </p>
-  <div v-else class="detail">
+  <div v-else class="detail" :class="{ 'with-banner': state.error }">
     <p v-if="state.error" class="banner">Could not refresh the card: {{ state.error }}</p>
     <h3><span class="id">#{{ state.detail.card.id }}</span> {{ state.detail.card.title }}</h3>
-    <aside class="detail-side">
+    <div class="detail-main">
+      <Markdown v-if="state.detail.card.body" :text="state.detail.card.body" :board="slug" />
+      <template v-if="links.length">
+        <h4 class="section-title">Links ({{ links.length }})</h4>
+        <ul class="links">
+          <li v-for="(link, index) in links" :key="index">
+            <a v-if="link.href" :href="link.href" :title="link.url" target="_blank" rel="noopener noreferrer">{{ link.label }}</a>
+            <span v-else>{{ link.label }}</span>
+          </li>
+        </ul>
+      </template>
+      <h4 class="section-title">Comments ({{ state.detail.comments.length }})</h4>
+      <ol class="comments">
+        <li v-for="comment in comments" :key="comment.id">
+          <div class="by"><b>{{ comment.author }}</b> <time :datetime="new Date(comment.created_at).toISOString()">{{ when(comment.created_at) }}</time></div>
+          <Markdown :text="comment.body" :board="slug" />
+        </li>
+      </ol>
+    </div>
+    <div class="detail-side">
       <dl>
         <dt>Column</dt>
         <dd>{{ state.detail.card.column }}</dd>
@@ -88,25 +107,6 @@ function when(ms) {
           <dd><CardTimes :times="state.detail.times" :received-at="state.receivedAt" /></dd>
         </template>
       </dl>
-    </aside>
-    <div class="detail-main">
-      <Markdown v-if="state.detail.card.body" :text="state.detail.card.body" :board="slug" />
-      <template v-if="links.length">
-        <h4 class="section-title">Links ({{ links.length }})</h4>
-        <ul class="links">
-          <li v-for="(link, index) in links" :key="index">
-            <a v-if="link.href" :href="link.href" :title="link.url" target="_blank" rel="noopener noreferrer">{{ link.label }}</a>
-            <span v-else>{{ link.label }}</span>
-          </li>
-        </ul>
-      </template>
-      <h4 class="section-title">Comments ({{ state.detail.comments.length }})</h4>
-      <ol class="comments">
-        <li v-for="comment in comments" :key="comment.id">
-          <div class="by"><b>{{ comment.author }}</b> <time :datetime="new Date(comment.created_at).toISOString()">{{ when(comment.created_at) }}</time></div>
-          <Markdown :text="comment.body" :board="slug" />
-        </li>
-      </ol>
     </div>
   </div>
 </template>
