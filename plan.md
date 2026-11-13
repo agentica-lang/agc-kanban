@@ -29,8 +29,8 @@ This file is the plan only. There is no product code yet.
 
 - One API key for everything. No users, no roles, no sign-up.
 - One server process. No cluster, no replication.
-- No drag-and-drop in phases 0 to 4. The web page is view-only (see the open
-  questions).
+- No drag-and-drop and no writes from the web: the web page stays view-only
+  (see the open questions).
 - No agent runner. The board does not start agents, open worktrees or run
   tests. The orchestrator does that.
 - No GitHub sync, no MCP server, no notifications by email or chat.
@@ -291,7 +291,7 @@ Rules:
 ## 4. API
 
 All paths are under `/api/`. Every request needs the `apikey` header (the
-CLI) or the session cookie (the web, read-only in v1). Writes need the
+CLI) or the session cookie (the web, read-only). Writes need the
 `X-Kanban-Agent` header: the agent name, 1 to 64 characters of
 `[A-Za-z0-9._@/-]`. The name is not a proof of identity: anyone with the key
 can use any name. It keeps honest agents apart, which is the goal.
@@ -717,37 +717,86 @@ an agent runs CLI commands.
 
 ### Phase 4: the skill and a real trial
 
-- [ ] `skill/agc-kanban/SKILL.md` as in section 7, short: the agent rules
+- [x] `skill/agc-kanban/SKILL.md` as in section 7, short: the agent rules
       (claim before working, comment before a status change, never work a
       blocked card), separate from the CLI usage skill of phase 2
       (`.agents/skills/kanban-cli/`).
-- [ ] `kanban prime` prints the same rules; a CLI feature checks that it
+- [x] `kanban prime` prints the same rules; a CLI feature checks that it
       exits 0 and names `card next`.
-- [ ] Install the skill for Claude Code, OpenCode and Codex (each reads a
+- [x] Install the skill for Claude Code, OpenCode and Codex (each reads a
       `SKILL.md` folder or an `AGENTS.md` pointer; document the path for
-      each in the README).
-- [ ] Trial: an orchestrator splits a small real task into 6 to 10 cards
-      with dependencies; 3 subagents work them in parallel through the CLI
-      only.
-- [ ] Record what went wrong (wrong commands, double work, stale claims)
-      in a trial note, and fix the skill or the CLI.
+      each in the README). Claude Code also has a plugin with the two
+      session hooks (#46), and Codex takes the same hook script; OpenCode
+      documents no such hook.
+- [x] Trial: the board `agentica-lines` coordinated many agent lines on
+      real work, far more than the 6 to 10 cards planned (see the trial
+      note below).
+- [x] Record what went wrong in a trial note, and fix the skill or the CLI
+      (the required agent name, Markdown comments, the plugin hooks).
 
 Done when: the trial ends with every card done, no two agents worked the
-same card, and the owner watched it live.
+same card, and the owner watched it live. The board kept its backlog open,
+so the first part is not literally met; no card was worked twice.
+
+### Trial note from real use
+
+The board `agentica-lines` (about 100 cards, 905 events from 2026-11-12 to
+2026-11-13) coordinated many agent lines over two days: a coordinator and
+one named agent per line, reviewers and design or release agents, each
+working its own cards through the CLI.
+
+What worked:
+
+- Claims kept two agents off one card. The journal shows 63 cards claimed;
+  two of them changed hands, each time after a release by the first holder,
+  and none was held by two agents at once.
+- The dependency chain ordered the work. A multi-PR feature was one chain of
+  cards (each PR needs the one before it), and a blocked card stayed out of
+  `card next` and `card list --ready` until its parent was done. 37
+  dependencies were added, 6 removed.
+- Comments as Markdown bullets, one per phase (claimed, reading, local
+  commits, PR and head, CI), made `card show` a readable log of a card for
+  the coordinator, and for the owner on the web.
+- The coordinator closed each card after its PR was merged and checked. A
+  line holds its card, so this is `done --force`: every one of the 66
+  `card.done` events in the journal is forced, by the coordinator.
+- Every write names an agent, so `kanban events` says who did what.
+
+What was missing or went wrong:
+
+- The agent name had a shared default in the config file. Two sessions on one
+  machine could act as one agent, so the name became required (#51) and the
+  hooks never invent one: the coordinator names itself, a subagent gets its
+  name in the brief.
+- Leases were never on: the board ran with `KANBAN_LEASE_MINUTES` at 0, and
+  no card in the journal has a `lease_until`. The journal shows no stale
+  claim, so the trial neither proves nor disproves leases. Four cards were
+  released, one of them with `--force`.
+- `done --force` on a merged card is the normal path of a coordinator, but
+  the event records only `forced`, so a routine close looks the same as a
+  rescue. A reason on the event, or a close for a card one does not hold
+  that is not a force, would tell them apart. The same holds for the 14
+  forced moves.
+- A new agent started blind: before the plugin it learned the board from a
+  brief only. The hook now lists the Doing cards of the other agents, so a
+  line sees what is in progress and avoids the same files.
+- A card had no field for its PR: the URL went in the body or a comment
+  until card links (#30) came during the trial.
 
 ### Phase 5: polish
 
-- [x] Card archive (`kanban card archive ID`), hidden from the board.
-- [ ] Claim leases if the trial showed stale claims (see the open
-      questions): `KANBAN_LEASE_MINUTES`, renew on any write by the
-      claimer, a "stale" mark in the web.
+- [x] Card archive (`kanban card archive ID`), hidden from the board (#56).
+- [x] A richer home page with a card per board (#52); Back and Forward step
+      through the opened cards (#54); readable agent chips (#55).
+- [x] Claim leases (see the open questions): `KANBAN_LEASE_MINUTES`, renew
+      on any write by the claimer. The default is 0 (no expiry); the trial
+      did not turn it on.
+- [ ] A "stale" mark in the web for a claim whose lease has ended.
 - [x] Filters in the web: label, claimer, ready only (`?label=`, `?claimer=`, `?ready=1`).
-- [ ] Markdown in card bodies and comments, escaped (`std/html`).
+- [x] Markdown in card bodies and comments, escaped (`std/html`).
 - [ ] `kanban card list --format tsv` if agents need a compact form.
-- [ ] A README: run the server, install the CLI, install the skill, back
-      up the database.
-- [ ] Optional, if cheap: drag-and-drop in the web, which needs web writes
-      (see the open questions) and CSRF.
+- [ ] A README: run the server, install the CLI, install the skill (done:
+      Claude Code, OpenCode and Codex), back up the database (not written).
 
 Done when: the owner uses it for a week of real work without a manual fix
 in the database.
@@ -770,11 +819,11 @@ Storage is decided: agentica-db with SQLite.
      related, discovered-from) for now; a comment can say "found while
      working on #12".
 3. **Can the web write, or only view?**
-   - a) View-only in v1.
+   - a) View-only.
    - b) The owner can move, comment and release from the web.
-   - Recommendation: a) in v1, b) in phase 5. Writes from the web need CSRF
-     protection and a UI; viewing is the goal. The owner can use the CLI
-     meanwhile.
+   - Decided (owner, 2026-11-12): a). There are no writes from the web, and
+     the web stays view-only. Writes go through the CLI or the API; there is
+     no drag-and-drop and no CSRF to protect.
 4. **Claim expiry.** Decided: configurable, with b) implemented and a)
    as the default.
    - a) No expiry: a claim lasts until release or done; the owner or the
