@@ -78,6 +78,7 @@ kanban column remove Check             # refused when it has cards or is the don
 kanban card add "Fix login" --label api,ui --priority 1 --body-file task.md \
                 [--link URL]...
 kanban card list [--column Todo] [--ready] [--mine] [--claimed-by NAME] [--label api] [--all] [--format tsv]
+kanban card search QUERY [--all] [--limit 20] [--json]   # read-only, no agent name; best match first
 kanban card show 12
 kanban card update 12 [--title T] [--body T | --body-file F] [--label L] \
                      [--priority N] [--branch B] [--worktree W] [--force] \
@@ -140,7 +141,7 @@ Labels and `--depends-on` take a
 comma-separated list.
 
 Card ids are global, so `card show`, `claim`, `comment`, `done` and `dep` need
-no board. `--board` is required by `column *`, `card add`, `card list`,
+no board. `--board` is required by `column *`, `card add`, `card list`, `card search`,
 `card next` and `events`; `board show` takes the board as a positional
 argument or from `KANBAN_BOARD`.
 

@@ -9,7 +9,7 @@ def test_schema_migrates_once() -> Result[Void]
   first = Migrate.up(conn, Migrations.all())
   second = Migrate.up(conn, Migrations.all())
   Db.close(conn)
-  try Test.eq(first, ok([1, 2, 3, 4, 5, 6, 7]))
+  try Test.eq(first, ok([1, 2, 3, 4, 5, 6, 7, 8]))
   Test.eq(second, ok([]))
 end
 
@@ -30,7 +30,7 @@ def test_a_card_from_before_links_has_none() -> Result[Void]
     [],
   )
 
-  try Test.eq(Migrate.up(conn, Migrations.all()), ok([7]))
+  try Test.eq(Migrate.up(conn, Migrations.all()), ok([7, 8]))
   card = Cards.load_at(conn, 1, 2)
   Db.close(conn)
   Test.eq((try card).links, [])
@@ -52,7 +52,7 @@ end
 
 def test_migration_versions_are_consecutive() -> Result[Void]
   versions = Migrations.all().map do |migration| migration.version end
-  Test.eq(versions, [1, 2, 3, 4, 5, 6, 7])
+  Test.eq(versions, [1, 2, 3, 4, 5, 6, 7, 8])
 end
 
 def test_migration_files_are_all_listed() -> Result[Void]
@@ -94,3 +94,31 @@ end
 
 # Migration files are mNNNN_name.agc; another shape is a bug in the repository.
 def version_of(file: String) -> Int = file.slice(1, 4).to_i!
+
+# A card stored before the search index is indexed by the migration, and the triggers keep it up to date afterwards.
+def test_search_index_backfills_and_follows_edits() -> Result[Void]
+  conn = try Db.open("sqlite::memory:")
+  _ = try Migrate.up(conn, Migrations.all().select do |migration| migration.version < 8 end)
+  _ = try Db.execute(conn, "insert into boards (slug, name, created_at, updated_at) values ('p', 'P', 1, 1)", [])
+  _ = try Db.execute(
+    conn,
+    "insert into columns (board_id, name, position, done, created_at) values (1, 'Todo', 0, 0, 1)",
+    [],
+  )
+
+  _ = try Db.execute(
+    conn,
+    "insert into cards (board_id, column_id, position, title, created_by, created_at, updated_at) values (1, 1, 0, 'old quokka', 'agent', 1, 1)",
+    [],
+  )
+
+  _ = try Migrate.up(conn, Migrations.all())
+  before = try Db.query(conn, "select rowid from card_search where card_search match 'quokka'", [])
+  _ = try Db.execute(conn, "update cards set title = 'new wombat' where id = 1", [])
+  gone = try Db.query(conn, "select rowid from card_search where card_search match 'quokka'", [])
+  found = try Db.query(conn, "select rowid from card_search where card_search match 'wombat'", [])
+  Db.close(conn)
+  try Test.eq(before.size, 1)
+  try Test.eq(gone.size, 0)
+  Test.eq(found.size, 1)
+end

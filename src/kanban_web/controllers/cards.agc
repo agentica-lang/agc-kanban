@@ -31,6 +31,10 @@ struct CardsAnswer
   cards: List[Cards.Card]
 end
 
+struct SearchAnswer
+  results: List[Cards.Hit]
+end
+
 export def create(conn: Bond.Conn, pool: Optional[Database.Pool]) -> Result[Bond.Conn]
   return ok(Failure.reject(conn, 503, "BUSY", "database unavailable")) if not pool.some?
 
@@ -94,6 +98,30 @@ export def index(conn: Bond.Conn, pool: Optional[Database.Pool]) -> Result[Bond.
   return ok(Failure.answer(conn, result.message)) if not result.ok?
 
   ok(Bond.json_as(conn, 200, CardsAnswer.codec, CardsAnswer(cards: result.unwrap!)))
+end
+
+export def search(conn: Bond.Conn, pool: Optional[Database.Pool]) -> Result[Bond.Conn]
+  return ok(Failure.reject(conn, 503, "BUSY", "database unavailable")) if not pool.some?
+
+  params = Bond.query_params(conn)
+  return ok(Failure.reject(conn, 400, "INVALID", "invalid query", some("query"))) if not params.ok?
+
+  query = params.unwrap!
+  all = Params.flag(query, "all")
+  limit = Params.number(query, "limit", 20)
+  return ok(Failure.reject(conn, 400, "INVALID", "invalid query", some("query"))) if not all.ok? or not limit.ok?
+
+  result = Cards.search(
+    pool.unwrap!,
+    Bond.param(conn, "board").unwrap_or(""),
+    Params.text(query, "q").unwrap_or(""),
+    all.unwrap!.unwrap_or(false),
+    limit.unwrap!,
+  )
+
+  return ok(Failure.answer(conn, result.message)) if not result.ok?
+
+  ok(Bond.json_as(conn, 200, SearchAnswer.codec, SearchAnswer(results: result.unwrap!)))
 end
 
 export def update(conn: Bond.Conn, pool: Optional[Database.Pool], lease_minutes: Int) -> Result[Bond.Conn]

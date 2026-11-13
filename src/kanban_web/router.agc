@@ -27,6 +27,7 @@ export def install(app: Bond.App, pool: Optional[Database.Pool], lease_minutes: 
     |> Bond.get(Routes.BOARD, ->(conn) { Boards.show(conn, pool) })
     |> Bond.post(Routes.CLAIM_NEXT, ->(conn) { Claims.next_card(conn, pool, lease_minutes) })
     |> Bond.get(Routes.BOARD_CARDS, ->(conn) { Cards.index(conn, pool) })
+    |> Bond.get(Routes.BOARD_SEARCH, ->(conn) { Cards.search(conn, pool) })
     |> Bond.post(Routes.BOARD_CARDS, ->(conn) { Cards.create(conn, pool) })
     |> Bond.post(Routes.CARD_DEPS, ->(conn) { Deps.add(conn, pool, lease_minutes) })
     |> Bond.delete(Routes.CARD_DEP, ->(conn) { Deps.remove(conn, pool, lease_minutes) })

@@ -1,6 +1,7 @@
 import BDD from "std/bdd"
 import Db from "pkg/db/db"
 import HTTP from "std/http"
+import URI from "std/uri"
 import WebSteps from "web_steps"
 
 struct RaceReply
@@ -75,6 +76,9 @@ def main() -> Void
       BDD.step("the response lists {string} before {string}", &response_lists_before),
       BDD.step("the response contains exactly {int} occurrences of {string}", &response_occurrences),
       BDD.step("I list project cards with query {string}", &list_cards_query),
+      BDD.step("I search project cards for {string}", &search_cards),
+      BDD.step("I search project cards for {string} with all", &search_cards_all),
+      BDD.step("I add a card titled {string} with the body {string}", &add_card_body),
       BDD.step("agent {string} claims the next card", &claim_next),
       BDD.step("an unrelated server is running", &start_unrelated),
       BDD.step("a server with broken authentication is running", &start_broken),
@@ -783,6 +787,23 @@ end
 
 def list_cards_query(ctx: BDD.Context, args: List[String]) -> BDD.Context
   api_request(ctx, "GET", "/api/boards/project/cards?#{args[0]}", "")
+end
+
+def search_path(text: String, extra: String) -> String
+  "/api/boards/project/search?#{URI.encode_www_form([URI.Pair(name: "q", value: text)])}#{extra}"
+end
+
+def search_cards(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  api_request(ctx, "GET", search_path(args[0], ""), "")
+end
+
+def search_cards_all(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  api_request(ctx, "GET", search_path(args[0], "&all=1"), "")
+end
+
+def add_card_body(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  body = JSON.encode(JSON.object({"title": JSON.from(args[0]), "body": JSON.from(args[1])}))
+  api_request(ctx, "POST", "/api/boards/project/cards", body)
 end
 
 def claim_next(ctx: BDD.Context, args: List[String]) -> BDD.Context
