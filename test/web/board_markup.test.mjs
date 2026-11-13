@@ -188,3 +188,11 @@ test("the panel of a card has the text before the facts, and the facts are a div
   var failing = await draw(CardPanel, { state: { detail: { card: full, comments: [], times: null }, error: "down" }, slug: "p" }, "");
   assert.equal(tagsWith(failing, "with-banner").length, 1);
 });
+
+test("the header has a Reload board button, enabled while the board is not being fetched", async function () {
+  var { html } = await drawPage("", true);
+  var tag = html.match(/<button\b[^>]*aria-label="Reload board"[^>]*>/);
+  assert.ok(tag, "no reload button");
+  assert.ok(tag[0].includes('title="Reload board"'));
+  assert.equal(tag[0].includes("disabled"), false);
+});

@@ -6,6 +6,7 @@ var REFETCH_MS = 80; // a burst of events (a claim and a move) is one fetch
 var RETRY_MS = 2000; // the pause before the one retry of a failed feed fetch
 var PAGE = 30; // events shown at first, and loaded by each "Ver m\u00e1s"
 var NEWEST = Number.MAX_SAFE_INTEGER; // `before` of the newest page
+var WAKE_MS = 1000; // visibilitychange, pageshow and focus of one return are one wake
 var FLASH_MS = 1700; // a little longer than the CSS flash
 
 // The one reactive state of the board page: the snapshot of the API (`board`, `cards`) and the feed. It is fetched
@@ -29,9 +30,11 @@ export function useBoard(slug, listener) {
     more: false,
     loading: false,
     loadError: false,
+    refreshing: false,
     error: "",
     flash: {},
     loadMore: loadMore,
+    reload: reload,
   });
   var timer = null;
   var synced = 0; // the newest event id that the feed is known to hold with nothing missing before it
@@ -156,11 +159,43 @@ export function useBoard(slug, listener) {
     catchUp().catch(function () {});
   }
 
+  // The reload button: the board, the open card and the feed again at once, whatever the cable did. `refreshing` shows
+  // that it runs.
+  function reload() {
+    if (state.refreshing) {
+      return Promise.resolve();
+    }
+    state.refreshing = true;
+    listener(null);
+    return Promise.all([load(), catchUp().catch(function () {})]).then(function () {
+      state.refreshing = false;
+    });
+  }
+
+  // The tab is back (it was hidden, or the page came from the back/forward cache, or the window got the focus): its
+  // timers were throttled and its socket may have died, so it reconnects a bad socket (the confirmation then fetches
+  // everything, see onSubscribed) and otherwise fetches at once. The three events fire together, so only the first
+  // one in WAKE_MS counts.
+  var woke = 0;
+  var cable = null;
+  function wake() {
+    if (document.visibilityState === "hidden" || Date.now() - woke < WAKE_MS || !cable) {
+      return;
+    }
+    woke = Date.now();
+    if (!cable.check()) {
+      reload();
+    }
+  }
+  document.addEventListener("visibilitychange", wake);
+  window.addEventListener("pageshow", wake);
+  window.addEventListener("focus", wake);
+
   loadOlder(NEWEST).then(function () {
     synced = state.feed.length ? state.feed[0].id : 0;
     return load();
   }).then(function () {
-    subscribe({ channel: "BoardChannel", board: slug }, onEvent, onSubscribed);
+    cable = subscribe({ channel: "BoardChannel", board: slug }, onEvent, onSubscribed);
   }, function (error) {
     state.error = error.message;
   });

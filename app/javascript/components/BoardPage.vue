@@ -174,6 +174,9 @@ var filtersLabel = computed(function () { return filterCount.value ? "Filters ·
     <header class="top" :inert="modal">
       <a href="/boards">Boards</a>
       <h1>{{ state.board.name }}</h1>
+      <button type="button" class="toggle reload" :class="{ spinning: state.refreshing }" aria-label="Reload board" title="Reload board" :disabled="state.refreshing" @click="state.reload()">
+        <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M13 8a5 5 0 1 1-1.6-3.7M13 2.5v3h-3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" /></svg>
+      </button>
       <button type="button" class="toggle" :aria-label="themeLabel" :title="themeLabel" @click="theme.toggle()">
         <svg v-if="theme.theme.value === 'dark'" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><circle cx="8" cy="8" r="3" fill="currentColor" /><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41M3.05 12.95l1.41-1.41M11.54 4.46l1.41-1.41" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" /></svg>
         <svg v-else viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M13.5 10.2A6 6 0 0 1 5.8 2.5a6 6 0 1 0 7.7 7.7z" fill="currentColor" /></svg>
