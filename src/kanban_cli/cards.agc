@@ -90,12 +90,24 @@ def list(words: List[String]) -> Result[Void]
       Opt(name: "claimed-by"),
       Opt(name: "label"),
       Opt(name: "all", kind: Kind.Flag),
+      Opt(
+        name: "format",
+        default: "text",
+        choices: ["text", "tsv"],
+        help: "text lines, or tsv: one card per line, tab-separated",
+      ),
     ] +
     Settings.common_opts(),
   )
 
   parsed = try OP.parse(parser, words)
   config = try Settings.load(Settings.read_flags(parsed))
+  tsv = OP.string(parsed, "format") == "tsv"
+  # --json prints the server document and tsv a table: one run cannot print both, so it is refused, not guessed.
+  if tsv and config.json
+    Output.fail(config.json, "USAGE", "--format tsv cannot be used with --json", 2)
+  end
+
   board = Support.board_of(config)
   pairs: List[Pair] = []
   column = OP.optional_string(parsed, "column")
@@ -136,6 +148,8 @@ def list(words: List[String]) -> Result[Void]
 
   if config.json
     puts(Output.body(response.unwrap!))
+  elsif tsv
+    Output.print_cards_tsv(response.unwrap!)
   else
     Output.print_cards(response.unwrap!)
   end
