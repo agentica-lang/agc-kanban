@@ -207,3 +207,34 @@
     box-shadow: -4px 0 16px rgb(0 0 0 / 0.2);
   }
 }
+
+@media (min-width: tokens.$wide) {
+  .backdrop-modal {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+    background: rgb(0 0 0 / 0.5);
+  }
+
+  // Centered with auto margins, not a transform: a transform would make a layer that blurs the text on some screens.
+  // The edge and the shadow are the Material elevation 24; the edge is the one that shows in the dark theme.
+  .drawer-modal {
+    position: fixed;
+    inset: 6vh 0 auto;
+    margin-inline: auto;
+    z-index: 11;
+    width: min(64rem, calc(100vw - 4rem));
+    max-height: 88vh;
+    overflow: hidden;
+    border: 1px solid var(--edge);
+    border-radius: calc(var(--radius) * 1.5);
+    box-shadow: 0 11px 15px -7px rgb(0 0 0 / 0.2), 0 24px 38px 3px rgb(0 0 0 / 0.14), 0 9px 46px 8px rgb(0 0 0 / 0.12);
+
+    .drawer-head { padding: 0.25rem 0.75rem 0 1.5rem; }
+    .drawer-head h2 { margin: 0.75rem 0 0; font-size: 1rem; }
+    .drawer-close { font-size: 1.75rem; }
+    .drawer-body { padding: 0.25rem 1.5rem 1.5rem; }
+    .empty { font-size: 1rem; }
+  }
+}

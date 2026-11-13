@@ -13,6 +13,7 @@
   --warn: #9c3f06;
   --flash: #fff3b0;
   --thumb: #b4bbc7;
+  --edge: var(--line);
 }
 
 @mixin dark {
@@ -27,6 +28,8 @@
   --warn: #f79009;
   --flash: #4d4416;
   --thumb: #4b566b;
+  // A shadow barely shows on a dark page, so the edge of a window lying over it is a light line.
+  --edge: rgb(255 255 255 / 0.18);
 }
 
 :root {
@@ -44,6 +47,11 @@
 
 // Below this width the columns take most of the screen and the drawer covers the board.
 $narrow: 700px;
+// From this width the card is a window over the board. A hair above `$narrow`, so a fractional width is in one of the
+// two ranges; wide.js has the same number for `matchMedia`.
+$wide: $narrow + 0.02px;
+// From this width the card's text and its facts sit side by side; below it they stack.
+$stack: 900px;
 
 // A thin scrollbar in the theme colors, hidden until the area scrolls (the class `scrolling`, which scrollbars.js
 // sets and takes off 1.5 s after the last scroll) or, with `$hover`, while the pointer is over the area. Only with a
@@ -51,7 +59,7 @@ $narrow: 700px;
 // properties; Chromium and Safari take `::-webkit-scrollbar`, which Chromium ignores once the standard ones are set,
 // so those go only where the pseudo-element is unknown.
 @mixin thin-scroll($hover: true) {
-  @media (hover: hover) and (pointer: fine) and (min-width: $narrow + 1) {
+  @media (hover: hover) and (pointer: fine) and (min-width: $wide) {
     @supports not selector(::-webkit-scrollbar) {
       scrollbar-width: thin;
       scrollbar-color: transparent transparent;

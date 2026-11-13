@@ -6,13 +6,20 @@
 .detail {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
+  // One column: the facts above the text (the text comes first in the markup, so a screen reader reads it first). The
+  // banner has a row only when there is one, so no empty row adds a gap above the title.
+  grid-template-areas: "title" "side" "main";
   gap: var(--gap);
   font-size: 0.875rem;
   overflow-wrap: anywhere;
 
-  h3 { margin: 0; font-size: 1rem; }
+  &.with-banner { grid-template-areas: "banner" "title" "side" "main"; }
+
+  h3 { grid-area: title; margin: 0; font-size: 1rem; }
   .id { color: var(--muted); font-weight: normal; }
-  .banner { margin: 0; }
+  .banner { grid-area: banner; margin: 0; }
+  .detail-main { grid-area: main; display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--gap); min-width: 0; }
+  .detail-side { grid-area: side; min-width: 0; }
 
   dl { display: grid; grid-template-columns: max-content 1fr; gap: 0.25rem 0.75rem; margin: 0; }
   dt { color: var(--muted); }
@@ -36,8 +43,41 @@
   .links { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.25rem 0.75rem; }
   .links a { color: var(--accent); }
   .comments { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.75rem; }
-  .comments li { border-top: 1px solid var(--line); padding-top: 0.5rem; }
+  .comments > li { border-top: 1px solid var(--line); padding-top: 0.5rem; }
   .by { color: var(--muted); font-size: 0.75rem; b { color: var(--text); } }
+}
+
+// A wide screen: the card is a window, so its text is the size of a page (16px) and the facts are a panel of their own.
+// The panel is the card color and its chips the panel color, so the muted names and the links on it keep 4.5:1.
+@media (min-width: tokens.$wide) {
+  .drawer-modal .detail {
+    gap: 1.25rem 2rem;
+    font-size: 1rem;
+    line-height: 1.5;
+
+    h3 { font-size: 1.75rem; line-height: 1.25; }
+    .detail-side { padding: 1rem; border-radius: var(--radius); background: var(--card); }
+    .detail-side dl { grid-template-columns: minmax(0, 1fr); gap: 0.125rem; }
+    .detail-side dt { font-size: 1rem; font-weight: 600; }
+    .detail-side dd { margin-bottom: 0.75rem; }
+    .detail-side .label { background: var(--panel); }
+    .label { font-size: 1rem; padding: 0.0625rem 0.625rem; }
+    .section-title { font-size: 1.125rem; letter-spacing: 0.02em; }
+    .by { font-size: 1rem; }
+    .md h4 { font-size: 1.25rem; }
+    .md code { font-size: 0.9em; }
+  }
+}
+
+// Wide enough for two columns: the text on the left, the facts on the right.
+@media (min-width: tokens.$stack) {
+  .drawer-modal .detail {
+    grid-template-columns: minmax(0, 1fr) 18rem;
+    grid-template-areas: "title title" "main side";
+    align-items: start;
+
+    &.with-banner { grid-template-areas: "banner banner" "title title" "main side"; }
+  }
 }
 
 .md {

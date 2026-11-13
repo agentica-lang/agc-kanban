@@ -18,12 +18,16 @@ var server = await createServer({
   appType: "custom",
   server: { middlewareMode: true, hmr: false, watch: null },
   plugins: [vue()],
+  // The board page reads its data from the network; the render gets a fixed board instead.
+  resolve: { alias: [{ find: /^.*\/board_store\.js$/, replacement: ROOT + "test/web/support/board_store.js" }] },
   optimizeDeps: { noDiscovery: true, include: [] },
 });
 after(function () { return server.close(); });
 var Card = (await server.ssrLoadModule("/app/javascript/components/Card.vue")).default;
 var CardPanel = (await server.ssrLoadModule("/app/javascript/components/CardPanel.vue")).default;
 var FilterBar = (await server.ssrLoadModule("/app/javascript/components/FilterBar.vue")).default;
+var Drawer = (await server.ssrLoadModule("/app/javascript/components/Drawer.vue")).default;
+var BoardPage = (await server.ssrLoadModule("/app/javascript/components/BoardPage.vue")).default;
 
 // The page code reads the filters from `location`; a plain object stands in for it.
 function filtersAt(search) {
@@ -91,4 +95,96 @@ test("the panel of an archived card says it is archived, and the panel of any ot
   assert.match(archived, /<dt>Archived<\/dt>/);
   var open = await draw(CardPanel, { state: detail({ archived_at: null }), slug: "p" }, "");
   assert.equal(open.includes("Archived"), false);
+});
+
+// The opening tags of `html` that have the class `name`, each as { tag, attrs } so a test does not depend on the order
+// of the attributes.
+function tagsWith(html, name) {
+  return Array.from(html.matchAll(/<([a-z][\w-]*)\b([^>]*)>/g)).map(function (one) {
+    var attrs = {};
+    Array.from(one[2].matchAll(/([\w-]+)(?:="([^"]*)")?/g)).forEach(function (pair) { attrs[pair[1]] = pair[2] === undefined ? "" : pair[2]; });
+    return { tag: one[1], attrs: attrs };
+  }).filter(function (one) { return (one.attrs.class || "").split(" ").includes(name); });
+}
+
+function only(html, name) {
+  var found = tagsWith(html, name);
+  assert.equal(found.length, 1, name + " x" + found.length);
+  return found[0];
+}
+
+// The board page with `search` as its URL, on a screen that is wide or not (`matchMedia`). The Sign out form is outside
+// the app, so a plain object stands in for it.
+async function drawPage(search, wide) {
+  var logout = { inert: false };
+  filtersAt(search);
+  globalThis.window.matchMedia = function () {
+    return { matches: wide, addEventListener: function () {}, removeEventListener: function () {} };
+  };
+  globalThis.document = {
+    addEventListener: function () {},
+    removeEventListener: function () {},
+    documentElement: { dataset: {} },
+    querySelector: function (selector) { return selector === ".logout" ? logout : null; },
+  };
+  globalThis.getSelection = function () { return { isCollapsed: true }; };
+  var app = createSSRApp(BoardPage, { slug: "p" });
+  return { html: await renderToString(app), logout: logout };
+}
+
+test("the open card is a modal over the board on a wide screen: a dialog, the rest inert, the backdrop modal", async function () {
+  var { html, logout } = await drawPage("?card=7&label=api", true);
+  assert.ok(only(html, "backdrop").attrs.class.split(" ").includes("backdrop-modal"));
+  var drawer = only(html, "drawer");
+  assert.ok(drawer.attrs.class.split(" ").includes("drawer-modal"));
+  assert.equal(drawer.attrs.role, "dialog");
+  assert.equal(drawer.attrs["aria-modal"], "true");
+  // What is behind the window: the header, the filter bar, the board (and the Sign out form, outside the app).
+  ["top", "filters", "board"].forEach(function (name) {
+    assert.ok("inert" in only(html, name).attrs, name + " is not inert");
+  });
+  assert.equal(drawer.attrs.inert, undefined);
+  assert.equal(logout.inert, true);
+});
+
+test("on a phone the card is a drawer beside the board: no dialog role and nothing inert", async function () {
+  var { html, logout } = await drawPage("?card=7&label=api", false);
+  var drawer = only(html, "drawer");
+  assert.equal(drawer.attrs.role, undefined);
+  assert.equal(drawer.attrs["aria-modal"], undefined);
+  ["top", "filters", "board"].forEach(function (name) {
+    assert.equal("inert" in only(html, name).attrs, false, name + " is inert");
+  });
+  assert.equal(logout.inert, false);
+});
+
+test("a board with no card open has no backdrop-modal, no dialog and nothing inert", async function () {
+  var { html } = await drawPage("", true);
+  assert.equal(tagsWith(html, "backdrop").length, 0);
+  assert.equal(tagsWith(html, "drawer").length, 0);
+  assert.equal("inert" in only(html, "board").attrs, false);
+});
+
+test("the card drawer is a dialog only when it is told it is one", async function () {
+  var modal = await draw(Drawer, { title: "Card #7", modal: true, dialog: true }, "");
+  var drawer = only(modal, "drawer");
+  assert.ok(drawer.attrs.class.split(" ").includes("drawer-modal"));
+  assert.equal(drawer.attrs.role, "dialog");
+  assert.equal(drawer.attrs["aria-modal"], "true");
+  var phone = only(await draw(Drawer, { title: "Card #7", modal: true }, ""), "drawer");
+  assert.equal(phone.attrs.role, undefined);
+  assert.equal(phone.attrs["aria-modal"], undefined);
+  var plain = await draw(Drawer, { title: "Activity" }, "");
+  assert.doesNotMatch(plain, /drawer-modal|role=|aria-modal/);
+});
+
+test("the panel of a card has the text before the facts, and the facts are a div, not an aside", async function () {
+  var full = card({ board: "p", column: "Todo", labels: [], links: [], blocks: [], body: "Hello" });
+  var html = await draw(CardPanel, { state: { detail: { card: full, comments: [], times: null }, error: "" }, slug: "p" }, "");
+  assert.ok(html.indexOf("detail-main") < html.indexOf("detail-side"));
+  assert.equal(only(html, "detail-side").tag, "div");
+  assert.equal(/<aside/.test(html), false);
+  assert.equal(tagsWith(html, "with-banner").length, 0, "no banner, no banner row");
+  var failing = await draw(CardPanel, { state: { detail: { card: full, comments: [], times: null }, error: "down" }, slug: "p" }, "");
+  assert.equal(tagsWith(failing, "with-banner").length, 1);
 });
