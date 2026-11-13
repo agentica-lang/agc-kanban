@@ -183,7 +183,7 @@ export function useBoard(slug, listener) {
       return;
     }
     woke = Date.now();
-    if (!cable.check()) {
+    if (!cable.check(true)) {
       reload();
     }
   }

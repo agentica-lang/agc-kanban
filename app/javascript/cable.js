@@ -50,7 +50,12 @@ export function subscribe(params, onMessage, onSubscribed) {
   // Reconnects a socket that is closed or silent for too long and says whether it did. Timers of a hidden tab are
   // throttled (a minute apart or worse) and a sleeping device drops the socket without a close event, so the interval
   // below can be far behind: the caller asks again when the tab is back.
-  function check() {
+  // `now` is true when the tab is back: then a closed socket (the backoff wait) reconnects at once too. The interval
+  // passes false and acts only on a live but silent socket, so a server that is down keeps the backoff.
+  function check(now) {
+    if (!socket && !now) {
+      return false;
+    }
     if (socket && (!lastPing || Date.now() - lastPing <= STALE_MS)) {
       return false;
     }
@@ -65,7 +70,7 @@ export function subscribe(params, onMessage, onSubscribed) {
     return true;
   }
 
-  setInterval(check, 3000);
+  setInterval(function () { check(false); }, 3000);
 
   open();
   return { check: check };
