@@ -65,24 +65,29 @@ make test
 
 `skill/agc-kanban/SKILL.md` holds the rules an agent follows on the board (claim first, comment at each phase, never mark a card done). It does not repeat the commands: those are in `.agents/skills/kanban-cli/` (install the `kanban` client with `make install-cli`).
 
+`skill/kanban-sync/SKILL.md` is a procedure for one request: sync a remote tracker (GitHub issues, Trello, ClickUp, Jira, Linear) with a board. The remote keeps the information; a card keeps the link and a few words. It is a procedure to follow on request, not a sync daemon.
+
 An agent with no skill installed learns the same rules from `kanban prime`; paste its output into a prompt.
 
-Run these from the repository root. They link the skill folders (`agc-kanban` and `kanban-cli`), so a change in the repository reaches the agent:
+Run these from the repository root. They link the skill folders (`agc-kanban`, `kanban-sync` and `kanban-cli`), so a change in the repository reaches the agent:
 
 ```sh
 # Claude Code: ~/.claude/skills/ (or .claude/skills/ in a project)
 mkdir -p ~/.claude/skills
 ln -sfn "$PWD/skill/agc-kanban" ~/.claude/skills/agc-kanban
+ln -sfn "$PWD/skill/kanban-sync" ~/.claude/skills/kanban-sync
 ln -sfn "$PWD/.agents/skills/kanban-cli" ~/.claude/skills/kanban-cli
 
 # OpenCode: ~/.config/opencode/skills/
 mkdir -p ~/.config/opencode/skills
 ln -sfn "$PWD/skill/agc-kanban" ~/.config/opencode/skills/agc-kanban
+ln -sfn "$PWD/skill/kanban-sync" ~/.config/opencode/skills/kanban-sync
 ln -sfn "$PWD/.agents/skills/kanban-cli" ~/.config/opencode/skills/kanban-cli
 
 # Codex: ~/.agents/skills/ (or .agents/skills/ in a project)
 mkdir -p ~/.agents/skills
 ln -sfn "$PWD/skill/agc-kanban" ~/.agents/skills/agc-kanban
+ln -sfn "$PWD/skill/kanban-sync" ~/.agents/skills/kanban-sync
 ln -sfn "$PWD/.agents/skills/kanban-cli" ~/.agents/skills/kanban-cli
 ```
 
@@ -92,7 +97,7 @@ Set `KANBAN_AGENT` to a different name for each agent, and `KANBAN_BOARD` to the
 
 ## Install the Claude Code plugin
 
-The repository is also a Claude Code plugin (`.claude-plugin/`): it carries the two skills and two hooks. The hooks run `hooks/board-context.sh` at the start of a session and of a subagent and add to the context the rule about the agent name and the cards in progress, at most 15 card lines in all, then "and N more". A session start lists the coordinator's own cards first, then the Doing cards of the other agents; a subagent start lists every Doing card, the coordinator's too. They only read the board.
+The repository is also a Claude Code plugin (`.claude-plugin/`): it carries the three skills and two hooks. The hooks run `hooks/board-context.sh` at the start of a session and of a subagent and add to the context the rule about the agent name and the cards in progress, at most 15 card lines in all, then "and N more". A session start lists the coordinator's own cards first, then the Doing cards of the other agents; a subagent start lists every Doing card, the coordinator's too. They only read the board.
 
 ```sh
 claude plugin marketplace add agentica-lang/agc-kanban
@@ -111,7 +116,7 @@ There is no session hook to install. OpenCode's plugin documentation ([plugins](
 
 ## Install for Codex
 
-Codex reads a skill folder from `.agents/skills/` (in the current directory, the folder above it and the repository root), `~/.agents/skills/` and `/etc/codex/skills`, and it follows symlinks, so the Codex block above is enough. Each `SKILL.md` needs `name` and `description`, which both skills have. Docs: [skills](https://learn.chatgpt.com/docs/build-skills) and [AGENTS.md](https://learn.chatgpt.com/docs/agent-configuration/agents-md).
+Codex reads a skill folder from `.agents/skills/` (in the current directory, the folder above it and the repository root), `~/.agents/skills/` and `/etc/codex/skills`, and it follows symlinks, so the Codex block above is enough. Each `SKILL.md` needs `name` and `description`, which all the skills have. Docs: [skills](https://learn.chatgpt.com/docs/build-skills) and [AGENTS.md](https://learn.chatgpt.com/docs/agent-configuration/agents-md).
 
 Codex has [hooks](https://learn.chatgpt.com/docs/hooks), including `SessionStart` and `SubagentStart`, and the text a hook prints is added to the context. `hooks/board-context.sh` prints the `hookSpecificOutput.additionalContext` JSON that the Codex page documents for both events, so the plugin script works there. This repository has no Codex plugin, so add the two hooks to `~/.codex/hooks.json` (or `<repo>/.codex/hooks.json`) with the path of your clone:
 
