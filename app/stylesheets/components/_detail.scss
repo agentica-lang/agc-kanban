@@ -44,20 +44,26 @@
 
 @media (min-width: tokens.$narrow + 1) {
   .drawer-modal .detail {
-    grid-template-columns: minmax(0, 1fr) 16rem;
+    grid-template-columns: minmax(0, 1fr) 18rem;
     grid-template-areas: "banner banner" "title title" "main side";
     align-items: start;
-    gap: 1rem 1.5rem;
-    font-size: 0.9375rem;
+    gap: 1.25rem 2rem;
+    font-size: 1rem;
+    line-height: 1.5;
 
     .banner { grid-area: banner; }
-    h3 { grid-area: title; font-size: 1.375rem; }
+    h3 { grid-area: title; font-size: 1.75rem; line-height: 1.25; }
     .detail-main { grid-area: main; }
-    .detail-side { grid-area: side; padding: 0.75rem; border-radius: var(--radius); background: var(--panel); }
+    .detail-side { grid-area: side; padding: 1rem; border-radius: var(--radius); background: var(--panel); }
     .detail-side dl { grid-template-columns: minmax(0, 1fr); gap: 0.125rem; }
-    .detail-side dt { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; }
-    .detail-side dd { margin-bottom: 0.5rem; }
+    .detail-side dt { font-size: 1rem; font-weight: 600; }
+    .detail-side dd { margin-bottom: 0.75rem; }
     .detail-side .label { background: var(--card); }
+    .label { font-size: 1rem; padding: 0.0625rem 0.625rem; }
+    .section-title { font-size: 1.125rem; letter-spacing: 0.02em; }
+    .by { font-size: 1rem; }
+    .md h4 { font-size: 1.25rem; }
+    .md code { font-size: 1rem; }
   }
 }
 
