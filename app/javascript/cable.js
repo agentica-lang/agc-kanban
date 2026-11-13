@@ -9,8 +9,10 @@ export function subscribe(params, onMessage, onSubscribed) {
   var socket = null;
   var attempts = 0;
   var lastPing = 0;
+  var retry = null;
 
   function open() {
+    retry = null;
     var ws = new WebSocket((location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/cable", PROTOCOL);
     socket = ws;
     lastPing = 0;
@@ -23,7 +25,7 @@ export function subscribe(params, onMessage, onSubscribed) {
       if (ws === socket) {
         socket = null;
         attempts += 1;
-        setTimeout(open, Math.min(30000, 500 * Math.pow(2, attempts)) * (0.5 + Math.random() / 2));
+        retry = setTimeout(open, Math.min(30000, 500 * Math.pow(2, attempts)) * (0.5 + Math.random() / 2));
       }
     };
   }
@@ -45,15 +47,31 @@ export function subscribe(params, onMessage, onSubscribed) {
     }
   }
 
-  setInterval(function () {
-    if (socket && lastPing && Date.now() - lastPing > STALE_MS) {
-      // Reconnect now: the close event of a dead socket can take minutes. `onclose` ignores the old socket.
+  // Reconnects a socket that is closed or silent for too long and says whether it did. Timers of a hidden tab are
+  // throttled (a minute apart or worse) and a sleeping device drops the socket without a close event, so the interval
+  // below can be far behind: the caller asks again when the tab is back.
+  // `now` is true when the tab is back: then a closed socket (the backoff wait) reconnects at once too. The interval
+  // passes false and acts only on a live but silent socket, so a server that is down keeps the backoff.
+  function check(now) {
+    if (!socket && !now) {
+      return false;
+    }
+    if (socket && (!lastPing || Date.now() - lastPing <= STALE_MS)) {
+      return false;
+    }
+    if (socket) {
+      // The close event of a dead socket can take minutes. `onclose` ignores the old socket.
       var dead = socket;
       socket = null;
       dead.close();
-      open();
     }
-  }, 3000);
+    clearTimeout(retry);
+    open();
+    return true;
+  }
+
+  setInterval(function () { check(false); }, 3000);
 
   open();
+  return { check: check };
 }

@@ -35,6 +35,15 @@
   cursor: pointer;
 
   &[aria-expanded="true"] { background: var(--panel); color: var(--text); }
+  &:disabled { cursor: progress; }
+}
+
+// The reload button spins while the board is fetched (not for people who ask for less motion).
+.reload.spinning svg { animation: reload-spin 0.8s linear infinite; }
+@keyframes reload-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .reload.spinning svg { animation: none; }
+  .reload.spinning { opacity: 0.5; }
 }
 
 // The Filters button: on a wide screen the word and the count ("Filters · 2"); on a phone a funnel with the count as a
