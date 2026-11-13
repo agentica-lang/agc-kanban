@@ -11,7 +11,9 @@ import {Pair} from "std/uri"
 
 export def run(words: List[String]) -> Result[Void]
   if words.empty?
-    return error("card needs a command: add, list, show, update, claim, next, release, move, done, comment or dep")
+    return error(
+      "card needs a command: add, list, show, update, claim, next, release, move, done, archive, comment or dep",
+    )
   end
 
   rest = List.drop(words, 1)

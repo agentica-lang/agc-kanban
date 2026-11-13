@@ -6,7 +6,8 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { hue, lightChip } from "../../app/javascript/claimer.js";
 
-var light = JSON.parse(readFileSync(new URL("../claimer_light.json", import.meta.url), "utf8"));
+var shared = JSON.parse(readFileSync(new URL("../claimer_light.json", import.meta.url), "utf8"));
+var light = shared.light;
 
 test("every hue has the tone of the shared file, and both tones are used", function () {
   assert.equal(light.length, 360);
@@ -16,6 +17,13 @@ test("every hue has the tone of the shared file, and both tones are used", funct
   assert.ok(light.includes(true) && light.includes(false));
 });
 
-test("the hue of a name is the one the home page draws", function () {
-  assert.deepEqual(["bob", "seed", "claude-code"].map(hue), [157, 57, 28]);
+// The names include the longest one the server takes (64 characters) and one with each of the punctuation marks it
+// allows (`.@/-_`), so the loop of the hash is pinned on both sides.
+test("the hue of a name is the one of the shared file, which the home page draws", function () {
+  var names = Object.keys(shared.hues);
+  assert.equal(names.length, 6);
+  assert.ok(names.some(function (name) { return name.length === 64; }));
+  names.forEach(function (name) {
+    assert.equal(hue(name), shared.hues[name], name);
+  });
 });

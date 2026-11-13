@@ -360,6 +360,7 @@ Tests assert the `code` and the status, never the message.
 | `POST /api/cards/:id/release` | `{"force"?: false, "column"?}` | `{"card"}`; `NOT_CLAIMER` unless `force` |
 | `POST /api/cards/:id/move` | `{"column", "position"?, "force"?: false}` | `{"card"}`; `CLAIMED` if another agent holds it, `BLOCKED` into the done column with an open dependency; `force` skips both |
 | `POST /api/cards/:id/done` | `{"force"?: false}` | `{"card"}`: moved to the done column, claim cleared; `NOT_CLAIMER` or `BLOCKED` (an open dependency) unless `force` |
+| `POST /api/cards/:id/archive` | `{"force"?: false}` | `{"card"}` with `archived_at`: hidden from the board, the lists, `next`, claims and readiness; kept in the database, the journal (`card.archived`) and `GET /api/cards/:id`. No role is checked (the coordinator's by agreement); `CLAIMED` unless `force`, which drops the claim. An archived card is archived again with no new event. Every other write on it is `NOT_FOUND`. A dependency on it no longer blocks |
 | `POST /api/cards/:id/comments` | `{"body"}` | 201 `{"comment": {"id", "card_id", "author", "body", "created_at"}}` |
 | `POST /api/cards/:id/deps` | `{"depends_on": id, "force"?: false}` | 201 `{"card"}`; `CYCLE`; `CLAIMED` if another agent holds the card, unless `force`. The holder can add one: the card keeps its column and claim and shows blocked. A new card in the done column with an open dependency is `BLOCKED` too |
 | `DELETE /api/cards/:id/deps/:other` | query: `force=1` | `{"card"}`; `CLAIMED` if another agent holds the card, unless `force` |
@@ -440,6 +441,7 @@ kanban card update ID [--title T] [--body TEXT | --body-file F] [--label L]...
                       [--priority N] [--branch B] [--worktree W]
 kanban card comment ID TEXT | --file F    `-` reads stdin
 kanban card done ID [--force]
+kanban card archive ID [--force]          hides the card (the coordinator's)
 kanban card dep add ID DEPENDS_ON_ID [--force]
 kanban card dep remove ID DEPENDS_ON_ID [--force]
 
@@ -735,7 +737,7 @@ same card, and the owner watched it live.
 
 ### Phase 5: polish
 
-- [ ] Card archive (`kanban card archive ID`), hidden from the board.
+- [x] Card archive (`kanban card archive ID`), hidden from the board.
 - [ ] Claim leases if the trial showed stale claims (see the open
       questions): `KANBAN_LEASE_MINUTES`, renew on any write by the
       claimer, a "stale" mark in the web.

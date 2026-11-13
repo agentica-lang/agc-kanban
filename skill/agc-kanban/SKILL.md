@@ -61,7 +61,8 @@ This skill is only the rules.
   yours. Only when your brief says you finish your own cards do you run it.
 - New work you find is a new card (`card add --depends-on`), not a wider card.
 - Cannot finish: comment why, then `kanban card release ID`.
-- `--force` is for the coordinator only.
+- `--force` and `card archive` are for the coordinator only: an archived card
+  is gone from the board, the lists and `card next`.
 - The board is not a lock. It does not replace the build or test locks, and
   it does not lock files.
 

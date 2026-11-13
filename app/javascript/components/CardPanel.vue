@@ -54,6 +54,10 @@ function when(ms) {
     <dl>
       <dt>Column</dt>
       <dd>{{ state.detail.card.column }}</dd>
+      <template v-if="state.detail.card.archived_at">
+        <dt>Archived</dt>
+        <dd>{{ when(state.detail.card.archived_at) }} (hidden from the board)</dd>
+      </template>
       <dt>Claimed by</dt>
       <dd>{{ state.detail.card.claimed_by || "free" }}</dd>
       <dt>Priority</dt>

@@ -101,9 +101,14 @@ test("a comment shows a one-line excerpt and the title from the board", function
   assert.equal(Array.from(one.excerpt).length, 80);
 });
 
+test("an archive reads as archived, with the title of the card in its data when the board no longer has it", function () {
+  var one = entry({ id: 10, kind: "card.archived", card_id: 5, actor: "x", created_at: 1000, data: { card: { title: "Old" }, from: { id: 1, name: "Todo" } } }, {});
+  assert.deepEqual([one.verb, one.group, one.title, one.from, one.to], ["archived", "other", "Old", "", ""]);
+});
+
 test("an unknown kind reads as its name, with no data needed", function () {
-  var one = entry({ id: 9, kind: "card.archived", card_id: 5, actor: "x", created_at: 1000, data: null }, {});
-  assert.deepEqual([one.verb, one.group, one.title], ["card.archived", "other", ""]);
+  var one = entry({ id: 9, kind: "card.exploded", card_id: 5, actor: "x", created_at: 1000, data: null }, {});
+  assert.deepEqual([one.verb, one.group, one.title], ["card.exploded", "other", ""]);
 });
 
 test("the relative time and the day separators", function () {

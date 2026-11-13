@@ -36,6 +36,8 @@ export struct Card
   created_at: Int
   updated_at: Int
   done_at: Optional[Int]
+  # Set once a card is archived: it is then hidden from the board and the lists, and kept for `show` and the journal.
+  archived_at: Optional[Int]
   version: Int
 end
 
@@ -115,7 +117,7 @@ export def show(pool: Database.Pool, id: Int) -> Result[Detail]
 
   Database.with_connection(pool) do |conn|
     Db.transaction(conn) do |tx|
-      card = try load(tx, id)
+      card = try load_any_at(tx, id, Time.now_ms())
       rows = try Db.query(
         tx,
         "select id, card_id, author, body, created_at from comments where card_id = ? order by id",
@@ -132,7 +134,8 @@ export def show(pool: Database.Pool, id: Int) -> Result[Detail]
         )
       end
 
-      now = Time.now_ms()
+      # An archived card stops counting the time it spends in its column at the archive.
+      now = card.archived_at.unwrap_or(Time.now_ms())
       steps = (try steps_of(tx, id)).map do |step| named(step, card) end
       ok(Detail(card: card, comments: comments, times: Times.build(steps, card.done, now)))
     end
@@ -163,7 +166,7 @@ export def list_open(conn: Db.Connection, board: String, filters: Filters) -> Re
   done = bool_value(filters.done)
   rows = try Db.query(
     conn,
-    "select c.id from cards c join columns col on col.id = c.column_id where c.board_id = ? and c.archived_at is null and (? is null or col.name = ? or cast(col.id as text) = ?) and (? is null or c.claimed_by = ?) and (? is null or exists (select 1 from json_each(c.labels) j where j.value = ?)) and (? is null or col.done = ?) and (? is null or (case when col.done = 0 and (c.claimed_by is null or c.lease_until <= ?) and not exists (select 1 from card_deps d join cards dep on dep.id = d.depends_on_id join columns dc on dc.id = dep.column_id where d.card_id = c.id and dc.done = 0) then 1 else 0 end) = ?) order by col.position, c.position, c.id",
+    "select c.id from cards c join columns col on col.id = c.column_id where c.board_id = ? and c.archived_at is null and (? is null or col.name = ? or cast(col.id as text) = ?) and (? is null or c.claimed_by = ?) and (? is null or exists (select 1 from json_each(c.labels) j where j.value = ?)) and (? is null or col.done = ?) and (? is null or (case when col.done = 0 and (c.claimed_by is null or c.lease_until <= ?) and not exists (select 1 from card_deps d join cards dep on dep.id = d.depends_on_id join columns dc on dc.id = dep.column_id where d.card_id = c.id and dep.archived_at is null and dc.done = 0) then 1 else 0 end) = ?) order by col.position, c.position, c.id",
     [
       Db.Value.Int(board_id),
       column,
@@ -212,10 +215,11 @@ export def update(pool: Database.Pool, input: Update) -> Result[Card]
 end
 
 # The ids of the cards `id` depends on that are not done yet (in a column that is not a done column), lowest first.
+# A card that was archived no longer blocks: it left the board, so nobody can finish it.
 export def open_blockers(conn: Db.Connection, id: Int) -> Result[List[Int]]
   rows = try Db.query(
     conn,
-    "select dep.id from card_deps d join cards dep on dep.id = d.depends_on_id join columns col on col.id = dep.column_id where d.card_id = ? and col.done = 0 order by dep.id",
+    "select dep.id from card_deps d join cards dep on dep.id = d.depends_on_id join columns col on col.id = dep.column_id where d.card_id = ? and dep.archived_at is null and col.done = 0 order by dep.id",
     [Db.Value.Int(id)],
   )
 
@@ -241,11 +245,18 @@ export def open_among(conn: Db.Connection, ids: List[Int]) -> Result[List[Int]]
   ok(open)
 end
 
-export def load_at(conn: Db.Connection, id: Int, now: Int) -> Result[Card]
+# A card that is not archived. An archived card is `NOT_FOUND` here, so every write refuses it as it refuses a
+# missing one.
+export def load_at(conn: Db.Connection, id: Int, now: Int) -> Result[Card] = read_card(conn, id, now, false)
+
+# A card, archived or not: for `show` and for the archive itself.
+export def load_any_at(conn: Db.Connection, id: Int, now: Int) -> Result[Card] = read_card(conn, id, now, true)
+
+def read_card(conn: Db.Connection, id: Int, now: Int, archived: Bool) -> Result[Card]
   rows = try Db.query(
     conn,
-    "select c.*, b.slug as board_slug, col.name as column_name, col.done as column_done, case when c.archived_at is null and col.done = 0 and (c.claimed_by is null or c.lease_until <= ?) and not exists (select 1 from card_deps d join cards dep on dep.id = d.depends_on_id join columns dc on dc.id = dep.column_id where d.card_id = c.id and dc.done = 0) then 1 else 0 end as ready from cards c join boards b on b.id = c.board_id join columns col on col.id = c.column_id where c.id = ? and c.archived_at is null",
-    [Db.Value.Int(now), Db.Value.Int(id)],
+    "select c.*, b.slug as board_slug, col.name as column_name, col.done as column_done, case when c.archived_at is null and col.done = 0 and (c.claimed_by is null or c.lease_until <= ?) and not exists (select 1 from card_deps d join cards dep on dep.id = d.depends_on_id join columns dc on dc.id = dep.column_id where d.card_id = c.id and dep.archived_at is null and dc.done = 0) then 1 else 0 end as ready from cards c join boards b on b.id = c.board_id join columns col on col.id = c.column_id where c.id = ? and (? = 1 or c.archived_at is null)",
+    [Db.Value.Int(now), Db.Value.Int(id), bool_int(archived)],
   )
 
   return error("NOT_FOUND:card") if rows.empty?
@@ -261,7 +272,7 @@ export def load_at(conn: Db.Connection, id: Int, now: Int) -> Result[Card]
 
   blocks = try Db.query(
     conn,
-    "select card_id as id from card_deps where depends_on_id = ? order by card_id",
+    "select d.card_id as id from card_deps d join cards c on c.id = d.card_id where d.depends_on_id = ? and c.archived_at is null order by d.card_id",
     [Db.Value.Int(id)],
   )
 
@@ -290,6 +301,7 @@ export def load_at(conn: Db.Connection, id: Int, now: Int) -> Result[Card]
       created_at: number(row, "created_at"),
       updated_at: number(row, "updated_at"),
       done_at: optional_number(row, "done_at"),
+      archived_at: optional_number(row, "archived_at"),
       version: number(row, "version"),
     ),
   )

@@ -88,6 +88,7 @@ kanban card next [--column Todo] [--label api]
 kanban card release 12 [--to Todo] [--force]   # releasing a free card is a no-op: "already free"
 kanban card move 12 Doing [--position 0] [--force]
 kanban card done 12 [--force]
+kanban card archive 12 [--force]       # the coordinator's: hides the card (see below)
 kanban card comment 12 "ran the migration"   # or --file notes.md
 kanban card dep add 12 10 [--force]    # 12 needs 10 first; allowed on a card you hold (it stays in its column, shown blocked)
                                        # while 10 is open, `done 12` and `move 12 Done` are refused (BLOCKED, exit 4)
@@ -97,6 +98,18 @@ kanban card dep remove 12 10 [--force]   # --force skips CLAIMED only
 
 kanban events [--after 42 | --before 42] [--card 12] [--limit 50]   # --before: newest first
 ```
+
+`card archive` hides a card from the board page, the home page counts, `card list` (even with
+`--all`), `card next`, claims and the readiness of the cards that depend on it. The card stays in the
+database and in the event journal (a `card.archived` event, which the open board pages hear and drop the card
+at once), and `card show 12` still prints it, with `archived: true` on the second line. Nothing unarchives it.
+The web has no archive button. The server checks no role, so it is the coordinator's by agreement, like `done`:
+any named agent may run it, and a card that another agent holds needs `--force`, as for the other writes. The
+archive drops the claim. Archiving an archived card is not an error: it prints the same line and writes no
+second event. An archived card refuses a claim, a move, a comment or a dependency with `NOT_FOUND` (exit 1), as
+a card that does not exist does. A dependency on an archived card no longer blocks: the card that waited for
+it becomes ready (its `depends on:` line still names the archived one). A column that holds an archived card
+cannot be removed (`CONFLICT`).
 
 `--link` and `--unlink` repeat (not after `--`). A link is an http(s) URL (a PR,
 an issue, a CI run) in printable ASCII (an IDN host as punycode, a path

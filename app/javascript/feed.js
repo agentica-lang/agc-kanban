@@ -15,6 +15,7 @@ var KINDS = {
   "card.released": { verb: "released", group: "release" },
   "card.moved": { verb: "moved", group: "move" },
   "card.done": { verb: "closed", group: "done" },
+  "card.archived": { verb: "archived", group: "other" },
   "comment.added": { verb: "commented on", group: "comment" },
   "dep.added": { verb: "added a dependency to", group: "dep" },
   "dep.removed": { verb: "removed a dependency from", group: "dep" },

@@ -136,6 +136,18 @@ Feature: The web pages
     And the response does not contain "carol"
     And the response contains "1 agent working"
 
+  Scenario: An agent with a dark hue gets the plain chip, and one with a light hue the light chip
+    Given the database server is running
+    When I post a board named "Project" with slug "project" as "agent-1"
+    And I add a card titled "A"
+    And I add a card titled "B"
+    And agent "web" claims card 1
+    And agent "bob" claims card 2
+    And I sign in with the key "01234567890123456789012345678901"
+    And I get the page "/boards" with the session
+    Then the response contains "<span class=\"claimer\" style=\"--hue:228\">web</span>"
+    And the response contains "<span class=\"claimer light\" style=\"--hue:157\">bob</span>"
+
   Scenario: A claimed card in the done column shows no agent
     Given the database server is running
     When I post a board named "Project" with slug "project" as "agent-1"

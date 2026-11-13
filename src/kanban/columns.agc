@@ -230,7 +230,7 @@ def update_open(conn: Db.Connection, input: Update) -> Result[Boards.Column]
     if not input.force
       waiting = try Db.query(
         conn,
-        "select c.id from cards c where c.column_id = ? and c.archived_at is null and exists (select 1 from card_deps d join cards dep on dep.id = d.depends_on_id join columns dc on dc.id = dep.column_id where d.card_id = c.id and dc.id != ? and (dc.done = 0 or dc.board_id = ?)) order by c.id",
+        "select c.id from cards c where c.column_id = ? and c.archived_at is null and exists (select 1 from card_deps d join cards dep on dep.id = d.depends_on_id join columns dc on dc.id = dep.column_id where d.card_id = c.id and dep.archived_at is null and dc.id != ? and (dc.done = 0 or dc.board_id = ?)) order by c.id",
         [Db.Value.Int(input.id), Db.Value.Int(input.id), Db.Value.Int(board_id)],
       )
 
@@ -389,7 +389,7 @@ end
 def card_ids_in_done(conn: Db.Connection, board_id: Int) -> Result[List[Int]]
   rows = try Db.query(
     conn,
-    "select id from cards where board_id = ? and column_id in (select id from columns where board_id = ? and done = 1)",
+    "select id from cards where board_id = ? and archived_at is null and column_id in (select id from columns where board_id = ? and done = 1)",
     [Db.Value.Int(board_id), Db.Value.Int(board_id)],
   )
 
@@ -397,7 +397,12 @@ def card_ids_in_done(conn: Db.Connection, board_id: Int) -> Result[List[Int]]
 end
 
 def card_ids_in_column(conn: Db.Connection, column_id: Int) -> Result[List[Int]]
-  rows = try Db.query(conn, "select id from cards where column_id = ?", [Db.Value.Int(column_id)])
+  rows = try Db.query(
+    conn,
+    "select id from cards where column_id = ? and archived_at is null",
+    [Db.Value.Int(column_id)],
+  )
+
   ok(rows.map do |row| int_of(row, "id") end)
 end
 

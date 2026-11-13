@@ -45,6 +45,16 @@ export def finish(pool: Database.Pool, input: Action) -> Result[Cards.Card]
   Database.with_connection(pool) do |conn| Db.transaction(conn) do |tx| finish_open(tx, input) end end
 end
 
+## Hides a card from the board and the lists: it stays in the database and the journal, and `show` still reads it. It
+## follows the rules of the other writes: a card that somebody else holds needs `force`. Archiving an archived card
+## changes nothing and writes no event. The claim is dropped, so an archived card holds nothing.
+export def archive(pool: Database.Pool, input: Action) -> Result[Cards.Card]
+  return error("INVALID:id") if input.id <= 0
+  return error("INVALID:agent") if not Regex.match?(input.actor, /^[A-Za-z0-9._@\/-]{1,64}$/)
+
+  Database.with_connection(pool) do |conn| Db.transaction(conn) do |tx| archive_open(tx, input) end end
+end
+
 export def move(pool: Database.Pool, input: Move) -> Result[Cards.Card]
   return error("INVALID:id") if input.id <= 0
   return error("INVALID:agent") if not Regex.match?(input.actor, /^[A-Za-z0-9._@\/-]{1,64}$/)
@@ -121,6 +131,48 @@ def finish_open(conn: Db.Connection, input: Action) -> Result[Cards.Card]
       Db.Value.Int(board_id),
       Db.Value.Int(input.id),
       Db.Value.Text("card.done"),
+      Db.Value.Text(input.actor),
+      Db.Value.Text(JSON.encode(JSON.from(data))),
+      Db.Value.Int(now),
+    ],
+  )
+
+  ok(updated)
+end
+
+def archive_open(conn: Db.Connection, input: Action) -> Result[Cards.Card]
+  now = Time.now_ms()
+  card = try Cards.load_any_at(conn, input.id, now)
+  return ok(card) if card.archived_at.some?
+
+  active = card.claimed_by.some? and (not card.lease_until.some? or card.lease_until.unwrap! > now)
+  if active and card.claimed_by.unwrap! != input.actor and not input.force
+    return error("CLAIMED:#{card.claimed_by.unwrap!}")
+  end
+
+  _ = try Db.execute(
+    conn,
+    "update cards set archived_at = ?, claimed_by = null, claimed_at = null, lease_until = null, updated_at = ?, version = version + 1 where id = ?",
+    [Db.Value.Int(now), Db.Value.Int(now), Db.Value.Int(input.id)],
+  )
+
+  # The cards below it move up, so the positions of the column stay 0..n-1 without it.
+  _ = try Db.execute(
+    conn,
+    "update cards set position = position - 1, version = version + 1, updated_at = ? where column_id = ? and position > ? and archived_at is null",
+    [Db.Value.Int(now), Db.Value.Int(card.column_id), Db.Value.Int(card.position)],
+  )
+
+  updated = try Cards.load_any_at(conn, input.id, now)
+  board = try Db.query(conn, "select board_id from cards where id = ?", [Db.Value.Int(input.id)])
+  data = EventData(card: updated, from: Source(id: card.column_id, name: card.column), forced: input.force)
+  _ = try Db.execute(
+    conn,
+    "insert into events (board_id, card_id, kind, actor, data, created_at) values (?, ?, ?, ?, ?, ?)",
+    [
+      Db.Value.Int(number(board[0], "board_id")),
+      Db.Value.Int(input.id),
+      Db.Value.Text("card.archived"),
       Db.Value.Text(input.actor),
       Db.Value.Text(JSON.encode(JSON.from(data))),
       Db.Value.Int(now),

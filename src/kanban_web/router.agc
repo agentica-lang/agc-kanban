@@ -33,6 +33,7 @@ export def install(app: Bond.App, pool: Optional[Database.Pool], lease_minutes: 
     |> Bond.post(Routes.CARD_RELEASE, ->(conn) { Claims.release(conn, pool) })
     |> Bond.post(Routes.CARD_MOVE, ->(conn) { Claims.move(conn, pool, lease_minutes) })
     |> Bond.post(Routes.CARD_DONE, ->(conn) { Claims.done(conn, pool) })
+    |> Bond.post(Routes.CARD_ARCHIVE, ->(conn) { Claims.archive(conn, pool) })
     |> Bond.post(Routes.CARD_CLAIM, ->(conn) { Claims.claim(conn, pool, lease_minutes) })
     |> Bond.get(Routes.CARD, ->(conn) { Cards.show(conn, pool) })
     |> Bond.patch(Routes.CARD, ->(conn) { Cards.update(conn, pool, lease_minutes) })
