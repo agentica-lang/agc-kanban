@@ -432,6 +432,7 @@ kanban column remove COLUMN
 kanban card add TITLE [--body TEXT | --body-file F] [--column C]
                 [--label L]... [--priority 0-4] [--depends-on ID]...
 kanban card list [--column C] [--ready] [--mine] [--claimed-by A] [--label L] [--all]
+                [--format text|tsv]
 kanban card show ID                       card, dependencies, comments
 kanban card claim ID
 kanban card next [--column C] [--label L] claim the first ready card
@@ -461,7 +462,10 @@ no skills installed still learns the rules from the shell alone.
 ### Output
 
 - Default: short text for people. `card list` prints one line per card:
-  `#12  Doing   claude-2  Add login route  [api]`.
+  `#12  Doing   claude-2  Add login route  [api]`. `card list --format tsv`
+  prints one tab-separated line per card for scripts (id, column,
+  claimed_by, ready, priority, labels, title; no header); it cannot be
+  combined with `--json`.
 - `--json`: one JSON document on stdout, the server's answer as is. Errors
   are `{"error": {...}}` on stdout too, so an agent reads one stream.
 - Text errors go to stderr as `kanban: CLAIMED: card 12 is claimed by
@@ -794,7 +798,8 @@ What was missing or went wrong:
 - [ ] A "stale" mark in the web for a claim whose lease has ended.
 - [x] Filters in the web: label, claimer, ready only (`?label=`, `?claimer=`, `?ready=1`).
 - [x] Markdown in card bodies and comments, escaped (`std/html`).
-- [ ] `kanban card list --format tsv` if agents need a compact form.
+- [x] `kanban card list --format tsv` for agents that need a compact form: seven
+      columns, no header, `--json` refused with `USAGE`; the hook keeps the text form.
 - [ ] A README: run the server, install the CLI, install the skill (done:
       Claude Code, OpenCode and Codex), back up the database (not written).
 

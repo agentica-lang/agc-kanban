@@ -67,6 +67,21 @@ struct CardLine
   labels: List[String]
 end
 
+# The list of `card list --format tsv`: the fields of a card line plus the two it leaves out.
+struct TsvCard
+  id: Int
+  column: String
+  claimed_by: Optional[String]
+  title: String
+  labels: List[String]
+  priority: Int
+  ready: Bool
+end
+
+struct TsvCards
+  cards: List[TsvCard]
+end
+
 struct Snapshot
   board: BoardInfo
   cards: List[CardLine]
@@ -243,6 +258,22 @@ export def print_cards(response: HTTP.Response) -> Void
   end
 end
 
+# One card per line, seven tab-separated fields in a fixed order, no header, so `cut -f` and `awk -F'\t'` read it:
+# id, column, claimed_by (empty when free), ready (1 or 0), priority, labels (comma-joined) and the title, last.
+# Every field goes through `one_line`, so a tab or a line break inside one becomes a space and cannot add a field or
+# a line. Unlike the text form, spaces are kept as they are: the tab is the separator, not the two spaces.
+export def print_cards_tsv(response: HTTP.Response) -> Void
+  decoded = JSON.decode(body(response), TsvCards)
+  if not decoded.ok?
+    puts(body(response))
+    return
+  end
+
+  for card in decoded.unwrap!.cards
+    puts(tsv_line(card))
+  end
+end
+
 export def print_card(response: HTTP.Response) -> Void
   decoded = JSON.decode(body(response), CardAnswer)
   if not decoded.ok?
@@ -354,6 +385,27 @@ end
 def card_line(card: CardLine) -> String
   holder = card.claimed_by.unwrap_or("free")
   one_line("##{card.id}  #{squeeze(card.column)}  #{holder}  #{card.title}#{labels_text(card.labels)}")
+end
+
+def tsv_line(card: TsvCard) -> String
+  ready = 0
+  if card.ready
+    ready = 1
+  end
+
+  # A comma inside a label would read as two labels.
+  labels = card.labels.map { |label| label.replace(",", " ") }.join(",")
+  fields = [
+    card.id.to_s,
+    card.column,
+    card.claimed_by.unwrap_or(""),
+    ready.to_s,
+    card.priority.to_s,
+    labels,
+    card.title,
+  ]
+
+  fields.map { |field| one_line(field) }.join("\t")
 end
 
 def squeeze(text: String) -> String = Regex.replace(one_line(text), / {2,}/, " ").unwrap!.strip

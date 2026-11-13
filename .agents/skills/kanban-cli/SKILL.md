@@ -77,7 +77,7 @@ kanban column remove Check             # refused when it has cards or is the don
 
 kanban card add "Fix login" --label api,ui --priority 1 --body-file task.md \
                 [--link URL]...
-kanban card list [--column Todo] [--ready] [--mine] [--claimed-by NAME] [--label api] [--all]
+kanban card list [--column Todo] [--ready] [--mine] [--claimed-by NAME] [--label api] [--all] [--format tsv]
 kanban card show 12
 kanban card update 12 [--title T] [--body T | --body-file F] [--label L] \
                      [--priority N] [--branch B] [--worktree W] [--force] \
@@ -158,6 +158,20 @@ verbatim, with `times` in milliseconds.
 $ kanban card list
 #12  Doing  claude-code  Fix login [api, ui]
 #13  Todo  free  Add logout
+```
+
+`kanban card list --format tsv` is the form for scripts: one card per line, seven tab-separated fields in a
+fixed order, no header line (so `cut -f` and `awk -F'\t'` read it as it is), the title last:
+`id`, `column`, `claimed_by` (empty when free), `ready` (`1` or `0`, as `--ready` selects), `priority`, `labels`
+(comma-joined; a comma inside a label becomes a space) and `title`. A tab, a line break or any other control
+character in a field becomes a space, and spaces are kept. The filters are the same, and an empty list prints
+nothing. `--format` takes `text` (the default) or `tsv`, and only `card list` has it; any other value is `USAGE`
+(exit 2). `--format tsv --json` is also `USAGE`: the run would have two outputs, so it is refused, not guessed.
+
+```
+$ kanban card list --format tsv
+12	Doing	claude-code	0	1	api,ui	Fix login
+13	Todo		1	2		Add logout
 ```
 
 ## Exit codes

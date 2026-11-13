@@ -23,6 +23,10 @@ def main() -> Void
       BDD.step("I get the project snapshot", &project_snapshot),
       BDD.step("I add a card titled {string}", &add_card),
       BDD.step("I add a card titled {string} with the link {string}", &add_linked_card),
+      BDD.step("I add a card titled {string} with labels {string} and priority {int}", &add_labelled_card),
+      BDD.step("I add a card whose title has a tab and a line break", &add_tab_title_card),
+      BDD.step("kanban tsv line {int} is {string}", &kanban_tsv_line),
+      BDD.step("kanban tsv has {int} lines", &kanban_tsv_lines),
       BDD.step("agent {string} links card {int} to {string}", &link_card),
       BDD.step("agent {string} unlinks card {int} from {string}", &unlink_card),
       BDD.step("agent {string} forcibly links card {int} to {string}", &force_link_card),
@@ -355,6 +359,44 @@ end
 def add_linked_card(ctx: BDD.Context, args: List[String]) -> BDD.Context
   body = JSON.encode(JSON.object({"title": JSON.from(args[0]), "links": JSON.from([args[1]])}))
   api_request(ctx, "POST", "/api/boards/project/cards", body)
+end
+
+# Labels come comma-separated so that one label can hold spaces.
+def add_labelled_card(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  body = JSON.encode(
+    JSON.object({
+      "title": JSON.from(args[0]),
+      "labels": JSON.from(args[1].split(",")),
+      "priority": JSON.from(args[2].to_i!),
+    }),
+  )
+
+  api_request(ctx, "POST", "/api/boards/project/cards", body)
+end
+
+def add_tab_title_card(ctx: BDD.Context, _args: List[String]) -> BDD.Context
+  api_request(ctx, "POST", "/api/boards/project/cards", JSON.encode(JSON.from({"title": "one\ttwo\nthree"})))
+end
+
+def tsv_lines(ctx: BDD.Context) -> List[String]
+  output = JSON.string(BDD.get(ctx, "kanban_stdout").unwrap!).unwrap!
+  output.strip.split("\n")
+end
+
+# A line with its tabs shown as `|`, so a feature file can say it.
+def kanban_tsv_line(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  lines = tsv_lines(ctx)
+  index = args[0].to_i! - 1
+  line = "(missing)"
+  if index >= 0 and index < lines.size
+    line = lines[index]
+  end
+
+  BDD.assert(ctx, line.replace("\t", "|") == args[1], "line #{args[0]} was #{line.replace("\t", "|")}")
+end
+
+def kanban_tsv_lines(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  BDD.assert(ctx, tsv_lines(ctx).size == args[0].to_i!, "stdout was #{tsv_lines(ctx).join(" | ")}")
 end
 
 def link_card(ctx: BDD.Context, args: List[String]) -> BDD.Context
