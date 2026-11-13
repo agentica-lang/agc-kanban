@@ -230,3 +230,22 @@ test("a card that is gone closes the panel through the board page's wiring: the 
   assert.equal(one.tab.length(), 1);
   one.stop();
 });
+
+test("after the page's scope stops, a drawer change fetches nothing", async function () {
+  var one = page("/boards/p");
+  var fetched = [];
+  globalThis.fetch = function (url) {
+    fetched.push(url);
+    return Promise.resolve({ ok: true, status: 200, json: function () { return { card: { id: 0 }, comments: [] }; } });
+  };
+  var card = one.scope.run(useCard);
+  one.scope.run(function () { followDrawer(one.drawer, card); });
+  one.drawer.showCard(4);
+  await new Promise(function (resolve) { setTimeout(resolve, 20); });
+  assert.equal(fetched.length, 1, "the live page follows the drawer");
+  assert.match(fetched[0], /\/api\/cards\/4$/);
+  one.stop();
+  one.drawer.showCard(5);
+  await new Promise(function (resolve) { setTimeout(resolve, 20); });
+  assert.equal(fetched.length, 1, "a stopped page fetches nothing");
+});

@@ -22,6 +22,7 @@ var server = await createServer({
 });
 after(function () { return server.close(); });
 var Card = (await server.ssrLoadModule("/app/javascript/components/Card.vue")).default;
+var CardPanel = (await server.ssrLoadModule("/app/javascript/components/CardPanel.vue")).default;
 var FilterBar = (await server.ssrLoadModule("/app/javascript/components/FilterBar.vue")).default;
 
 // The page code reads the filters from `location`; a plain object stands in for it.
@@ -79,4 +80,15 @@ test("?label= and the other filters of the URL show as chips above the board, ea
   });
   assert.ok(html.includes(">Clear</button>"));
   assert.equal((await draw(FilterBar, { shown: 2 }, "")).includes("filters"), false, "no filter, no bar");
+});
+
+test("the panel of an archived card says it is archived, and the panel of any other does not", async function () {
+  var detail = function (extra) {
+    var full = card(Object.assign({ board: "p", column: "Todo", labels: [], links: [], blocks: [], body: "" }, extra));
+    return { detail: { card: full, comments: [], times: null }, error: "" };
+  };
+  var archived = await draw(CardPanel, { state: detail({ archived_at: 1000 }), slug: "p" }, "");
+  assert.match(archived, /<dt>Archived<\/dt>/);
+  var open = await draw(CardPanel, { state: detail({ archived_at: null }), slug: "p" }, "");
+  assert.equal(open.includes("Archived"), false);
 });

@@ -106,7 +106,7 @@ def insert(conn: Db.Connection, input: Add) -> Result[Boards.Column]
     affected = try card_ids_in_done(conn, board_id)
     _ = try Db.execute(
       conn,
-      "update cards set done_at = null, updated_at = ?, version = version + 1 where board_id = ? and column_id in (select id from columns where board_id = ? and done = 1)",
+      "update cards set done_at = null, updated_at = ?, version = version + 1 where board_id = ? and archived_at is null and column_id in (select id from columns where board_id = ? and done = 1)",
       [Db.Value.Int(now), Db.Value.Int(board_id), Db.Value.Int(board_id)],
     )
 
@@ -230,7 +230,7 @@ def update_open(conn: Db.Connection, input: Update) -> Result[Boards.Column]
     if not input.force
       waiting = try Db.query(
         conn,
-        "select c.id from cards c where c.column_id = ? and c.archived_at is null and exists (select 1 from card_deps d join cards dep on dep.id = d.depends_on_id join columns dc on dc.id = dep.column_id where d.card_id = c.id and dc.id != ? and (dc.done = 0 or dc.board_id = ?)) order by c.id",
+        "select c.id from cards c where c.column_id = ? and c.archived_at is null and exists (select 1 from card_deps d join cards dep on dep.id = d.depends_on_id join columns dc on dc.id = dep.column_id where d.card_id = c.id and dep.archived_at is null and dc.id != ? and (dc.done = 0 or dc.board_id = ?)) order by c.id",
         [Db.Value.Int(input.id), Db.Value.Int(input.id), Db.Value.Int(board_id)],
       )
 
@@ -244,13 +244,13 @@ def update_open(conn: Db.Connection, input: Update) -> Result[Boards.Column]
 
     _ = try Db.execute(
       conn,
-      "update cards set done_at = null, updated_at = ?, version = version + 1 where column_id in (select id from columns where board_id = ? and done = 1)",
+      "update cards set done_at = null, updated_at = ?, version = version + 1 where archived_at is null and column_id in (select id from columns where board_id = ? and done = 1)",
       [Db.Value.Int(now), Db.Value.Int(board_id)],
     )
 
     _ = try Db.execute(
       conn,
-      "update cards set done_at = ?, claimed_by = null, claimed_at = null, lease_until = null, updated_at = ?, version = version + 1 where column_id = ? and done_at is null",
+      "update cards set done_at = ?, claimed_by = null, claimed_at = null, lease_until = null, updated_at = ?, version = version + 1 where column_id = ? and archived_at is null and done_at is null",
       [Db.Value.Int(now), Db.Value.Int(now), Db.Value.Int(input.id)],
     )
 
@@ -316,11 +316,17 @@ def remove_open(conn: Db.Connection, input: Remove) -> Result[Void]
   return error("CONFLICT:done_column") if int_of(rows[0], "done") == 1
 
   board_id = int_of(rows[0], "board_id")
-  cards = try Db.query(conn, "select count(*) as n from cards where column_id = ?", [Db.Value.Int(input.id)])
+  # Only the cards on the board count: an archived card is hidden, so it never keeps a column from going.
+  cards = try Db.query(
+    conn,
+    "select count(*) as n from cards where column_id = ? and archived_at is null",
+    [Db.Value.Int(input.id)],
+  )
 
   return error("CONFLICT:column_not_empty") if int_of(cards[0], "n") > 0
 
   now = Time.now_ms()
+  try shelter_archived(conn, board_id, input.id, now)
   _ = try Db.execute(conn, "delete from columns where id = ?", [Db.Value.Int(input.id)])
   remaining = try Db.query(
     conn,
@@ -360,6 +366,26 @@ def remove_open(conn: Db.Connection, input: Remove) -> Result[Void]
   ok()
 end
 
+# The archived cards of a column that goes move to the first column that stays (by position), because `cards.column_id`
+# must name a column. They stay archived, and their `card.archived` event keeps the column they came from.
+def shelter_archived(conn: Db.Connection, board_id: Int, column_id: Int, now: Int) -> Result[Void]
+  target = try Db.query(
+    conn,
+    "select id from columns where board_id = ? and id != ? order by position limit 1",
+    [Db.Value.Int(board_id), Db.Value.Int(column_id)],
+  )
+
+  return ok() if target.empty?
+
+  _ = try Db.execute(
+    conn,
+    "update cards set column_id = ?, updated_at = ?, version = version + 1 where column_id = ? and archived_at is not null",
+    [Db.Value.Int(int_of(target[0], "id")), Db.Value.Int(now), Db.Value.Int(column_id)],
+  )
+
+  ok()
+end
+
 def reorder(conn: Db.Connection, board_id: Int, ordered: List[Db.Row], id: Int, position: Int) -> Result[Void]
   others = ordered.map { |row| int_of(row, "id") }.select do |current| current != id end
   wanted: List[Int] = []
@@ -389,7 +415,7 @@ end
 def card_ids_in_done(conn: Db.Connection, board_id: Int) -> Result[List[Int]]
   rows = try Db.query(
     conn,
-    "select id from cards where board_id = ? and column_id in (select id from columns where board_id = ? and done = 1)",
+    "select id from cards where board_id = ? and archived_at is null and column_id in (select id from columns where board_id = ? and done = 1)",
     [Db.Value.Int(board_id), Db.Value.Int(board_id)],
   )
 
@@ -397,7 +423,12 @@ def card_ids_in_done(conn: Db.Connection, board_id: Int) -> Result[List[Int]]
 end
 
 def card_ids_in_column(conn: Db.Connection, column_id: Int) -> Result[List[Int]]
-  rows = try Db.query(conn, "select id from cards where column_id = ?", [Db.Value.Int(column_id)])
+  rows = try Db.query(
+    conn,
+    "select id from cards where column_id = ? and archived_at is null",
+    [Db.Value.Int(column_id)],
+  )
+
   ok(rows.map do |row| int_of(row, "id") end)
 end
 

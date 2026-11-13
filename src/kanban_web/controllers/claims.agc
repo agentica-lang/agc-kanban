@@ -145,3 +145,27 @@ export def done(conn: Bond.Conn, pool: Optional[Database.Pool]) -> Result[Bond.C
 
   ok(Bond.json_as(conn, 200, Answers.CardAnswer.codec, Answers.CardAnswer(card: result.unwrap!)))
 end
+
+export def archive(conn: Bond.Conn, pool: Optional[Database.Pool]) -> Result[Bond.Conn]
+  return ok(Failure.reject(conn, 503, "BUSY", "database unavailable")) if not pool.some?
+
+  id = Bond.param_int(conn, "id")
+  return ok(Failure.reject(conn, 400, "INVALID", "invalid id", some("id"))) if not id.ok?
+
+  body = Bond.body_text(conn)
+  return ok(Failure.reject(conn, 400, "INVALID", "invalid body", some("body"))) if not body.ok?
+
+  decoded = JSON.decode(body.unwrap!, ForceInput)
+  return ok(Failure.reject(conn, 400, "INVALID", "invalid body", some("body"))) if not decoded.ok?
+
+  input = Transitions.Action(
+    id: id.unwrap!,
+    actor: Bond.request_header(conn, "X-Kanban-Agent").unwrap_or(""),
+    force: decoded.unwrap!.force.unwrap_or(false),
+  )
+
+  result = Transitions.archive(pool.unwrap!, input)
+  return ok(Failure.answer(conn, result.message, some(id.unwrap!))) if not result.ok?
+
+  ok(Bond.json_as(conn, 200, Answers.CardAnswer.codec, Answers.CardAnswer(card: result.unwrap!)))
+end

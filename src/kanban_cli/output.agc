@@ -86,6 +86,16 @@ struct CommentLine
   body: String
 end
 
+# The card of `card archive`: its id and title are all the line needs.
+struct ArchivedCard
+  id: Int
+  title: String
+end
+
+struct ArchivedAnswer
+  card: ArchivedCard
+end
+
 struct CardDetail
   id: Int
   column: String
@@ -102,6 +112,8 @@ struct CardDetail
   blocks: List[Int]
   ready: Bool
   done: Bool
+  # None from a server older than the archive, and for a card that is not archived.
+  archived_at: Optional[Int]
 end
 
 # `times` is none from a server older than the time in each column.
@@ -241,6 +253,17 @@ export def print_card(response: HTTP.Response) -> Void
   puts("#{card_line(decoded.unwrap!.card)}")
 end
 
+export def print_archived(response: HTTP.Response) -> Void
+  decoded = JSON.decode(body(response), ArchivedAnswer)
+  if not decoded.ok?
+    puts(body(response))
+    return
+  end
+
+  card = decoded.unwrap!.card
+  puts(one_line("archived\t#{card.id}\t#{card.title}"))
+end
+
 export def print_card_detail(response: HTTP.Response) -> Void
   decoded = JSON.decode(body(response), DetailAnswer)
   if not decoded.ok?
@@ -256,7 +279,12 @@ export def print_card_detail(response: HTTP.Response) -> Void
     ),
   )
 
-  puts("priority: #{card.priority}  ready: #{card.ready}  done: #{card.done}")
+  marks = "priority: #{card.priority}  ready: #{card.ready}  done: #{card.done}"
+  if card.archived_at.some?
+    marks = "#{marks}  archived: true"
+  end
+
+  puts(marks)
   if not card.depends_on.empty?
     puts("depends on: #{card.depends_on.map { |id| id.to_s }.join(", ")}")
   end

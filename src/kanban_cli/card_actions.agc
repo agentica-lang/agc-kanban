@@ -24,6 +24,7 @@ export def run(words: List[String]) -> Result[Void]
     "release" -> release(rest)
     "move" -> move(rest)
     "done" -> done(rest)
+    "archive" -> archive(rest)
     "comment" -> comment(rest)
     "dep" -> dep(rest)
     _ -> error("unknown card action #{words[0]}")
@@ -178,6 +179,37 @@ def done(words: List[String]) -> Result[Void]
   return ok() if not response.ok?
 
   Support.print_card(config, response.unwrap!)
+  ok()
+end
+
+# The coordinator's command, like `done`: the server checks no role, only the claim, so a card that another agent holds
+# needs --force. An archived card is archived again with no error.
+def archive(words: List[String]) -> Result[Void]
+  parser = OP.new(
+    "kanban card archive",
+    "Hide a card from the board",
+    [Arg(name: "id", kind: Kind.Int)],
+    [Opt(name: "force", kind: Kind.Flag)] + Settings.common_opts(),
+  )
+
+  parsed = try OP.parse(parser, words)
+  config = try Settings.load(Settings.read_flags(parsed))
+  Support.require_agent(config)
+  fields: Map[String, Json] = {}
+  fields = Support.force(fields, parsed)
+  response = Output.expect(
+    Client.post(Client.from(config), "/api/cards/#{OP.int(parsed, "id")}/archive", JSON.encode(JSON.object(fields))),
+    config.json,
+  )
+
+  return ok() if not response.ok?
+
+  if config.json
+    puts(Output.body(response.unwrap!))
+  else
+    Output.print_archived(response.unwrap!)
+  end
+
   ok()
 end
 

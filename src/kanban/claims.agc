@@ -46,7 +46,7 @@ def next_open(conn: Db.Connection, input: Next) -> Result[Cards.Card]
   now = Time.now_ms()
   candidates = try Db.query(
     conn,
-    "select c.id from cards c join columns col on col.id = c.column_id where c.board_id = ? and c.archived_at is null and col.done = 0 and (c.claimed_by is null or c.lease_until <= ?) and not exists (select 1 from card_deps d join cards dep on dep.id = d.depends_on_id join columns dc on dc.id = dep.column_id where d.card_id = c.id and dc.done = 0) and (? is null or col.name = ? or cast(col.id as text) = ?) and (? is null or exists (select 1 from json_each(c.labels) j where j.value = ?)) order by c.priority, col.position, c.position, c.id limit 8",
+    "select c.id from cards c join columns col on col.id = c.column_id where c.board_id = ? and c.archived_at is null and col.done = 0 and (c.claimed_by is null or c.lease_until <= ?) and not exists (select 1 from card_deps d join cards dep on dep.id = d.depends_on_id join columns dc on dc.id = dep.column_id where d.card_id = c.id and dep.archived_at is null and dc.done = 0) and (? is null or col.name = ? or cast(col.id as text) = ?) and (? is null or exists (select 1 from json_each(c.labels) j where j.value = ?)) order by c.priority, col.position, c.position, c.id limit 8",
     [Db.Value.Int(number(boards[0], "id")), Db.Value.Int(now), column, column, column, label, label],
   )
 
@@ -78,7 +78,7 @@ def acquire(conn: Db.Connection, id: Int, actor: String, lease_minutes: Int) -> 
 
   changed = try Db.execute(
     conn,
-    "update cards set claimed_by = ?, claimed_at = ?, lease_until = ?, updated_at = ?, version = version + 1, column_id = ?, position = ? where id = ? and archived_at is null and column_id not in (select id from columns where done = 1) and (claimed_by is null or claimed_by = ? or lease_until <= ?) and (not exists (select 1 from card_deps d join cards dep on dep.id = d.depends_on_id join columns col on col.id = dep.column_id where d.card_id = cards.id and col.done = 0) or (claimed_by = ? and (lease_until is null or lease_until > ?)))",
+    "update cards set claimed_by = ?, claimed_at = ?, lease_until = ?, updated_at = ?, version = version + 1, column_id = ?, position = ? where id = ? and archived_at is null and column_id not in (select id from columns where done = 1) and (claimed_by is null or claimed_by = ? or lease_until <= ?) and (not exists (select 1 from card_deps d join cards dep on dep.id = d.depends_on_id join columns col on col.id = dep.column_id where d.card_id = cards.id and dep.archived_at is null and col.done = 0) or (claimed_by = ? and (lease_until is null or lease_until > ?)))",
     [
       Db.Value.Text(actor),
       Db.Value.Int(now),

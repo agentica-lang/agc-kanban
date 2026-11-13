@@ -47,6 +47,8 @@ def main() -> Void
       BDD.step("agent {string} claims card {int}", &claim_card),
       BDD.step("agent {string} marks card {int} done", &done_card),
       BDD.step("agent {string} releases card {int}", &release_card),
+      BDD.step("agent {string} archives card {int}", &archive_card),
+      BDD.step("agent {string} forcibly archives card {int}", &force_archive_card),
       BDD.step("I move card {int} to {string}", &move_card),
       BDD.step("eight agents race to claim card {int}", &race_claims),
       BDD.step("I add eight cards", &add_eight_cards),
@@ -589,6 +591,20 @@ def release_card(ctx: BDD.Context, args: List[String]) -> BDD.Context
   HTTP.close_client(client)
   stored = BDD.set(ctx, "status", JSON.from(response.status))
   BDD.set(stored, "body", JSON.from(HTTP.text(response.body, response.headers).unwrap!))
+end
+
+def archive_card(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  api_request_as(ctx, args[0], "POST", "/api/cards/#{args[1]}/archive", "{}")
+end
+
+def force_archive_card(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  api_request_as(
+    ctx,
+    args[0],
+    "POST",
+    "/api/cards/#{args[1]}/archive",
+    JSON.encode(JSON.object({"force": JSON.from(true)})),
+  )
 end
 
 def move_card(ctx: BDD.Context, args: List[String]) -> BDD.Context
