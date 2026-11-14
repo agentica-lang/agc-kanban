@@ -131,12 +131,10 @@ def names_assets(ctx: BDD.Context, _args: List[String]) -> BDD.Context
   BDD.assert(ctx, fingerprinted and named, "the page was #{page}")
 end
 
-def serving(f: Fn[JSON.Value, Result[JSON.Value]]) -> Fn[JSON.Value, Result[JSON.Value]] = f
-
 # Starts the live client and keeps it behind a service: a request `{"timeout_ms": N}` answers its next line.
 def subscribe(ctx: BDD.Context, cookie: String, board: String) -> BDD.Context
   process = Process.spawn_captured("agentica", [CLIENT, "#{port_of(ctx)}", cookie, board]).unwrap!
-  service = serving do |request| next_line(process, request) end
+  service: Fn[JSON.Value, Result[JSON.Value]] = ->(request) { next_line(process, request) }
   BDD.keep(ctx, "live", service)
 end
 

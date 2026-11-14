@@ -32,7 +32,7 @@ def start(pool: Optional[Database.Pool]) -> Cable
     job = Publisher.new(pool.unwrap!, hub, cursor)
     # One try here, so that a write that follows the start is seen; the actor retries while the read fails.
     _ = Publisher.seeded(job)
-    behaviour: Actor.Behaviour[Publisher.Publisher, Msg] = Actor.Behaviour(init: init_from do job end, handle: &handle)
+    behaviour: Actor.Behaviour[Publisher.Publisher, Msg] = Actor.Behaviour(init: -> { job }, handle: &handle)
 
     child = Supervisor.child(NAME, behaviour) do |address| NAMES.put(NAME, address) end
     _ = Supervisor.start([child])
@@ -106,9 +106,6 @@ def cast(message: Msg) -> Bool
 
   Actor.cast(found.unwrap!, message, 0).ok?
 end
-
-# The block of `init` gives the state of each new actor; the helper only types it as an `Fn`.
-def init_from[R](f: Fn[R]) -> Fn[R] = f
 
 # The flag is cleared before the flush: a write during the flush sends one more nudge. A crash that loses a pending
 # nudge leaves the flag set, and the next tick clears it.
