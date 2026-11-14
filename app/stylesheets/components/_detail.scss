@@ -80,6 +80,39 @@
   }
 }
 
+// The Archive and Unarchive buttons, in the card panel and the archive panel.
+.action {
+  font: inherit;
+  padding: 0.25rem 0.75rem;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  cursor: pointer;
+
+  &:hover:not(:disabled) { border-color: var(--accent); }
+  &:disabled { opacity: 0.6; cursor: default; }
+  &:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+}
+
+.detail-side .action { margin-top: 0.75rem; }
+
+.archive-panel {
+  display: grid;
+  gap: var(--gap);
+  font-size: 0.875rem;
+
+  .archive-bulk { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+  .archive-days { width: 4.5rem; font: inherit; padding: 0.25rem 0.5rem; color: var(--text); background: var(--card); border: 1px solid var(--line); border-radius: 6px; }
+  .archive-note, .section-title, .empty { margin: 0; }
+  .section-title { font-size: 0.8rem; text-transform: uppercase; color: var(--muted); }
+  .archive-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.5rem; }
+  .archive-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.125rem 0.5rem; align-items: center; border-top: 1px solid var(--line); padding-top: 0.5rem; overflow-wrap: anywhere; }
+  .archive-list a { color: var(--text); text-decoration: none; &:hover { text-decoration: underline; } }
+  .archive-when { grid-column: 1; color: var(--muted); font-size: 0.75rem; }
+  .archive-list .action { grid-column: 2; grid-row: 1 / span 2; }
+}
+
 .md {
   > :first-child { margin-top: 0; }
   > :last-child { margin-bottom: 0; }

@@ -1,5 +1,6 @@
 import Db from "pkg/db/db"
 import Regex from "std/regex"
+import Boards from "boards"
 import Cards from "cards"
 import Database from "repo/database"
 
@@ -16,6 +17,19 @@ struct Move
   column: String
   position: Optional[Int]
   lease_minutes: Int
+end
+
+struct ArchiveDone
+  board: String
+  days: Int
+  actor: String
+  now: Int
+end
+
+struct ArchivedDone
+  archived: Int
+  days: Int
+  cards: List[Int]
 end
 
 struct Release
@@ -39,7 +53,27 @@ def archive(pool: Database.Pool, input: Action) -> Result[Cards.Card]
   return error("INVALID:id") if input.id <= 0
   return error("INVALID:agent") if not Regex.match?(input.actor, /^[A-Za-z0-9._@\/-]{1,64}$/)
 
-  Database.with_connection(pool) do |conn| Db.transaction(conn) do |tx| archive_open(tx, input) end end
+  Database.with_connection(pool) do |conn| Db.transaction(conn) do |tx| archive_open(tx, input, Time.now_ms()) end end
+end
+
+## Puts an archived card back at the end of its column. Unarchiving a card that is not archived changes nothing and
+## writes no event. `force` is not read: an archived card holds no claim.
+def unarchive(pool: Database.Pool, input: Action) -> Result[Cards.Card]
+  return error("INVALID:id") if input.id <= 0
+  return error("INVALID:agent") if not Regex.match?(input.actor, /^[A-Za-z0-9._@\/-]{1,64}$/)
+
+  Database.with_connection(pool) do |conn| Db.transaction(conn) do |tx| unarchive_open(tx, input) end end
+end
+
+## Archives the cards of a done column that were done `days` days or more before `now`, in one transaction: a
+## `card.archived` event per card and, when there is any, one `board.done_archived` event for the board. A card that
+## is not in a done column, or that somebody holds, is never touched.
+def archive_done(pool: Database.Pool, input: ArchiveDone) -> Result[ArchivedDone]
+  return error("INVALID:board") if input.board.empty?
+  return error("INVALID:days") if input.days < 0 or input.days > DAYS_MAX
+  return error("INVALID:agent") if not Regex.match?(input.actor, /^[A-Za-z0-9._@\/-]{1,64}$/)
+
+  Database.with_connection(pool) do |conn| Db.transaction(conn) do |tx| archive_done_open(tx, input) end end
 end
 
 def move(pool: Database.Pool, input: Move) -> Result[Cards.Card]
@@ -71,6 +105,9 @@ end
 
 private
 
+DAY_MS = 86400000
+DAYS_MAX = 36500
+
 # The column a card left, so the feed can say "from Doing to Review". Events written before it have no `from`.
 struct Source
   id: Int
@@ -82,6 +119,13 @@ struct EventData
   card: Cards.Card
   from: Source
   forced: Bool
+end
+
+# The data of the board.done_archived event.
+struct SweepData
+  count: Int
+  days: Int
+  cards: List[Int]
 end
 
 def finish_open(conn: Db.Connection, input: Action) -> Result[Cards.Card]
@@ -142,8 +186,7 @@ def finish_open(conn: Db.Connection, input: Action) -> Result[Cards.Card]
   ok(updated)
 end
 
-def archive_open(conn: Db.Connection, input: Action) -> Result[Cards.Card]
-  now = Time.now_ms()
+def archive_open(conn: Db.Connection, input: Action, now: Int) -> Result[Cards.Card]
   card = try Cards.load_any_at(conn, input.id, now)
   return ok(card) if card.archived_at.some?
 
@@ -175,6 +218,78 @@ def archive_open(conn: Db.Connection, input: Action) -> Result[Cards.Card]
       Db.Value.Int(number(board[0], "board_id")),
       Db.Value.Int(input.id),
       Db.Value.Text("card.archived"),
+      Db.Value.Text(input.actor),
+      Db.Value.Text(JSON.encode(JSON.from(data))),
+      Db.Value.Int(now),
+    ],
+  )
+
+  ok(updated)
+end
+
+def archive_done_open(conn: Db.Connection, input: ArchiveDone) -> Result[ArchivedDone]
+  board = try Boards.get_open(conn, input.board)
+  rows = try Db.query(
+    conn,
+    "select c.id from cards c join columns col on col.id = c.column_id where c.board_id = ? and c.archived_at is null and col.done = 1 and c.done_at is not null and c.done_at <= ? and (c.claimed_by is null or c.lease_until <= ?) order by c.id",
+    [Db.Value.Int(board.id), Db.Value.Int(input.now - input.days * DAY_MS), Db.Value.Int(input.now)],
+  )
+
+  ids = rows.map do |row| number(row, "id") end
+  action = Action(id: 0, actor: input.actor, force: false)
+  for id in ids
+    _ = try archive_open(conn, action.with(id: id), input.now)
+  end
+
+  if not ids.empty?
+    data = SweepData(count: ids.size, days: input.days, cards: ids)
+    _ = try Db.execute(
+      conn,
+      "insert into events (board_id, card_id, kind, actor, data, created_at) values (?, null, ?, ?, ?, ?)",
+      [
+        Db.Value.Int(board.id),
+        Db.Value.Text("board.done_archived"),
+        Db.Value.Text(input.actor),
+        Db.Value.Text(JSON.encode(JSON.from(data))),
+        Db.Value.Int(input.now),
+      ],
+    )
+  end
+
+  ok(ArchivedDone(archived: ids.size, days: input.days, cards: ids))
+end
+
+def unarchive_open(conn: Db.Connection, input: Action) -> Result[Cards.Card]
+  now = Time.now_ms()
+  card = try Cards.load_any_at(conn, input.id, now)
+  return ok(card) if not card.archived_at.some?
+
+  rows = try Db.query(
+    conn,
+    "select board_id, (select coalesce(max(position) + 1, 0) from cards where column_id = ? and archived_at is null) as next from cards where id = ?",
+    [Db.Value.Int(card.column_id), Db.Value.Int(input.id)],
+  )
+
+  done_at: Db.Value = Db.Value.Null
+  if card.done
+    done_at = Db.Value.Int(card.done_at.unwrap_or(now))
+  end
+
+  _ = try Db.execute(
+    conn,
+    "update cards set archived_at = null, position = ?, done_at = ?, updated_at = ?, version = version + 1 where id = ?",
+    [Db.Value.Int(number(rows[0], "next")), done_at, Db.Value.Int(now), Db.Value.Int(input.id)],
+  )
+
+  updated = try Cards.load_at(conn, input.id, now)
+  data = EventData(card: updated, from: Source(id: card.column_id, name: card.column), forced: false)
+  _ = try Db.execute(
+    conn,
+    "insert into events (board_id, card_id, kind, actor, data, created_at) values (?, ?, ?, ?, ?, ?)",
+    [
+      Db.Value.Int(number(rows[0], "board_id")),
+      Db.Value.Int(input.id),
+      Db.Value.Text("card.unarchived"),
       Db.Value.Text(input.actor),
       Db.Value.Text(JSON.encode(JSON.from(data))),
       Db.Value.Int(now),

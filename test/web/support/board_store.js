@@ -12,6 +12,15 @@ export function useBoard() {
     loadError: false,
     error: "",
     flash: {},
+    archived: [],
+    archivedMax: 200,
+    watchArchived: false,
+    actionError: "",
+    busy: false,
     loadMore: function () {},
+    loadArchived: function () {},
+    archiveCard: function () { return Promise.resolve(); },
+    unarchiveCard: function () { return Promise.resolve(); },
+    archiveDone: function () { return Promise.resolve(null); },
   });
 }

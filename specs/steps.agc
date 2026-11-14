@@ -19,6 +19,8 @@ def main() -> Void
       BDD.step("a database server with a short busy timeout is running", &start_busy_database_server),
       BDD.step("I post a board while the database is locked", &post_board_locked),
       BDD.step("the lease of card {int} has run out", &expire_lease),
+      BDD.step("card {int} was done {int} days ago", &age_done),
+      BDD.step("agent {string} archives the done cards of {string} older than {int} days", &archive_done_cards),
       BDD.step("the store keeps card {int} claimed by {string}", &keep_claim),
       BDD.step("I post a board named {string} with slug {string} as {string}", &post_board),
       BDD.step("I list boards", &list_boards),
@@ -759,6 +761,26 @@ def expire_lease(ctx: BDD.Context, args: List[String]) -> BDD.Context
   _ = Db.execute(conn, "update cards set lease_until = 1 where id = ?", [Db.Value.Int(args[0].to_i!)]).unwrap!
   Db.close(conn)
   ctx
+end
+
+# The clock of the server is the real one, so a spec moves the card back in time instead.
+def age_done(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  dir = JSON.string(BDD.get(ctx, "data_dir").unwrap!).unwrap!
+  conn = Db.open("sqlite:#{dir}/kanban.sqlite3", [Sqlite.driver()]).unwrap!
+  sql = "update cards set done_at = done_at - ? where id = ?"
+  _ = Db.execute(conn, sql, [Db.Value.Int(args[1].to_i! * 86400000), Db.Value.Int(args[0].to_i!)]).unwrap!
+  Db.close(conn)
+  ctx
+end
+
+def archive_done_cards(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  api_request_as(
+    ctx,
+    args[0],
+    "POST",
+    "/api/boards/#{args[1]}/archive-done",
+    JSON.encode(JSON.object({"days": JSON.from(args[2].to_i!)})),
+  )
 end
 
 # The API clears a claim when a card reaches the done column, so a spec cannot reach that state through it: a second

@@ -151,6 +151,14 @@ def print_card(response: HTTP.Response) -> Void
 end
 
 def print_archived(response: HTTP.Response) -> Void
+  print_archive_change(response, "archived")
+end
+
+def print_unarchived(response: HTTP.Response) -> Void
+  print_archive_change(response, "unarchived")
+end
+
+def print_archive_change(response: HTTP.Response, verb: String) -> Void
   decoded = JSON.decode(body(response), ArchivedAnswer)
   if not decoded.ok?
     puts(body(response))
@@ -158,7 +166,18 @@ def print_archived(response: HTTP.Response) -> Void
   end
 
   card = decoded.unwrap!.card
-  puts(one_line("archived\t#{card.id}\t#{card.title}"))
+  puts(one_line("#{verb}\t#{card.id}\t#{card.title}"))
+end
+
+def print_archived_done(response: HTTP.Response) -> Void
+  decoded = JSON.decode(body(response), ArchivedDoneAnswer)
+  if not decoded.ok?
+    puts(body(response))
+    return
+  end
+
+  done = decoded.unwrap!
+  puts("archived #{done.archived} done cards older than #{done.days} days")
 end
 
 def print_card_detail(response: HTTP.Response) -> Void
@@ -360,6 +379,11 @@ end
 
 struct ArchivedAnswer
   card: ArchivedCard
+end
+
+struct ArchivedDoneAnswer
+  archived: Int
+  days: Int
 end
 
 struct CardDetail

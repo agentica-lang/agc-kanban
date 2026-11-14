@@ -1,5 +1,5 @@
 import { reactive } from "vue";
-import { getJSON, latest, patchJSON } from "./api.js";
+import { getJSON, latest, patchJSON, postJSON } from "./api.js";
 import { subscribe } from "./cable.js";
 
 var REFETCH_MS = 80; // a burst of events (a claim and a move) is one fetch
@@ -8,6 +8,8 @@ var PAGE = 30; // events shown at first, and loaded by each "Ver m\u00e1s"
 var NEWEST = Number.MAX_SAFE_INTEGER; // `before` of the newest page
 var WAKE_MS = 1000; // visibilitychange, pageshow and focus of one return are one wake
 var FLASH_MS = 1700; // a little longer than the CSS flash
+var ARCHIVED_MAX = 200; // the archived cards listed, the newest archive first
+var ARCHIVE_KINDS = ["card.archived", "card.unarchived", "board.done_archived"];
 
 // The one reactive state of the board page: the snapshot of the API (`board`, `cards`) and the feed. It is fetched
 // again after each event the cable brings and after each confirmed subscription, so a missed broadcast never leaves a
@@ -37,6 +39,15 @@ export function useBoard(slug, listener) {
     loadMore: loadMore,
     reload: reload,
     setLabelColor: setLabelColor,
+    archived: [],
+    archivedMax: ARCHIVED_MAX,
+    watchArchived: false,
+    actionError: "",
+    busy: false,
+    archiveCard: function (id) { return act("/api/cards/" + id + "/archive"); },
+    unarchiveCard: function (id) { return act("/api/cards/" + id + "/unarchive"); },
+    archiveDone: archiveDone,
+    loadArchived: function () { return fetchArchived(); },
   });
   var timer = null;
   var synced = 0; // the newest event id that the feed is known to hold with nothing missing before it
@@ -65,6 +76,38 @@ export function useBoard(slug, listener) {
       state.error = error.message;
       return load();
     });
+  }
+
+  // The archived cards are fetched while the archive panel is open (`watchArchived`) and again at each event about an
+  // archive, so the list is the live one.
+  var fetchArchived = latest(function () {
+    return getJSON("/api/boards/" + encodeURIComponent(slug) + "/cards?archived=1&limit=" + ARCHIVED_MAX);
+  }, function (answer) {
+    state.archived = answer.cards;
+  }, function (error) {
+    state.actionError = error.message;
+  });
+
+  // The write of the web session: an archive, an unarchive or the bulk archive. The events it makes reach the board
+  // through the cable, as the ones of the CLI do; the fetches here only make the answer show at once.
+  function act(path, body) {
+    state.busy = true;
+    state.actionError = "";
+    return postJSON(path, body || {}).then(function (answer) {
+      return Promise.all([load(), state.watchArchived ? fetchArchived() : null]).then(function () { return answer; });
+    }, function (error) {
+      state.actionError = error.status === 409
+        ? "An agent holds this card: archive it with the CLI and --force."
+        : "Could not do it: " + error.message;
+      return null;
+    }).then(function (answer) {
+      state.busy = false;
+      return answer;
+    });
+  }
+
+  function archiveDone(days) {
+    return act("/api/boards/" + encodeURIComponent(slug) + "/archive-done", { days: days });
   }
 
   function oldest() {
@@ -163,6 +206,9 @@ export function useBoard(slug, listener) {
     } else if (message.type.indexOf("label.") === 0) {
       listener(null);
     }
+    if (state.watchArchived && ARCHIVE_KINDS.indexOf(message.type) !== -1) {
+      fetchArchived();
+    }
     if (timer === null) {
       timer = setTimeout(load, REFETCH_MS);
     }
@@ -172,6 +218,9 @@ export function useBoard(slug, listener) {
   // confirmation was not broadcast to this client.
   function onSubscribed() {
     load();
+    if (state.watchArchived) {
+      fetchArchived();
+    }
     listener(null);
     catchUp().catch(function () {});
   }

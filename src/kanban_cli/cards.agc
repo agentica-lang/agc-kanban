@@ -12,7 +12,7 @@ import {Pair} from "std/uri"
 def run(words: List[String]) -> Result[Void]
   if words.empty?
     return error(
-      "card needs a command: add, list, search, show, update, claim, next, release, move, done, archive, comment or dep",
+      "card needs a command: add, list, search, show, update, claim, next, release, move, done, archive, unarchive, comment or dep",
     )
   end
 
@@ -94,6 +94,11 @@ def list(words: List[String]) -> Result[Void]
       Opt(name: "label"),
       Opt(name: "all", kind: Kind.Flag),
       Opt(
+        name: "archived",
+        kind: Kind.Flag,
+        help: "the archived cards, newest archive first, instead of the open ones",
+      ),
+      Opt(
         name: "format",
         default: "text",
         choices: ["text", "tsv"],
@@ -137,7 +142,9 @@ def list(words: List[String]) -> Result[Void]
     pairs = pairs.push(Pair(name: "label", value: label.unwrap!))
   end
 
-  if not OP.flag(parsed, "all")
+  if OP.flag(parsed, "archived")
+    pairs = pairs.push(Pair(name: "archived", value: "1"))
+  elsif not OP.flag(parsed, "all")
     pairs = pairs.push(Pair(name: "done", value: "0"))
   end
 

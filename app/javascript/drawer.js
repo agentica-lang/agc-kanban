@@ -31,7 +31,8 @@ function cardInUrl() {
 }
 
 // The right-side drawer of the board page shows one panel at a time: `panel` is "filters" (the filter choices), "card"
-// (the detail of `card`), "activity" (the feed) or "" while it is closed. Only the activity choice is kept in
+// (the detail of `card`), "archive" (the archived cards and the bulk archive), "activity" (the feed) or "" while it is
+// closed. Only the activity choice is kept in
 // localStorage; with nothing kept, it is closed. The open card is in the URL, so a reload or a shared link opens it
 // again. Closing the card or the filters shows the activity again when that was open; opening a card closes the
 // filters.
@@ -39,12 +40,16 @@ export function useDrawer() {
   var activity = ref(saved() === "activity");
   var card = ref(cardInUrl());
   var filters = ref(false);
+  var archive = ref(false);
   var panel = computed(function () {
     if (card.value !== null) {
       return "card";
     }
     if (filters.value) {
       return "filters";
+    }
+    if (archive.value) {
+      return "archive";
     }
     return activity.value ? "activity" : "";
   });
@@ -109,6 +114,7 @@ export function useDrawer() {
       } else {
         showCard(null);
         filters.value = false;
+        archive.value = false;
         showActivity(true);
       }
     },
@@ -117,7 +123,17 @@ export function useDrawer() {
         filters.value = false;
       } else {
         showCard(null);
+        archive.value = false;
         filters.value = true;
+      }
+    },
+    toggleArchive: function () {
+      if (panel.value === "archive") {
+        archive.value = false;
+      } else {
+        showCard(null);
+        filters.value = false;
+        archive.value = true;
       }
     },
     close: function () {
@@ -125,6 +141,8 @@ export function useDrawer() {
         showCard(null);
       } else if (filters.value) {
         filters.value = false;
+      } else if (archive.value) {
+        archive.value = false;
       } else {
         showActivity(false);
       }

@@ -65,6 +65,9 @@ struct Filters
   claimed_by: Optional[String]
   label: Optional[String]
   done: Optional[Bool]
+  # The archived cards instead of the open ones, the newest archive first.
+  archived: Bool = false
+  limit: Optional[Int] = none
 end
 
 struct Update
@@ -142,6 +145,7 @@ end
 
 def list(pool: Database.Pool, board: String, filters: Filters) -> Result[List[Card]]
   return error("INVALID:board") if board.empty?
+  return error("INVALID:limit") if filters.limit.some? and (filters.limit.unwrap! < 1 or filters.limit.unwrap! > 1000)
 
   Database.with_connection(pool) do |conn| Db.transaction(conn) do |tx| list_open(tx, board, filters) end end
 end
@@ -164,9 +168,10 @@ def list_open(conn: Db.Connection, board: String, filters: Filters) -> Result[Li
   done = bool_value(filters.done)
   rows = try Db.query(
     conn,
-    "select c.id from cards c join columns col on col.id = c.column_id where c.board_id = ? and c.archived_at is null and (? is null or col.name = ? or cast(col.id as text) = ?) and (? is null or c.claimed_by = ?) and (? is null or exists (select 1 from json_each(c.labels) j where j.value = ?)) and (? is null or col.done = ?) and (? is null or (case when col.done = 0 and (c.claimed_by is null or c.lease_until <= ?) and not exists (select 1 from card_deps d join cards dep on dep.id = d.depends_on_id join columns dc on dc.id = dep.column_id where d.card_id = c.id and dep.archived_at is null and dc.done = 0) then 1 else 0 end) = ?) order by col.position, c.position, c.id",
+    "select c.id from cards c join columns col on col.id = c.column_id where c.board_id = ? and (c.archived_at is not null) = ? and (? is null or col.name = ? or cast(col.id as text) = ?) and (? is null or c.claimed_by = ?) and (? is null or exists (select 1 from json_each(c.labels) j where j.value = ?)) and (? is null or col.done = ?) and (? is null or (case when col.done = 0 and (c.claimed_by is null or c.lease_until <= ?) and not exists (select 1 from card_deps d join cards dep on dep.id = d.depends_on_id join columns dc on dc.id = dep.column_id where d.card_id = c.id and dep.archived_at is null and dc.done = 0) then 1 else 0 end) = ?) order by case when ? = 1 then -c.archived_at else 0 end, case when ? = 1 then -c.id else 0 end, col.position, c.position, c.id limit ?",
     [
       Db.Value.Int(board_id),
+      bool_int(filters.archived),
       column,
       column,
       column,
@@ -179,12 +184,15 @@ def list_open(conn: Db.Connection, board: String, filters: Filters) -> Result[Li
       ready,
       Db.Value.Int(now),
       ready,
+      bool_int(filters.archived),
+      bool_int(filters.archived),
+      Db.Value.Int(filters.limit.unwrap_or(-1)),
     ],
   )
 
   cards: List[Card] = []
   for row in rows
-    cards = cards.push(try load_at(conn, number(row, "id"), now))
+    cards = cards.push(try read_card(conn, number(row, "id"), now, filters.archived))
   end
 
   ok(cards)

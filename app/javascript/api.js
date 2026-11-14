@@ -38,11 +38,11 @@ export function latest(request, onAnswer, onError) {
   };
 }
 
-// PATCH a JSON body with the session cookie. The API lets the session write a label color only, and asks the agent
-// name of every write; the page is "web".
-export function patchJSON(path, body) {
+// Send a JSON body with the session cookie. The API lets the session write a label color, archive and unarchive only,
+// and asks the agent name of every write; the page is "web". An error carries the `status` of the answer.
+function writeJSON(method, path, body) {
   var headers = { Accept: "application/json", "Content-Type": "application/json", "X-Kanban-Agent": "web" };
-  return fetch(path, { method: "PATCH", credentials: "same-origin", headers: headers, body: JSON.stringify(body) }).then(function (res) {
+  return fetch(path, { method: method, credentials: "same-origin", headers: headers, body: JSON.stringify(body) }).then(function (res) {
     if (res.status === 401) {
       location.assign("/login");
       return new Promise(function () {});
@@ -54,4 +54,12 @@ export function patchJSON(path, body) {
     }
     return res.json();
   });
+}
+
+export function patchJSON(path, body) {
+  return writeJSON("PATCH", path, body);
+}
+
+export function postJSON(path, body) {
+  return writeJSON("POST", path, body);
 }
