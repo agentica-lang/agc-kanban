@@ -116,6 +116,11 @@ def list(words: List[String]) -> Result[Void]
     Output.fail(config.json, "USAGE", "--format tsv cannot be used with --json", 2)
   end
 
+  # --archived already lists every archived card (done or not), and an archived card is never ready.
+  if OP.flag(parsed, "archived") and (OP.flag(parsed, "all") or OP.flag(parsed, "ready"))
+    Output.fail(config.json, "USAGE", "--archived cannot be used with --all or --ready", 2)
+  end
+
   board = Support.board_of(config)
   pairs: List[Pair] = []
   column = OP.optional_string(parsed, "column")

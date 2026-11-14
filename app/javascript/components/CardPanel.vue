@@ -43,6 +43,14 @@ var links = computed(function () {
   });
 });
 
+// A card that is not done is archived by a click and a yes: the cards that wait for it stop waiting.
+function archive() {
+  var card = props.state.detail.card;
+  if (card.done || globalThis.confirm("Archive this card? It is not done, so the cards that depend on it stop waiting for it.")) {
+    emit("archive", card.id);
+  }
+}
+
 function when(ms) {
   return new Date(ms).toLocaleString();
 }
@@ -115,7 +123,7 @@ function when(ms) {
       </dl>
       <p v-if="actionError" class="banner" role="alert">{{ actionError }}</p>
       <button v-if="state.detail.card.archived_at" type="button" class="action" :disabled="busy" @click="emit('unarchive', state.detail.card.id)">Unarchive</button>
-      <button v-else type="button" class="action" :disabled="busy" @click="emit('archive', state.detail.card.id)">Archive</button>
+      <button v-else type="button" class="action" :disabled="busy" @click="archive()">Archive</button>
     </div>
   </div>
 </template>

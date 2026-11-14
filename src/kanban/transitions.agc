@@ -56,7 +56,7 @@ def archive(pool: Database.Pool, input: Action) -> Result[Cards.Card]
   Database.with_connection(pool) do |conn| Db.transaction(conn) do |tx| archive_open(tx, input, Time.now_ms()) end end
 end
 
-## Puts an archived card back at the end of its column. Unarchiving a card that is not archived changes nothing and
+## Puts an archived card back: on top of a done column, at the end of any other. Unarchiving a card that is not archived changes nothing and
 ## writes no event. `force` is not read: an archived card holds no claim.
 def unarchive(pool: Database.Pool, input: Action) -> Result[Cards.Card]
   return error("INVALID:id") if input.id <= 0
@@ -270,15 +270,23 @@ def unarchive_open(conn: Db.Connection, input: Action) -> Result[Cards.Card]
     [Db.Value.Int(card.column_id), Db.Value.Int(input.id)],
   )
 
+  # Like `finish`, a card that comes back into a done column goes on top, any other column appends.
   done_at: Db.Value = Db.Value.Null
+  position = number(rows[0], "next")
   if card.done
     done_at = Db.Value.Int(card.done_at.unwrap_or(now))
+    position = 0
+    _ = try Db.execute(
+      conn,
+      "update cards set position = position + 1, version = version + 1, updated_at = ? where column_id = ? and archived_at is null",
+      [Db.Value.Int(now), Db.Value.Int(card.column_id)],
+    )
   end
 
   _ = try Db.execute(
     conn,
     "update cards set archived_at = null, position = ?, done_at = ?, updated_at = ?, version = version + 1 where id = ?",
-    [Db.Value.Int(number(rows[0], "next")), done_at, Db.Value.Int(now), Db.Value.Int(input.id)],
+    [Db.Value.Int(position), done_at, Db.Value.Int(now), Db.Value.Int(input.id)],
   )
 
   updated = try Cards.load_at(conn, input.id, now)
