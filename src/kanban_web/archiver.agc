@@ -1,5 +1,6 @@
-## The periodic archive of the boards that turned it on (`kanban board auto-archive`): one sweep every ten minutes.
-## The publisher broadcasts the events it writes, as it does for any other write.
+## The periodic archive of the boards that turned it on (`kanban board auto-archive`): a sweep a few seconds after the
+## start and then one every ten minutes. The publisher broadcasts the events it writes on its own tick, so the live
+## views see an automatic archive up to 5 s late.
 
 import Database from "../kanban/repo/database"
 import AutoArchive from "../kanban/auto_archive"
@@ -11,14 +12,18 @@ end
 
 private
 
+START_MS = 5_000
 SWEEP_MS = 600_000
 
+# Each sweep runs in a task of its own, so a crash of one is logged and the next one still runs.
 def loop(pool: Database.Pool) -> Void
+  Task.sleep(START_MS)
   while true
-    Task.sleep(SWEEP_MS)
-    swept = AutoArchive.sweep(pool, Time.now_ms())
+    swept = Task.await(Task.spawn do AutoArchive.sweep(pool, Time.now_ms()) end)
     if not swept.ok?
       IO.warn("kanban: auto-archive sweep failed: #{swept.message}")
     end
+
+    Task.sleep(SWEEP_MS)
   end
 end

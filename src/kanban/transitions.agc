@@ -56,8 +56,8 @@ def archive(pool: Database.Pool, input: Action) -> Result[Cards.Card]
   Database.with_connection(pool) do |conn| Db.transaction(conn) do |tx| archive_open(tx, input, Time.now_ms()) end end
 end
 
-## Puts an archived card back: on top of a done column, at the end of any other. Unarchiving a card that is not archived changes nothing and
-## writes no event. `force` is not read: an archived card holds no claim.
+## Puts an archived card back: on top of a done column, at the end of any other. Unarchiving a card that is not
+## archived changes nothing and writes no event. `force` is not read: an archived card holds no claim.
 def unarchive(pool: Database.Pool, input: Action) -> Result[Cards.Card]
   return error("INVALID:id") if input.id <= 0
   return error("INVALID:agent") if not Regex.match?(input.actor, /^[A-Za-z0-9._@\/-]{1,64}$/)
