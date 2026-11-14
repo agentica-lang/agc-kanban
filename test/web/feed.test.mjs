@@ -127,3 +127,8 @@ test("an unarchive and the bulk archive read as sentences", function () {
   assert.deepEqual([bulk.verb, bulk.group, bulk.name], ["archived", "board", "3 done cards older than 3 days"]);
   assert.equal(entry({ id: 13, kind: "board.done_archived", card_id: null, actor: "web", created_at: 1000, data: { count: 1, days: 1 } }, {}).name, "1 done card older than 1 day");
 });
+
+test("a change of the automatic archive reads as a sentence", function () {
+  assert.equal(entry({ id: 14, kind: "board.updated", card_id: null, actor: "agent", created_at: 1000, data: { auto_archive_days: 3 } }, {}).name, "to archive done cards after 3 days");
+  assert.equal(entry({ id: 15, kind: "board.updated", card_id: null, actor: "agent", created_at: 1000, data: { auto_archive_days: null } }, {}).name, "to keep done cards");
+});

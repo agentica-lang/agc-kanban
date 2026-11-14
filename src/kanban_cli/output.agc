@@ -89,6 +89,10 @@ def print_board(response: HTTP.Response) -> Void
   snapshot = decoded.unwrap!
   puts("#{snapshot.board.slug}\t#{snapshot.board.name}")
   puts("columns: #{snapshot.board.columns.map { |column| column.name }.join(", ")}")
+  if snapshot.board.auto_archive_days.some?
+    puts("auto-archive: #{snapshot.board.auto_archive_days.unwrap!} days")
+  end
+
   for card in snapshot.cards
     puts("#{card_line(card)}")
   end
@@ -167,6 +171,21 @@ def print_archive_change(response: HTTP.Response, verb: String) -> Void
 
   card = decoded.unwrap!.card
   puts(one_line("#{verb}\t#{card.id}\t#{card.title}"))
+end
+
+def print_auto_archive(response: HTTP.Response) -> Void
+  decoded = JSON.decode(body(response), AutoArchiveAnswer)
+  if not decoded.ok?
+    puts(body(response))
+    return
+  end
+
+  board = decoded.unwrap!.board
+  if board.auto_archive_days.some?
+    puts("auto-archive\t#{board.slug}\t#{board.auto_archive_days.unwrap!} days")
+  else
+    puts("auto-archive\t#{board.slug}\toff")
+  end
 end
 
 def print_archived_done(response: HTTP.Response) -> Void
@@ -317,7 +336,13 @@ struct BoardInfo
   id: Int
   slug: String
   name: String
+  # None from a server older than the automatic archive, and when it is off.
+  auto_archive_days: Optional[Int]
   columns: List[ColumnLine]
+end
+
+struct AutoArchiveAnswer
+  board: BoardInfo
 end
 
 struct CardLine

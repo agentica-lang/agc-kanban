@@ -6,7 +6,7 @@ import Support from "support"
 import {Arg, Kind, Opt} from "std/option_parser"
 
 def run(words: List[String]) -> Result[Void]
-  return error("board needs a command: list, create, show or archive-done") if words.empty?
+  return error("board needs a command: list, create, show, archive-done or auto-archive") if words.empty?
 
   rest = List.drop(words, 1)
   case words[0]
@@ -14,6 +14,7 @@ def run(words: List[String]) -> Result[Void]
     "create" -> create(rest)
     "show" -> show(rest)
     "archive-done" -> archive_done(rest)
+    "auto-archive" -> auto_archive(rest)
     _ -> error("unknown board command #{words[0]}")
   end
 end
@@ -135,6 +136,46 @@ def archive_done(words: List[String]) -> Result[Void]
     puts(Output.body(response.unwrap!))
   else
     Output.print_archived_done(response.unwrap!)
+  end
+
+  ok()
+end
+
+# Turns the automatic archive of the board on (--days N: the server archives the done cards that were done N days ago,
+# checking every ten minutes) or off (--off). It is off by default.
+def auto_archive(words: List[String]) -> Result[Void]
+  parser = OP.new(
+    "kanban board auto-archive",
+    "Archive the done cards of the board by itself after DAYS days, or stop doing it",
+    [],
+    [
+      Opt(name: "days", kind: Kind.Int, help: "1 to 36500"),
+      Opt(name: "off", kind: Kind.Flag, help: "stop archiving by itself"),
+    ] +
+    Settings.common_opts(),
+  )
+
+  parsed = try OP.parse(parser, words)
+  config = try Settings.load(Settings.read_flags(parsed))
+  Support.require_agent(config)
+  days = OP.optional_int(parsed, "days")
+  if days.some? == OP.flag(parsed, "off")
+    Output.fail(config.json, "USAGE", "pass --days N or --off", 2)
+  end
+
+  board = Support.board_of(config)
+  fields: Map[String, JSON.Value] = {"days": JSON.from(days)}
+  response = Output.expect(
+    Client.post(Client.from(config), "/api/boards/#{board}/auto-archive", JSON.encode(JSON.object(fields))),
+    config.json,
+  )
+
+  return ok() if not response.ok?
+
+  if config.json
+    puts(Output.body(response.unwrap!))
+  else
+    Output.print_auto_archive(response.unwrap!)
   end
 
   ok()

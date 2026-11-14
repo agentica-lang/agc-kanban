@@ -294,7 +294,7 @@ Rules:
 - Event kinds: `board.created`, `column.added`, `column.updated`,
   `column.removed`, `card.created`, `card.updated`, `card.moved`,
   `card.claimed`, `card.released`, `card.done`, `card.archived`,
-  `card.unarchived`, `board.done_archived`, `dep.added`, `dep.removed`, `comment.added`, `label.updated`.
+  `card.unarchived`, `board.done_archived`, `board.updated`, `dep.added`, `dep.removed`, `comment.added`, `label.updated`.
 
 ## 4. API
 
@@ -374,6 +374,7 @@ Tests assert the `code` and the status, never the message.
 | `POST /api/cards/:id/archive` | `{"force"?: false}` (the web session may send it, with `X-Kanban-Agent`, but never `force`: 401) | `{"card"}` with `archived_at`: hidden from the board, the lists, `next`, claims and readiness; kept in the database, the journal (`card.archived`) and `GET /api/cards/:id`. No role is checked (the coordinator's by agreement); `CLAIMED` unless `force`, which drops the claim. An archived card is archived again with no new event. Every other write on it is `NOT_FOUND`. A dependency on it no longer blocks, so the web asks for a confirmation before it archives a card that is not done |
 | `POST /api/cards/:id/unarchive` | `{}` | `{"card"}`: back on top of a done column (it keeps its `done_at`) or at the end of any other; a `card.unarchived` event. Unarchiving a card that is not archived writes nothing |
 | `POST /api/boards/:board/archive-done` | `{"days": N}` (0 to 36500) | `{"archived": n, "days": N, "cards": [ids]}`: in one transaction, archives the cards of a done column whose `done_at` is at least N days old (0: every done card) and that nobody holds; a `card.archived` event per card and, when n is above 0, one `board.done_archived` event (`data`: `count`, `days`, `cards`) for the board. Cards of other columns are never touched |
+| `POST /api/boards/:board/auto-archive` | `{"days": N}` (1 to 36500) or `{"days": null}` | `{"board"}` with `auto_archive_days`: turns on (or off, with null) the automatic archive of the board, off by default; a `board.updated` event (`data.auto_archive_days`). The key is needed (the web session cannot). Every ten minutes the server runs the `archive-done` rule for each board that has it on, as the actor `auto-archive`: the same `card.archived` and `board.done_archived` events |
 | `POST /api/cards/:id/comments` | `{"body"}` | 201 `{"comment": {"id", "card_id", "author", "body", "created_at"}}` |
 | `POST /api/cards/:id/deps` | `{"depends_on": id, "force"?: false}` | 201 `{"card"}`; `CYCLE`; `CLAIMED` if another agent holds the card, unless `force`. The holder can add one: the card keeps its column and claim and shows blocked. A new card in the done column with an open dependency is `BLOCKED` too |
 | `DELETE /api/cards/:id/deps/:other` | query: `force=1` | `{"card"}`; `CLAIMED` if another agent holds the card, unless `force` |
@@ -458,6 +459,7 @@ kanban card done ID [--force]
 kanban card archive ID [--force]          hides the card (the coordinator's)
 kanban card unarchive ID                  puts it back (on top of a done column, else at the end)
 kanban board archive-done [--days N]      archives the done cards that were done N days ago or more (3 by default)
+kanban board auto-archive --days N | --off   the server does it by itself every ten minutes (off by default)
 kanban card dep add ID DEPENDS_ON_ID [--force]
 kanban card dep remove ID DEPENDS_ON_ID [--force]
 
@@ -809,8 +811,8 @@ What was missing or went wrong:
       (`kanban board archive-done`), the archived list and `card unarchive` (#71).
       Owner-approved exception to the view-only web: the session may archive,
       unarchive and bulk archive (exact paths, never `force`), like the label color.
-- [ ] Optional: a per-board setting to archive the done cards by itself after
-      N days (a periodic task in the server), off by default.
+- [x] A per-board setting to archive the done cards by itself after N days
+      (`kanban board auto-archive`, a periodic task in the server), off by default.
 - [x] A richer home page with a card per board (#52); Back and Forward step
       through the opened cards (#54); readable agent chips (#55).
 - [x] Claim leases (see the open questions): `KANBAN_LEASE_MINUTES`, renew

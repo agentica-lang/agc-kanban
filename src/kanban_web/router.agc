@@ -39,6 +39,7 @@ def install(app: Bond.App, pool: Optional[Database.Pool], lease_minutes: Int, ke
     |> Bond.post(Routes.CARD_ARCHIVE, ->(conn) { Claims.archive(conn, pool) })
     |> Bond.post(Routes.CARD_UNARCHIVE, ->(conn) { Archives.unarchive(conn, pool) })
     |> Bond.post(Routes.BOARD_ARCHIVE_DONE, ->(conn) { Archives.archive_done(conn, pool) })
+    |> Bond.post(Routes.BOARD_AUTO_ARCHIVE, ->(conn) { Archives.auto_archive(conn, pool) })
     |> Bond.post(Routes.CARD_CLAIM, ->(conn) { Claims.claim(conn, pool, lease_minutes) })
     |> Bond.get(Routes.CARD, ->(conn) { Cards.show(conn, pool) })
     |> Bond.patch(Routes.CARD, ->(conn) { Cards.update(conn, pool, lease_minutes) })
