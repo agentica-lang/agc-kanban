@@ -184,3 +184,18 @@ Feature: The web pages
     And the response contains exactly 1 occurrences of "<form"
     And the response does not contain "<input"
     And the response does not contain "<textarea"
+
+  Scenario: The session edits a label color and nothing else
+    Given the database server is running
+    When I post a board named "Project" with slug "project" as "agent-1"
+    And I add a card titled "First" with labels "api" and priority 2
+    And I sign in with the key "01234567890123456789012345678901"
+    And I patch "/api/labels/1" with the session as agent "web" and the body "{\"color\":\"#00ff7f\"}"
+    Then the response status is 200
+    And the response contains "#00ff7f"
+    When I patch "/api/labels/1" with the session as agent "" and the body "{\"color\":\"#00ff7f\"}"
+    Then the response status is 400
+    When I patch "/api/cards/1" with the session as agent "web" and the body "{\"title\":\"x\"}"
+    Then the response status is 401
+    When I get board events for "project" after 1
+    Then the response contains "label.updated"

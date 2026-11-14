@@ -8,6 +8,7 @@ import Database from "../kanban/repo/database"
 import Deps from "controllers/deps"
 import Events from "controllers/events"
 import Health from "health"
+import Labels from "controllers/labels"
 import Pages from "controllers/pages"
 import Routes from "routes"
 
@@ -42,6 +43,8 @@ def install(app: Bond.App, pool: Optional[Database.Pool], lease_minutes: Int, ke
     |> Bond.post(Routes.BOARD_COLUMNS, ->(conn) { Columns.add(conn, pool) })
     |> Bond.patch(Routes.COLUMN, ->(conn) { Columns.update(conn, pool) })
     |> Bond.delete(Routes.COLUMN, ->(conn) { Columns.remove(conn, pool) })
+    |> Bond.get(Routes.BOARD_LABELS, ->(conn) { Labels.index(conn, pool) })
+    |> Bond.patch(Routes.LABEL, ->(conn) { Labels.update(conn, pool) })
     |> Bond.get(Routes.BOARD_EVENTS, ->(conn) { Events.index(conn, pool) })
   )
 end

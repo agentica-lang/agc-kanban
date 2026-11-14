@@ -1,6 +1,7 @@
 import Db from "pkg/db/db"
 import Regex from "std/regex"
 import Database from "repo/database"
+import Labels from "labels"
 import Times from "times"
 
 struct Card
@@ -384,6 +385,7 @@ def update_open(conn: Db.Connection, input: Update) -> Result[Card]
 
   updated = try load_at(conn, input.id, now)
   board = try Db.query(conn, "select board_id from cards where id = ?", [Db.Value.Int(input.id)])
+  try Labels.ensure(conn, number(board[0], "board_id"), labels, now)
   _ = try Db.execute(
     conn,
     "insert into events (board_id, card_id, kind, actor, data, created_at) values (?, ?, ?, ?, ?, ?)",
@@ -515,6 +517,7 @@ def insert(conn: Db.Connection, input: Create) -> Result[Card]
     )
   end
 
+  try Labels.ensure(conn, board_id, input.labels, now)
   card = try load(conn, id)
   _ = try Db.execute(
     conn,

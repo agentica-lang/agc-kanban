@@ -7,6 +7,7 @@ import M0005 from "migrations/m0005_comments"
 import M0006 from "migrations/m0006_events"
 import M0007 from "migrations/m0007_card_links"
 import M0008 from "migrations/m0008_card_search"
+import M0009 from "migrations/m0009_labels"
 
 def all() -> List[Migrate.Migration]
   [
@@ -18,5 +19,6 @@ def all() -> List[Migrate.Migration]
     M0006.migration(),
     M0007.migration(),
     M0008.migration(),
+    M0009.migration(),
   ]
 end

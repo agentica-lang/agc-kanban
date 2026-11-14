@@ -37,3 +37,21 @@ export function latest(request, onAnswer, onError) {
     });
   };
 }
+
+// PATCH a JSON body with the session cookie. The API lets the session write a label color only, and asks the agent
+// name of every write; the page is "web".
+export function patchJSON(path, body) {
+  var headers = { Accept: "application/json", "Content-Type": "application/json", "X-Kanban-Agent": "web" };
+  return fetch(path, { method: "PATCH", credentials: "same-origin", headers: headers, body: JSON.stringify(body) }).then(function (res) {
+    if (res.status === 401) {
+      location.assign("/login");
+      return new Promise(function () {});
+    }
+    if (!res.ok) {
+      var error = new Error(path + " answered " + res.status);
+      error.status = res.status;
+      throw error;
+    }
+    return res.json();
+  });
+}

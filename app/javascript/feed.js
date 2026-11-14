@@ -22,6 +22,7 @@ var KINDS = {
   "column.added": { verb: "added the column", group: "board" },
   "column.updated": { verb: "changed the column", group: "board" },
   "column.removed": { verb: "removed the column", group: "board" },
+  "label.updated": { verb: "changed the label", group: "board" },
   "board.created": { verb: "created the board", group: "board" },
 };
 

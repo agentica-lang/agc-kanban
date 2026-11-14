@@ -1,5 +1,5 @@
 import { reactive } from "vue";
-import { getJSON, latest } from "./api.js";
+import { getJSON, latest, patchJSON } from "./api.js";
 import { subscribe } from "./cable.js";
 
 var REFETCH_MS = 80; // a burst of events (a claim and a move) is one fetch
@@ -26,6 +26,7 @@ export function useBoard(slug, listener) {
   var state = reactive({
     board: null,
     cards: [],
+    labels: [],
     feed: [],
     more: false,
     loading: false,
@@ -35,6 +36,7 @@ export function useBoard(slug, listener) {
     flash: {},
     loadMore: loadMore,
     reload: reload,
+    setLabelColor: setLabelColor,
   });
   var timer = null;
   var synced = 0; // the newest event id that the feed is known to hold with nothing missing before it
@@ -50,6 +52,19 @@ export function useBoard(slug, listener) {
     if (!state.board || !same(state.board, snapshot.board)) {
       state.board = snapshot.board;
     }
+    var labels = snapshot.labels || [];
+    if (!same(state.labels, labels)) {
+      state.labels = labels;
+    }
+  }
+
+  // The color shows at once and the answer of the server settles it; a refusal puts the old one back with the next load.
+  function setLabelColor(id, color) {
+    state.labels = state.labels.map(function (label) { return label.id === id ? Object.assign({}, label, { color: color }) : label; });
+    return patchJSON("/api/labels/" + id, { color: color }).catch(function (error) {
+      state.error = error.message;
+      return load();
+    });
   }
 
   function oldest() {
@@ -145,6 +160,8 @@ export function useBoard(slug, listener) {
     if (message.card_id !== null) {
       flash(message.card_id);
       listener(message.card_id);
+    } else if (message.type.indexOf("label.") === 0) {
+      listener(null);
     }
     if (timer === null) {
       timer = setTimeout(load, REFETCH_MS);

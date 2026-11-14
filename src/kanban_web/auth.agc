@@ -18,12 +18,16 @@ def authorize(conn: Bond.Conn, key: String) -> Result[Bond.Conn]
   return ok(conn) if public?(conn.path)
   return ok(page_access(conn)) if not conn.path.start_with?("/api/")
 
-  # The session reads the API, never writes it: a write needs the key and the agent name.
+  # The session reads the API and edits label colors; every other write needs the key. A write needs the agent name,
+  # a header that a page of another site cannot send, so a label edit cannot be forged across sites.
   read = conn.method == "GET" or conn.method == "HEAD"
   return ok(conn) if read and signed_in?(conn)
 
+  session_edit = signed_in?(conn) and label_edit?(conn)
   given = Bond.request_header(conn, "apikey").unwrap_or("")
-  return ok(Failure.reject(conn, 401, "UNAUTHORIZED", "unauthorized")) if not key_matches?(given, key)
+  if not session_edit and not key_matches?(given, key)
+    return ok(Failure.reject(conn, 401, "UNAUTHORIZED", "unauthorized"))
+  end
 
   if not read
     agent = Bond.request_header(conn, "X-Kanban-Agent").unwrap_or("")
@@ -46,6 +50,8 @@ SESSION_LABEL = "kanban session v1"
 def public?(path: String) -> Bool
   path == "/api/health" or path == "/login" or path == "/cable" or path.start_with?("/assets/")
 end
+
+def label_edit?(conn: Bond.Conn) -> Bool = conn.method == "PATCH" and conn.path.start_with?("/api/labels/")
 
 def page_access(conn: Bond.Conn) -> Bond.Conn
   return conn if signed_in?(conn)

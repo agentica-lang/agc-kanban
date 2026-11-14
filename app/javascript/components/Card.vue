@@ -9,6 +9,7 @@ var flashing = ref(props.flash > 0);
 var openCard = inject("openCard");
 var openCardId = inject("openCardId");
 var filter = inject("filter");
+var labelStyle = inject("labelStyle", function () { return null; });
 var open = computed(function () { return openCardId.value === props.card.id; });
 // The link keeps the filters, so a middle-click opens the same view in a new tab.
 var href = computed(function () { return cardSearch(filter.filters.value, props.card.id); });
@@ -39,8 +40,8 @@ watch(function () { return props.flash; }, function (count) {
       <button v-if="card.claimed_by" type="button" class="claimer pick" :class="{ light: lightChip(hue(card.claimed_by)) }" :aria-pressed="filter.filters.value.claimer === card.claimed_by" :title="'Filter by ' + card.claimed_by" :style="'--hue:' + hue(card.claimed_by)" @click="filter.claimer(card.claimed_by)">{{ card.claimed_by }}</button>
       <span v-if="blocked" class="blocked">blocked by {{ card.depends_on.map(function (id) { return "#" + id; }).join(" ") }}</span>
       <template v-for="label in card.labels" :key="label">
-        <button v-if="selectable(label)" type="button" class="label pick" :class="{ on: filter.filters.value.labels.indexOf(label) !== -1 }" :aria-pressed="filter.filters.value.labels.indexOf(label) !== -1" :title="'Filter by ' + label" @click="filter.label(label)">{{ label }}</button>
-        <span v-else class="label">{{ label }}</span>
+        <button v-if="selectable(label)" type="button" class="label pick" :class="{ on: filter.filters.value.labels.indexOf(label) !== -1 }" :style="labelStyle(label)" :aria-pressed="filter.filters.value.labels.indexOf(label) !== -1" :title="'Filter by ' + label" @click="filter.label(label)">{{ label }}</button>
+        <span v-else class="label" :style="labelStyle(label)">{{ label }}</span>
       </template>
     </div>
   </div>
