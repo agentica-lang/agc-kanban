@@ -1,11 +1,12 @@
 import Db from "pkg/db/db"
 import Migrate from "pkg/db/migrate"
+import Sqlite from "pkg/db/sqlite"
 import Cards from "../src/kanban/cards"
 import Database from "../src/kanban/repo/database"
 import Migrations from "../src/kanban/repo/migrations"
 
 def test_schema_migrates_once() -> Result[Void]
-  conn = try Db.open("sqlite::memory:")
+  conn = try Db.open("sqlite::memory:", [Sqlite.driver()])
   first = Migrate.up(conn, Migrations.all())
   second = Migrate.up(conn, Migrations.all())
   Db.close(conn)
@@ -15,7 +16,7 @@ end
 
 # A card stored before the links column reads with no links, and gets them afterwards.
 def test_a_card_from_before_links_has_none() -> Result[Void]
-  conn = try Db.open("sqlite::memory:")
+  conn = try Db.open("sqlite::memory:", [Sqlite.driver()])
   _ = try Migrate.up(conn, Migrations.all().select do |migration| migration.version < 7 end)
   _ = try Db.execute(conn, "insert into boards (slug, name, created_at, updated_at) values ('p', 'P', 1, 1)", [])
   _ = try Db.execute(
@@ -97,7 +98,7 @@ def version_of(file: String) -> Int = file.slice(1, 4).to_i!
 
 # A card stored before the search index is indexed by the migration, and the triggers keep it up to date afterwards.
 def test_search_index_backfills_and_follows_edits() -> Result[Void]
-  conn = try Db.open("sqlite::memory:")
+  conn = try Db.open("sqlite::memory:", [Sqlite.driver()])
   _ = try Migrate.up(conn, Migrations.all().select do |migration| migration.version < 8 end)
   _ = try Db.execute(conn, "insert into boards (slug, name, created_at, updated_at) values ('p', 'P', 1, 1)", [])
   _ = try Db.execute(

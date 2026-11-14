@@ -1,5 +1,6 @@
 import Db from "pkg/db/db"
 import DbPool from "pkg/db/db_pool"
+import Sqlite from "pkg/db/sqlite"
 import Database from "../src/kanban/repo/database"
 
 def test_busy_messages_are_recognized() -> Result[Void]
@@ -26,9 +27,9 @@ end
 
 def lock_message(dir: String) -> Result[String]
   url = "sqlite:#{dir}/kanban.sqlite3?busy_timeout=50"
-  holder = try Db.open(url)
+  holder = try Db.open(url, [Sqlite.driver()])
   _ = try Db.execute(holder, "begin immediate", [])
-  other = try Db.open(url)
+  other = try Db.open(url, [Sqlite.driver()])
   failed = Db.execute(other, "insert into boards (slug, name, created_at, updated_at) values ('x', 'X', 1, 1)", [])
 
   Db.close(other)
@@ -41,7 +42,7 @@ end
 
 def pool_message(dir: String) -> Result[String]
   url = "sqlite:#{dir}/kanban.sqlite3"
-  small = try DbPool.start(DbPool.Options(url: url, size: 1, checkout_ms: 50))
+  small = try DbPool.start(DbPool.Options(url: url, drivers: [Sqlite.driver()], size: 1, checkout_ms: 50))
   inside = DbPool.with(small) do |_conn| DbPool.with(small) do |_second| ok("second connection") end end
 
   DbPool.close(small, 1000)

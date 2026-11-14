@@ -1,5 +1,6 @@
 import BDD from "std/bdd"
 import Db from "pkg/db/db"
+import Sqlite from "pkg/db/sqlite"
 import HTTP from "std/http"
 import URI from "std/uri"
 import WebSteps from "web_steps"
@@ -735,7 +736,7 @@ end
 # A write lock from another connection makes the server wait out its busy timeout and answer BUSY.
 def post_board_locked(ctx: BDD.Context, _args: List[String]) -> BDD.Context
   dir = JSON.string(BDD.get(ctx, "data_dir").unwrap!).unwrap!
-  conn = Db.open("sqlite:#{dir}/kanban.sqlite3").unwrap!
+  conn = Db.open("sqlite:#{dir}/kanban.sqlite3", [Sqlite.driver()]).unwrap!
   _ = Db.execute(conn, "begin immediate", []).unwrap!
   answered = post_board(ctx, ["Project", "project", "agent-1"])
   _ = Db.execute(conn, "rollback", []).unwrap!
@@ -746,7 +747,7 @@ end
 # The lease is set in the past by a second connection: a spec cannot wait a minute for a real one to end.
 def expire_lease(ctx: BDD.Context, args: List[String]) -> BDD.Context
   dir = JSON.string(BDD.get(ctx, "data_dir").unwrap!).unwrap!
-  conn = Db.open("sqlite:#{dir}/kanban.sqlite3").unwrap!
+  conn = Db.open("sqlite:#{dir}/kanban.sqlite3", [Sqlite.driver()]).unwrap!
   _ = Db.execute(conn, "update cards set lease_until = 1 where id = ?", [Db.Value.Int(args[0].to_i!)]).unwrap!
   Db.close(conn)
   ctx
@@ -756,7 +757,7 @@ end
 # connection writes it, to check that the home page still shows no agent for such a row.
 def keep_claim(ctx: BDD.Context, args: List[String]) -> BDD.Context
   dir = JSON.string(BDD.get(ctx, "data_dir").unwrap!).unwrap!
-  conn = Db.open("sqlite:#{dir}/kanban.sqlite3").unwrap!
+  conn = Db.open("sqlite:#{dir}/kanban.sqlite3", [Sqlite.driver()]).unwrap!
   sql = "update cards set claimed_by = ?, lease_until = null where id = ?"
   _ = Db.execute(conn, sql, [Db.Value.Text(args[1]), Db.Value.Int(args[0].to_i!)]).unwrap!
   Db.close(conn)

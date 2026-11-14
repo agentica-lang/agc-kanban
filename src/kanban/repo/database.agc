@@ -1,6 +1,7 @@
 import Db from "pkg/db/db"
 import DbPool from "pkg/db/db_pool"
 import Migrate from "pkg/db/migrate"
+import Sqlite from "pkg/db/sqlite"
 import Migrations from "migrations"
 
 type Pool = DbPool.Pool
@@ -12,11 +13,11 @@ def open(dir: String, busy_timeout: Int = 0) -> Result[Pool]
     url = "#{url}?busy_timeout=#{busy_timeout}"
   end
 
-  conn = try Db.open(url)
+  conn = try Db.open(url, [Sqlite.driver()])
   applied = Migrate.up(conn, Migrations.all())
   Db.close(conn)
   try applied
-  DbPool.start(DbPool.Options(url: url, size: 0, checkout_ms: 3000))
+  DbPool.start(DbPool.Options(url: url, drivers: [Sqlite.driver()], size: 0, checkout_ms: 3000))
 end
 
 def close(pool: Pool) -> Void
