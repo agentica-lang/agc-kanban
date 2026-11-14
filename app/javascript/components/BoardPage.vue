@@ -10,6 +10,7 @@ import { useSearch } from "../search_store.js";
 import { useTheme } from "../theme.js";
 import { chipStyle, colorsOf } from "../labels.js";
 import { useWide } from "../wide.js";
+import ArchivePanel from "./ArchivePanel.vue";
 import CardPanel from "./CardPanel.vue";
 import Column from "./Column.vue";
 import Drawer from "./Drawer.vue";
@@ -47,6 +48,15 @@ var card = useCard();
 var state = useBoard(props.slug, card.changed);
 
 followDrawer(drawer, card);
+
+// The card panel's Archive and Unarchive: the card fetches again at once, the board and the archive list by the event.
+function archiveCard(id) {
+  return state.archiveCard(id).then(function () { card.changed(id); });
+}
+
+function unarchiveCard(id) {
+  return state.unarchiveCard(id).then(function () { card.changed(id); });
+}
 // A card on the board opens its detail; the open one is marked.
 provide("openCard", drawer.showCard);
 provide("openCardId", drawer.card);
@@ -69,6 +79,7 @@ var filterPanel = ref(null);
 // when the card changes, and the focus would fall to the page).
 var filtersButton = ref(null);
 var activityButton = ref(null);
+var archiveButton = ref(null);
 var closedByPointer = false;
 
 function origin(closed, id) {
@@ -77,6 +88,9 @@ function origin(closed, id) {
   }
   if (closed === "activity") {
     return activityButton.value;
+  }
+  if (closed === "archive") {
+    return archiveButton.value;
   }
   return id === null ? null : document.querySelector('.card a.title[data-card="' + id + '"]');
 }
@@ -203,6 +217,9 @@ var filtersLabel = computed(function () { return filterCount.value ? "Filters ·
         <span class="filters-word">{{ filtersLabel }}</span>
         <span v-if="filterCount" class="badge" aria-hidden="true">{{ filterCount }}</span>
       </button>
+      <button ref="archiveButton" type="button" class="toggle" aria-label="Archive" title="Archive" aria-controls="drawer" :aria-expanded="panel === 'archive'" @click="drawer.toggleArchive()">
+        <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M2 3h12v3H2zM3 6v7h10V6M6.5 9h3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" /></svg>
+      </button>
       <button ref="activityButton" type="button" class="toggle" aria-label="Activity" title="Activity" aria-controls="drawer" :aria-expanded="panel === 'activity'" @click="drawer.toggleActivity()">
         <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M2 3h1.5v1.5H2zM5 3h9v1.5H5zM2 7.25h1.5v1.5H2zM5 7.25h9v1.5H5zM2 11.5h1.5V13H2zM5 11.5h9V13H5z" fill="currentColor" /></svg>
       </button>
@@ -222,7 +239,10 @@ var filtersLabel = computed(function () { return filterCount.value ? "Filters ·
         <FilterPanel ref="filterPanel" :store="filter" :cards="state.cards" :search="search" :labels="state.labels" @color="state.setLabelColor" />
       </Drawer>
       <Drawer v-else-if="panel === 'card'" ref="cardDrawer" :title="'Card #' + drawer.card.value" modal :dialog="wide" focus @close="drawer.close()">
-        <CardPanel :state="card" :slug="slug" @open="drawer.showCard" />
+        <CardPanel :state="card" :slug="slug" :busy="state.busy" :action-error="state.actionError" @open="drawer.showCard" @archive="archiveCard" @unarchive="unarchiveCard" />
+      </Drawer>
+      <Drawer v-else-if="panel === 'archive'" title="Archive" @close="drawer.close()">
+        <ArchivePanel :state="state" />
       </Drawer>
     </div>
   </div>

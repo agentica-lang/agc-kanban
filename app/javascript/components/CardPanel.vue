@@ -6,10 +6,10 @@ import { cardLink } from "../links.js";
 import { Markdown } from "../markdown.js";
 import CardTimes from "./CardTimes.vue";
 
-// The detail of the open card, read-only. A dependency opens that card in the same panel. A card of another board
+// The detail of the open card, read-only except for the Archive and Unarchive button. A dependency opens that card in the same panel. A card of another board
 // (a dependency, or `?card=` by hand) gets only a link to its board: the live events of this page are not its own.
-var props = defineProps({ state: Object, slug: String });
-var emit = defineEmits(["open"]);
+var props = defineProps({ state: Object, slug: String, busy: Boolean, actionError: String });
+var emit = defineEmits(["open", "archive", "unarchive"]);
 // The filters, so the link of a card opens the same view in a new tab, as the cards of the board do.
 var boardFilter = inject("filter");
 var labelStyle = inject("labelStyle", function () { return null; });
@@ -113,6 +113,9 @@ function when(ms) {
           <dd><CardTimes :times="state.detail.times" :received-at="state.receivedAt" /></dd>
         </template>
       </dl>
+      <p v-if="actionError" class="banner" role="alert">{{ actionError }}</p>
+      <button v-if="state.detail.card.archived_at" type="button" class="action" :disabled="busy" @click="emit('unarchive', state.detail.card.id)">Unarchive</button>
+      <button v-else type="button" class="action" :disabled="busy" @click="emit('archive', state.detail.card.id)">Archive</button>
     </div>
   </div>
 </template>

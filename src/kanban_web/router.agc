@@ -1,3 +1,4 @@
+import Archives from "controllers/archives"
 import Boards from "controllers/boards"
 import Bond from "pkg/bond/bond"
 import Cards from "controllers/cards"
@@ -36,6 +37,8 @@ def install(app: Bond.App, pool: Optional[Database.Pool], lease_minutes: Int, ke
     |> Bond.post(Routes.CARD_MOVE, ->(conn) { Claims.move(conn, pool, lease_minutes) })
     |> Bond.post(Routes.CARD_DONE, ->(conn) { Claims.done(conn, pool) })
     |> Bond.post(Routes.CARD_ARCHIVE, ->(conn) { Claims.archive(conn, pool) })
+    |> Bond.post(Routes.CARD_UNARCHIVE, ->(conn) { Archives.unarchive(conn, pool) })
+    |> Bond.post(Routes.BOARD_ARCHIVE_DONE, ->(conn) { Archives.archive_done(conn, pool) })
     |> Bond.post(Routes.CARD_CLAIM, ->(conn) { Claims.claim(conn, pool, lease_minutes) })
     |> Bond.get(Routes.CARD, ->(conn) { Cards.show(conn, pool) })
     |> Bond.patch(Routes.CARD, ->(conn) { Cards.update(conn, pool, lease_minutes) })

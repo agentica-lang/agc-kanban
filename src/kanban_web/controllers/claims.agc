@@ -1,4 +1,5 @@
 import Answers from "../answers"
+import Auth from "../auth"
 import Bond from "pkg/bond/bond"
 import Claims from "../../kanban/claims"
 import Database from "../../kanban/repo/database"
@@ -138,10 +139,15 @@ def archive(conn: Bond.Conn, pool: Optional[Database.Pool]) -> Result[Bond.Conn]
   decoded = JSON.decode(body.unwrap!, ForceInput)
   return ok(Failure.reject(conn, 400, "INVALID", "invalid body", some("body"))) if not decoded.ok?
 
+  force = decoded.unwrap!.force.unwrap_or(false)
+  if force and Auth.session_write?(conn)
+    return ok(Failure.reject(conn, 401, "UNAUTHORIZED", "force needs the api key"))
+  end
+
   input = Transitions.Action(
     id: id.unwrap!,
     actor: Bond.request_header(conn, "X-Kanban-Agent").unwrap_or(""),
-    force: decoded.unwrap!.force.unwrap_or(false),
+    force: force,
   )
 
   result = Transitions.archive(pool.unwrap!, input)

@@ -119,3 +119,11 @@ test("the relative time and the day separators", function () {
   var days = byDay([entry(moved({ created_at: now - HOUR }), {}), entry(moved({ created_at: now - 20 * HOUR }), {})], now);
   assert.deepEqual(days.map(function (one) { return one.label; }), ["Today", "Yesterday"]);
 });
+
+test("an unarchive and the bulk archive read as sentences", function () {
+  var back = entry({ id: 11, kind: "card.unarchived", card_id: 5, actor: "web", created_at: 1000, data: { card: { title: "Old" } } }, {});
+  assert.deepEqual([back.verb, back.group, back.title], ["unarchived", "other", "Old"]);
+  var bulk = entry({ id: 12, kind: "board.done_archived", card_id: null, actor: "web", created_at: 1000, data: { count: 3, days: 3, cards: [1, 2, 3] } }, {});
+  assert.deepEqual([bulk.verb, bulk.group, bulk.name], ["archived", "board", "3 done cards older than 3 days"]);
+  assert.equal(entry({ id: 13, kind: "board.done_archived", card_id: null, actor: "web", created_at: 1000, data: { count: 1, days: 1 } }, {}).name, "1 done card older than 1 day");
+});

@@ -16,6 +16,7 @@ var KINDS = {
   "card.moved": { verb: "moved", group: "move" },
   "card.done": { verb: "closed", group: "done" },
   "card.archived": { verb: "archived", group: "other" },
+  "card.unarchived": { verb: "unarchived", group: "other" },
   "comment.added": { verb: "commented on", group: "comment" },
   "dep.added": { verb: "added a dependency to", group: "dep" },
   "dep.removed": { verb: "removed a dependency from", group: "dep" },
@@ -24,6 +25,7 @@ var KINDS = {
   "column.removed": { verb: "removed the column", group: "board" },
   "label.updated": { verb: "changed the label", group: "board" },
   "board.created": { verb: "created the board", group: "board" },
+  "board.done_archived": { verb: "archived", group: "board" },
 };
 
 // The groups in the order of the filter, with their names there.
@@ -122,6 +124,10 @@ export function entry(event, titles) {
     }
   } else if (event.kind === "comment.added") {
     result.excerpt = typeof data.body === "string" ? cut(data.body, EXCERPT_MAX) : "";
+  } else if (event.kind === "board.done_archived") {
+    var count = Number.isInteger(data.count) ? data.count : 0;
+    var days = Number.isInteger(data.days) ? data.days : 0;
+    result.name = count + (count === 1 ? " done card" : " done cards") + " older than " + days + (days === 1 ? " day" : " days");
   } else if (result.group === "board") {
     result.name = typeof data.name === "string" ? cut(data.name, TITLE_MAX) : "";
   }

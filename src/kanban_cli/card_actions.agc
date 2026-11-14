@@ -17,6 +17,7 @@ def run(words: List[String]) -> Result[Void]
     "move" -> move(rest)
     "done" -> done(rest)
     "archive" -> archive(rest)
+    "unarchive" -> unarchive(rest)
     "comment" -> comment(rest)
     "dep" -> dep(rest)
     _ -> error("unknown card action #{words[0]}")
@@ -210,6 +211,34 @@ def archive(words: List[String]) -> Result[Void]
     puts(Output.body(response.unwrap!))
   else
     Output.print_archived(response.unwrap!)
+  end
+
+  ok()
+end
+
+# Puts an archived card back at the end of its column. A card that is not archived is left alone.
+def unarchive(words: List[String]) -> Result[Void]
+  parser = OP.new(
+    "kanban card unarchive",
+    "Put an archived card back on the board",
+    [Arg(name: "id", kind: Kind.Int)],
+    Settings.common_opts(),
+  )
+
+  parsed = try OP.parse(parser, words)
+  config = try Settings.load(Settings.read_flags(parsed))
+  Support.require_agent(config)
+  response = Output.expect(
+    Client.post(Client.from(config), "/api/cards/#{OP.int(parsed, "id")}/unarchive", "{}"),
+    config.json,
+  )
+
+  return ok() if not response.ok?
+
+  if config.json
+    puts(Output.body(response.unwrap!))
+  else
+    Output.print_unarchived(response.unwrap!)
   end
 
   ok()

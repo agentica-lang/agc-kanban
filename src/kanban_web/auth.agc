@@ -18,15 +18,15 @@ def authorize(conn: Bond.Conn, key: String) -> Result[Bond.Conn]
   return ok(conn) if public?(conn.path)
   return ok(page_access(conn)) if not conn.path.start_with?("/api/")
 
-  # The session reads the API and edits the color of a label (the handler refuses a rename); every other write needs
-  # the key. A write needs the agent name,
-  # a header that a page of another site cannot send, so a label edit cannot be forged across sites.
+  # The session reads the API, edits the color of a label (the handler refuses a rename) and archives and unarchives
+  # (the handler refuses force); every other write needs the key. A write needs the agent name, a header that a page
+  # of another site cannot send, so these writes cannot be forged across sites.
   read = conn.method == "GET" or conn.method == "HEAD"
   return ok(conn) if read and signed_in?(conn)
 
   given = Bond.request_header(conn, "apikey").unwrap_or("")
   keyed = key_matches?(given, key)
-  session_edit = not keyed and signed_in?(conn) and label_edit?(conn)
+  session_edit = not keyed and signed_in?(conn) and session_path?(conn)
   return ok(Failure.reject(conn, 401, "UNAUTHORIZED", "unauthorized")) if not keyed and not session_edit
 
   if not read
@@ -57,8 +57,14 @@ def public?(path: String) -> Bool
   path == "/api/health" or path == "/login" or path == "/cable" or path.start_with?("/assets/")
 end
 
-def label_edit?(conn: Bond.Conn) -> Bool
-  conn.method == "PATCH" and Regex.match?(conn.path, /^\/api\/labels\/[0-9]+$/)
+def session_path?(conn: Bond.Conn) -> Bool
+  return Regex.match?(conn.path, /^\/api\/labels\/[0-9]+$/) if conn.method == "PATCH"
+  return false if conn.method != "POST"
+
+  (
+    Regex.match?(conn.path, /^\/api\/cards\/[0-9]+\/(archive|unarchive)$/) or
+    Regex.match?(conn.path, /^\/api\/boards\/[a-z0-9-]+\/archive-done$/)
+  )
 end
 
 def page_access(conn: Bond.Conn) -> Bond.Conn

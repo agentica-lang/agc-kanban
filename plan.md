@@ -29,8 +29,9 @@ This file is the plan only. There is no product code yet.
 
 - One API key for everything. No users, no roles, no sign-up.
 - One server process. No cluster, no replication.
-- No drag-and-drop and no writes from the web, except the color of a label:
-  the web page stays otherwise view-only (see the open questions).
+- No drag-and-drop and no writes from the web, except the color of a label and
+  archive, unarchive and the bulk archive of done cards: the web page stays
+  otherwise view-only (see the open questions).
 - No agent runner. The board does not start agents, open worktrees or run
   tests. The orchestrator does that.
 - No GitHub sync, no MCP server, no notifications by email or chat.
@@ -293,12 +294,13 @@ Rules:
 - Event kinds: `board.created`, `column.added`, `column.updated`,
   `column.removed`, `card.created`, `card.updated`, `card.moved`,
   `card.claimed`, `card.released`, `card.done`, `card.archived`,
-  `dep.added`, `dep.removed`, `comment.added`, `label.updated`.
+  `card.unarchived`, `board.done_archived`, `dep.added`, `dep.removed`, `comment.added`, `label.updated`.
 
 ## 4. API
 
 All paths are under `/api/`. Every request needs the `apikey` header (the
-CLI) or the session cookie (the web: reads, and the `color` of `PATCH /api/labels/:id`). Writes need the
+CLI) or the session cookie (the web: reads, the `color` of `PATCH /api/labels/:id`, and the archive paths
+below). Writes need the
 `X-Kanban-Agent` header: the agent name, 1 to 64 characters of
 `[A-Za-z0-9._@/-]`. The name is not a proof of identity: anyone with the key
 can use any name. It keeps honest agents apart, which is the goal.
@@ -360,7 +362,7 @@ Tests assert the `code` and the status, never the message.
 | `POST /api/boards/:board/columns` | `{"name", "position"?, "done"?, "wip_limit"?}` | 201 `{"column"}` |
 | `PATCH /api/columns/:id` | `{"name"?, "position"?, "done"?, "wip_limit"?, "force"?: false}` | `{"column"}`; making a column done is `BLOCKED` (`blocked_by` lists the cards of the column that wait for a card outside it) unless `force`, which the `column.updated` event records |
 | `DELETE /api/columns/:id` | | 204, or `CONFLICT` if it has cards |
-| `GET /api/boards/:board/cards` | query: `column`, `ready=1`, `claimed_by`, `label`, `done=0/1` | `{"cards": [card]}`, ordered by column, then position |
+| `GET /api/boards/:board/cards` | query: `column`, `ready=1`, `claimed_by`, `label`, `done=0/1`, `archived=1`, `limit` | `{"cards": [card]}`, ordered by column, then position. With `archived=1` it lists the archived cards instead, the newest archive first; `limit` (1 to 1000) caps any list |
 | `POST /api/boards/:board/cards` | `{"title", "body"?, "column"?, "labels"?, "priority"?, "depends_on"?: [id], "links"?: [url]}` (at most 50 links, repeats included) | 201 `{"card"}`; the first column by default |
 | `GET /api/cards/:id` | | `{"card", "comments": [comment]}` |
 | `PATCH /api/cards/:id` | `{"title"?, "body"?, "labels"?, "priority"?, "branch"?, "worktree"?, "link"?: [url], "unlink"?: [url]}` | `{"card"}`; `CLAIMED` if another agent holds it. `unlink` removes, then `link` adds (each list at most 50, repeats included) the URLs the card lacks; when only links were asked and none changed, nothing is written (no version, no event), unless the actor holds a running lease and leases are on; then it renews the lease. |
@@ -369,7 +371,9 @@ Tests assert the `code` and the status, never the message.
 | `POST /api/cards/:id/release` | `{"force"?: false, "column"?}` | `{"card"}`; `NOT_CLAIMER` unless `force` |
 | `POST /api/cards/:id/move` | `{"column", "position"?, "force"?: false}` | `{"card"}`; `CLAIMED` if another agent holds it, `BLOCKED` into the done column with an open dependency; `force` skips both |
 | `POST /api/cards/:id/done` | `{"force"?: false}` | `{"card"}`: moved to the done column, claim cleared; `NOT_CLAIMER` or `BLOCKED` (an open dependency) unless `force` |
-| `POST /api/cards/:id/archive` | `{"force"?: false}` | `{"card"}` with `archived_at`: hidden from the board, the lists, `next`, claims and readiness; kept in the database, the journal (`card.archived`) and `GET /api/cards/:id`. No role is checked (the coordinator's by agreement); `CLAIMED` unless `force`, which drops the claim. An archived card is archived again with no new event. Every other write on it is `NOT_FOUND`. A dependency on it no longer blocks |
+| `POST /api/cards/:id/archive` | `{"force"?: false}` (the web session may send it, with `X-Kanban-Agent`, but never `force`: 401) | `{"card"}` with `archived_at`: hidden from the board, the lists, `next`, claims and readiness; kept in the database, the journal (`card.archived`) and `GET /api/cards/:id`. No role is checked (the coordinator's by agreement); `CLAIMED` unless `force`, which drops the claim. An archived card is archived again with no new event. Every other write on it is `NOT_FOUND`. A dependency on it no longer blocks |
+| `POST /api/cards/:id/unarchive` | `{}` | `{"card"}`: back at the end of its column (a card of a done column keeps its `done_at`); a `card.unarchived` event. Unarchiving a card that is not archived writes nothing |
+| `POST /api/boards/:board/archive-done` | `{"days": N}` (0 to 36500) | `{"archived": n, "days": N, "cards": [ids]}`: in one transaction, archives the cards of a done column whose `done_at` is at least N days old (0: every done card) and that nobody holds; a `card.archived` event per card and, when n is above 0, one `board.done_archived` event (`data`: `count`, `days`, `cards`) for the board. Cards of other columns are never touched |
 | `POST /api/cards/:id/comments` | `{"body"}` | 201 `{"comment": {"id", "card_id", "author", "body", "created_at"}}` |
 | `POST /api/cards/:id/deps` | `{"depends_on": id, "force"?: false}` | 201 `{"card"}`; `CYCLE`; `CLAIMED` if another agent holds the card, unless `force`. The holder can add one: the card keeps its column and claim and shows blocked. A new card in the done column with an open dependency is `BLOCKED` too |
 | `DELETE /api/cards/:id/deps/:other` | query: `force=1` | `{"card"}`; `CLAIMED` if another agent holds the card, unless `force` |
@@ -440,7 +444,7 @@ kanban column remove COLUMN
 
 kanban card add TITLE [--body TEXT | --body-file F] [--column C]
                 [--label L]... [--priority 0-4] [--depends-on ID]...
-kanban card list [--column C] [--ready] [--mine] [--claimed-by A] [--label L] [--all]
+kanban card list [--column C] [--ready] [--mine] [--claimed-by A] [--label L] [--all | --archived]
                 [--format text|tsv]
 kanban card show ID                       card, dependencies, comments
 kanban card claim ID
@@ -452,6 +456,8 @@ kanban card update ID [--title T] [--body TEXT | --body-file F] [--label L]...
 kanban card comment ID TEXT | --file F    `-` reads stdin
 kanban card done ID [--force]
 kanban card archive ID [--force]          hides the card (the coordinator's)
+kanban card unarchive ID                  puts it back at the end of its column
+kanban board archive-done [--days N]      archives the done cards that were done N days ago or more (3 by default)
 kanban card dep add ID DEPENDS_ON_ID [--force]
 kanban card dep remove ID DEPENDS_ON_ID [--force]
 
@@ -461,7 +467,7 @@ kanban prime                              print the agent rules (the skill, shor
 ```
 
 `--board` applies to every command that needs a board. `card list` hides
-done cards unless `--all`.
+done cards unless `--all`, and archived cards always; `--archived` lists them.
 
 `kanban prime` prints the short form of the skill (the loop and the rules),
 as `bd prime` and `flux prime` do. An orchestrator can paste it into a
@@ -799,6 +805,12 @@ What was missing or went wrong:
 ### Phase 5: polish
 
 - [x] Card archive (`kanban card archive ID`), hidden from the board (#56).
+- [x] Archive from the web, bulk archive of the done cards older than N days
+      (`kanban board archive-done`), the archived list and `card unarchive` (#71).
+      Owner-approved exception to the view-only web: the session may archive,
+      unarchive and bulk archive (exact paths, never `force`), like the label color.
+- [ ] Optional: a per-board setting to archive the done cards by itself after
+      N days (a periodic task in the server), off by default.
 - [x] A richer home page with a card per board (#52); Back and Forward step
       through the opened cards (#54); readable agent chips (#55).
 - [x] Claim leases (see the open questions): `KANBAN_LEASE_MINUTES`, renew
@@ -837,7 +849,9 @@ Storage is decided: agentica-db with SQLite.
    - b) The owner can move, comment and release from the web.
    - Decided (owner, 2026-11-12): a). There are no writes from the web, and
      the web stays view-only. Writes go through the CLI or the API; there is
-     no drag-and-drop and no CSRF to protect.
+     no drag-and-drop. Exceptions, each owner-approved and narrow (the session
+     cookie and `X-Kanban-Agent`, no key, exact paths): the color of a label,
+     and archive, unarchive and the bulk archive of done cards (2026-11-14).
 4. **Claim expiry.** Decided: configurable, with b) implemented and a)
    as the default.
    - a) No expiry: a claim lasts until release or done; the owner or the

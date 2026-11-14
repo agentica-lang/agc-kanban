@@ -249,3 +249,20 @@ test("after the page's scope stops, a drawer change fetches nothing", async func
   await new Promise(function (resolve) { setTimeout(resolve, 20); });
   assert.equal(fetched.length, 1, "a stopped page fetches nothing");
 });
+
+test("the archive panel opens and closes, and a card opened from it goes back to it when closed", function () {
+  var one = page("/boards/p");
+  one.drawer.toggleArchive();
+  assert.equal(one.drawer.panel.value, "archive");
+  one.drawer.showCard(4);
+  assert.equal(one.drawer.panel.value, "card");
+  one.drawer.close();
+  assert.equal(one.drawer.panel.value, "archive");
+  one.drawer.toggleFilters();
+  assert.equal(one.drawer.panel.value, "filters");
+  one.drawer.toggleArchive();
+  assert.equal(one.drawer.panel.value, "archive");
+  one.drawer.close();
+  assert.equal(one.drawer.panel.value, "");
+  one.stop();
+});

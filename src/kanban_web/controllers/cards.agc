@@ -54,7 +54,16 @@ def index(conn: Bond.Conn, pool: Optional[Database.Pool]) -> Result[Bond.Conn]
   query = params.unwrap!
   ready = Params.flag(query, "ready")
   done = Params.flag(query, "done")
-  return ok(Failure.reject(conn, 400, "INVALID", "invalid query", some("query"))) if not ready.ok? or not done.ok?
+  archived = Params.flag(query, "archived")
+  limit = Params.number(query, "limit", 0)
+  if not ready.ok? or not done.ok? or not archived.ok? or not limit.ok?
+    return ok(Failure.reject(conn, 400, "INVALID", "invalid query", some("query")))
+  end
+
+  bound: Optional[Int] = none
+  if Params.text(query, "limit").some?
+    bound = some(limit.unwrap!)
+  end
 
   filters = Cards.Filters(
     column: Params.text(query, "column"),
@@ -62,6 +71,8 @@ def index(conn: Bond.Conn, pool: Optional[Database.Pool]) -> Result[Bond.Conn]
     claimed_by: Params.text(query, "claimed_by"),
     label: Params.text(query, "label"),
     done: done.unwrap!,
+    archived: archived.unwrap!.unwrap_or(false),
+    limit: bound,
   )
 
   result = Cards.list(pool.unwrap!, Bond.param(conn, "board").unwrap_or(""), filters)

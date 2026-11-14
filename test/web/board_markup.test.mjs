@@ -29,6 +29,7 @@ var CardPanel = (await server.ssrLoadModule("/app/javascript/components/CardPane
 var FilterPanel = (await server.ssrLoadModule("/app/javascript/components/FilterPanel.vue")).default;
 var FilterBar = (await server.ssrLoadModule("/app/javascript/components/FilterBar.vue")).default;
 var Drawer = (await server.ssrLoadModule("/app/javascript/components/Drawer.vue")).default;
+var ArchivePanel = (await server.ssrLoadModule("/app/javascript/components/ArchivePanel.vue")).default;
 var BoardPage = (await server.ssrLoadModule("/app/javascript/components/BoardPage.vue")).default;
 
 // The page code reads the filters from `location`; a plain object stands in for it.
@@ -106,6 +107,21 @@ test("the panel of an archived card says it is archived, and the panel of any ot
   assert.match(archived, /<dt>Archived<\/dt>/);
   var open = await draw(CardPanel, { state: detail({ archived_at: null }), slug: "p" }, "");
   assert.equal(open.includes("Archived"), false);
+  assert.ok(archived.includes(">Unarchive</button>") && !archived.includes(">Archive</button>"));
+  assert.ok(open.includes(">Archive</button>") && !open.includes(">Unarchive</button>"));
+});
+
+test("the archive drawer archives the done cards older than 3 days by default and lists the archived cards", async function () {
+  var archived = [{ id: 4, title: "Old <b>one</b>", archived_at: 1000 }];
+  var state = { archived: archived, archivedMax: 200, watchArchived: false, actionError: "", busy: false, loadArchived: function () {}, archiveDone: function () {}, unarchiveCard: function () {} };
+  var html = await draw(ArchivePanel, { state: state }, "");
+  assert.match(html, /Archive done cards older than\s*<input[^>]*value="3"/);
+  assert.equal(state.watchArchived, true, "the list follows the archive events while the panel is open");
+  assert.ok(html.includes("Archived (1)") && html.includes("#4"));
+  assert.ok(html.includes("Old &lt;b&gt;one&lt;/b&gt;") && !html.includes("<b>one</b>"), "titles are text");
+  assert.ok(html.includes(">Unarchive</button>"));
+  var none = await draw(ArchivePanel, { state: Object.assign({}, state, { archived: [] }) }, "");
+  assert.ok(none.includes("No archived card."));
 });
 
 // The opening tags of `html` that have the class `name`, each as { tag, attrs } so a test does not depend on the order

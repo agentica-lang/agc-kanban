@@ -68,6 +68,7 @@ kanban board create "Project" --columns "Todo,Doing,Done"   # last column is the
 kanban board create "Project" --slug project   # slug: --slug, else KANBAN_BOARD, else the name
 # without --columns: Todo, Doing, Review, Done
 kanban board show [BOARD]
+kanban board archive-done [--days 3]   # archive the cards of the done columns done 3 or more days ago (0: all)
 
 kanban column add Review --position 2 [--done] [--wip 3]   # --done moves the done flag off the old done column
 #   and warns on stderr: "Done is no longer the done column; 2 cards are no longer done"
@@ -77,7 +78,7 @@ kanban column remove Check             # refused when it has cards or is the don
 
 kanban card add "Fix login" --label api,ui --priority 1 --body-file task.md \
                 [--link URL]...
-kanban card list [--column Todo] [--ready] [--mine] [--claimed-by NAME] [--label api] [--all] [--format tsv]
+kanban card list [--column Todo] [--ready] [--mine] [--claimed-by NAME] [--label api] [--all | --archived] [--format tsv]
 kanban card search QUERY [--all] [--limit 20] [--json]   # read-only, no agent name; best match first
 kanban card show 12
 kanban card update 12 [--title T] [--body T | --body-file F] [--label L] \
@@ -90,6 +91,7 @@ kanban card release 12 [--to Todo] [--force]   # releasing a free card is a no-o
 kanban card move 12 Doing [--position 0] [--force]
 kanban card done 12 [--force]
 kanban card archive 12 [--force]       # the coordinator's: hides the card (see below)
+kanban card unarchive 12               # puts it back at the end of its column
 kanban card comment 12 "ran the migration"   # or --file notes.md
 kanban card dep add 12 10 [--force]    # 12 needs 10 first; allowed on a card you hold (it stays in its column, shown blocked)
                                        # while 10 is open, `done 12` and `move 12 Done` are refused (BLOCKED, exit 4)
@@ -107,8 +109,14 @@ kanban events [--after 42 | --before 42] [--card 12] [--limit 50]   # --before: 
 `card archive` hides a card from the board page, the home page counts, `card list` (even with
 `--all`), `card next`, claims and the readiness of the cards that depend on it. The card stays in the
 database and in the event journal (a `card.archived` event, which the open board pages hear and drop the card
-at once), and `card show 12` still prints it, with `archived: true` on the second line. Nothing unarchives it.
-The web has no archive button. The server checks no role, so it is the coordinator's by agreement, like `done`:
+at once), and `card show 12` still prints it, with `archived: true` on the second line. `card list --archived`
+lists the archived cards, newest first, and `card unarchive 12` puts one back at the end of its column (a card
+that is not archived is left alone, with no event). `board archive-done --days N` archives, in one transaction, the
+cards of the done columns whose done time is N or more days ago (3 by default, 0 for every done card; a card
+somebody holds and a card of any other column are never touched): a `card.archived` event per card and one
+`board.done_archived` event, and it prints `archived 5 done cards older than 3 days`. The web has an Archive button
+on a card, and an Archive drawer with the same bulk archive, the archived list and Unarchive; the web session may
+write nothing else besides label colors, and never `--force`. The server checks no role, so it is the coordinator's by agreement, like `done`:
 any named agent may run it, and a card that another agent holds needs `--force`, as for the other writes. The
 archive drops the claim. Archiving an archived card is not an error: it prints the same line and writes no
 second event. An archived card refuses a claim, a move, a comment or a new dependency with `NOT_FOUND` (exit 1), as

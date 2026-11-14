@@ -3,16 +3,17 @@ import Client from "client"
 import Output from "output"
 import Settings from "settings"
 import Support from "support"
-import {Arg, Opt} from "std/option_parser"
+import {Arg, Kind, Opt} from "std/option_parser"
 
 def run(words: List[String]) -> Result[Void]
-  return error("board needs a command: list, create or show") if words.empty?
+  return error("board needs a command: list, create, show or archive-done") if words.empty?
 
   rest = List.drop(words, 1)
   case words[0]
     "list" -> list(rest)
     "create" -> create(rest)
     "show" -> show(rest)
+    "archive-done" -> archive_done(rest)
     _ -> error("unknown board command #{words[0]}")
   end
 end
@@ -103,6 +104,37 @@ def show(words: List[String]) -> Result[Void]
     puts(Output.body(response.unwrap!))
   else
     Output.print_board(response.unwrap!)
+  end
+
+  ok()
+end
+
+# Archives the cards of the done columns that were done at least --days days ago (3 by default). The summary line is
+# the only output; with --json it is the server answer, which lists the ids.
+def archive_done(words: List[String]) -> Result[Void]
+  parser = OP.new(
+    "kanban board archive-done",
+    "Archive the done cards that were done at least DAYS days ago",
+    [],
+    [Opt(name: "days", kind: Kind.Int, default: "3", help: "0 archives every done card")] + Settings.common_opts(),
+  )
+
+  parsed = try OP.parse(parser, words)
+  config = try Settings.load(Settings.read_flags(parsed))
+  Support.require_agent(config)
+  board = Support.board_of(config)
+  fields: Map[String, JSON.Value] = {"days": JSON.from(OP.int(parsed, "days"))}
+  response = Output.expect(
+    Client.post(Client.from(config), "/api/boards/#{board}/archive-done", JSON.encode(JSON.object(fields))),
+    config.json,
+  )
+
+  return ok() if not response.ok?
+
+  if config.json
+    puts(Output.body(response.unwrap!))
+  else
+    Output.print_archived_done(response.unwrap!)
   end
 
   ok()
