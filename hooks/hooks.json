@@ -3,12 +3,12 @@
   "hooks": {
     "SessionStart": [
       {
-        "hooks": [{"type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/board-context.sh\" session", "timeout": 15}]
+        "hooks": [{"type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/board-context.sh\" session", "timeout": 15, "statusMessage": "Loading the agc-kanban board..."}]
       }
     ],
     "SubagentStart": [
       {
-        "hooks": [{"type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/board-context.sh\" subagent", "timeout": 15}]
+        "hooks": [{"type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/board-context.sh\" subagent", "timeout": 15, "statusMessage": "Loading the agc-kanban board..."}]
       }
     ]
   }
