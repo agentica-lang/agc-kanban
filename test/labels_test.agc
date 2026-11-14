@@ -11,12 +11,13 @@ def test_a_new_label_gets_an_unused_palette_color() -> Result[Void]
   _ = try Migrate.up(conn, Migrations.all())
   _ = try Db.execute(conn, "insert into boards (slug, name, created_at, updated_at) values ('p', 'P', 1, 1)", [])
   names = (1..Labels.PALETTE.size).map do |n| "label-#{n}" end
-  try Labels.ensure(conn, 1, names, 1)
+  try Labels.ensure(conn, 1, names + [" "], 1)
   first = try Labels.list_by_board_id(conn, 1)
   colors = first.map do |label| label.color end
   try Labels.ensure(conn, 1, names + ["extra"], 2)
   second = try Labels.list_by_board_id(conn, 1)
   Db.close(conn)
+  try Test.eq(first.size, Labels.PALETTE.size)
   try Test.eq(colors.uniq.size, Labels.PALETTE.size)
   try Test.eq(colors.all? { |color| Labels.PALETTE.include?(color) }, true)
   try Test.eq(second.size, Labels.PALETTE.size + 1)

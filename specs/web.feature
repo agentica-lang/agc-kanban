@@ -195,6 +195,10 @@ Feature: The web pages
     And the response contains "#00ff7f"
     When I patch "/api/labels/1" with the session as agent "" and the body "{\"color\":\"#00ff7f\"}"
     Then the response status is 400
+    When I patch "/api/labels/1" with the session as agent "web" and the body "{\"name\":\"renamed\"}"
+    Then the response status is 401
+    When I patch "/api/labels/1x" with the session as agent "web" and the body "{\"color\":\"#00ff7f\"}"
+    Then the response status is 401
     When I patch "/api/cards/1" with the session as agent "web" and the body "{\"title\":\"x\"}"
     Then the response status is 401
     When I get board events for "project" after 1

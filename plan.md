@@ -282,7 +282,7 @@ Rules:
   seen creates the row, with a palette color that no label of the board wears
   yet (any when all are taken); the migration backfills it from the cards. A
   rename (`PATCH /api/labels/:id` with `name`) rewrites the name on the cards of
-  the board; a name that exists is `CONFLICT`. The color is validated
+  the board and writes a `card.updated` event for each (a rename ignores claims); a name that exists is `CONFLICT`. The color is validated
   (`INVALID`) and stored in lower case.
 - Links are a JSON array of URLs too (a PR, an issue, a CI run), each once,
   at most 50 per card, and a create names at most 50 (repeats included). A
@@ -298,7 +298,7 @@ Rules:
 ## 4. API
 
 All paths are under `/api/`. Every request needs the `apikey` header (the
-CLI) or the session cookie (the web: reads, and `PATCH /api/labels/:id`). Writes need the
+CLI) or the session cookie (the web: reads, and the `color` of `PATCH /api/labels/:id`). Writes need the
 `X-Kanban-Agent` header: the agent name, 1 to 64 characters of
 `[A-Za-z0-9._@/-]`. The name is not a proof of identity: anyone with the key
 can use any name. It keeps honest agents apart, which is the goal.
@@ -356,7 +356,7 @@ Tests assert the `code` and the status, never the message.
 | `POST /api/boards` | `{"name", "slug"?, "columns"?: ["Todo", ...]}` | 201 `{"board"}` |
 | `GET /api/boards/:board` | | `{"board", "cards": [card], "last_event_id"}`: the snapshot the web draws |
 | `GET /api/boards/:board/labels` | | `{"labels": [{"id", "name", "color"}]}`, by name; the snapshot has the same `labels` |
-| `PATCH /api/labels/:id` | `{"name"?, "color"?: "#rrggbb"}` (one of them) | `{"label"}`; `label.updated` event; `INVALID`, `NOT_FOUND`, `CONFLICT` (name taken). The web session may send this one write (with `X-Kanban-Agent`) |
+| `PATCH /api/labels/:id` | `{"name"?, "color"?: "#rrggbb"}` (one of them) | `{"label"}`; `label.updated` event; `INVALID`, `NOT_FOUND`, `CONFLICT` (name taken). The web session may send this one write for the `color` only (with `X-Kanban-Agent`; a `name` from the session is 401, a rename needs the key). A rename also writes a `card.updated` event per changed card |
 | `POST /api/boards/:board/columns` | `{"name", "position"?, "done"?, "wip_limit"?}` | 201 `{"column"}` |
 | `PATCH /api/columns/:id` | `{"name"?, "position"?, "done"?, "wip_limit"?, "force"?: false}` | `{"column"}`; making a column done is `BLOCKED` (`blocked_by` lists the cards of the column that wait for a card outside it) unless `force`, which the `column.updated` event records |
 | `DELETE /api/columns/:id` | | 204, or `CONFLICT` if it has cards |

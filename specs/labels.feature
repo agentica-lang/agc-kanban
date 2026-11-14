@@ -60,6 +60,9 @@ Feature: Label colors
     And the response contains "\"name\":\"backend\""
     When I get card 1
     Then the response contains "\"labels\":[\"backend\",\"ui\"]"
+    When I get board events for "project" after 1
+    Then the response contains "card.updated"
+    And the response contains "label.updated"
     When I send "PATCH" to "/api/labels/1" with the body "{\"name\":\"ui\"}"
     Then the response status is 409
     And the response contains "CONFLICT"

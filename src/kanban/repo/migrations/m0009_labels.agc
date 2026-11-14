@@ -1,5 +1,6 @@
 import Migrate from "pkg/db/migrate"
 
+# A frozen copy of the palette of labels.agc: a migration never follows a later change of it.
 PALETTE = [
   "#d73a4a",
   "#0075ca",
