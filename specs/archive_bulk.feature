@@ -87,6 +87,14 @@ Feature: Archive the done cards, list the archived and unarchive
     Then the response contains "\"archived_at\":null"
     And the response contains "\"done\":true"
     And the response contains "\"position\":0"
+    When I run kanban "card unarchive 1"
+    And I run kanban "card list --board project --column Done --all"
+    Then kanban output lists "Alpha" before "Beta"
+    When I get card 1
+    Then the response contains "\"position\":0"
+    When I get card 2
+    Then the response contains "\"position\":1"
+    When I run kanban "card archive 1"
     When I run kanban "card unarchive 2"
     Then kanban exits with code 0
     When I get board events for "project" with query "after=0&card=2"
@@ -97,6 +105,17 @@ Feature: Archive the done cards, list the archived and unarchive
     And kanban stderr contains "NOT_FOUND"
     When I run kanban without an agent "card unarchive 1"
     Then kanban exits with code 2
+
+  Scenario: The archived list refuses the filters that mean nothing for it
+    Given the database server is running
+    When I post a board named "Project" with slug "project" as "agent-1"
+    And I run kanban "card list --board project --archived --all"
+    Then kanban exits with code 2
+    And kanban stderr contains "USAGE"
+    When I run kanban "card list --board project --archived --ready"
+    Then kanban exits with code 2
+    When I list project cards with query "archived=1&ready=1"
+    Then the response status is 400
 
   Scenario: An unarchived card goes to the end of its column and works again
     Given the database server is running

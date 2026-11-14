@@ -362,7 +362,7 @@ Tests assert the `code` and the status, never the message.
 | `POST /api/boards/:board/columns` | `{"name", "position"?, "done"?, "wip_limit"?}` | 201 `{"column"}` |
 | `PATCH /api/columns/:id` | `{"name"?, "position"?, "done"?, "wip_limit"?, "force"?: false}` | `{"column"}`; making a column done is `BLOCKED` (`blocked_by` lists the cards of the column that wait for a card outside it) unless `force`, which the `column.updated` event records |
 | `DELETE /api/columns/:id` | | 204, or `CONFLICT` if it has cards |
-| `GET /api/boards/:board/cards` | query: `column`, `ready=1`, `claimed_by`, `label`, `done=0/1`, `archived=1`, `limit` | `{"cards": [card]}`, ordered by column, then position. With `archived=1` it lists the archived cards instead, the newest archive first; `limit` (1 to 1000) caps any list |
+| `GET /api/boards/:board/cards` | query: `column`, `ready=1`, `claimed_by`, `label`, `done=0/1`, `archived=1`, `limit` | `{"cards": [card]}`, ordered by column, then position. With `archived=1` it lists the archived cards instead, the newest archive first (`ready` with it is `INVALID`); `limit` (1 to 1000) caps any list |
 | `POST /api/boards/:board/cards` | `{"title", "body"?, "column"?, "labels"?, "priority"?, "depends_on"?: [id], "links"?: [url]}` (at most 50 links, repeats included) | 201 `{"card"}`; the first column by default |
 | `GET /api/cards/:id` | | `{"card", "comments": [comment]}` |
 | `PATCH /api/cards/:id` | `{"title"?, "body"?, "labels"?, "priority"?, "branch"?, "worktree"?, "link"?: [url], "unlink"?: [url]}` | `{"card"}`; `CLAIMED` if another agent holds it. `unlink` removes, then `link` adds (each list at most 50, repeats included) the URLs the card lacks; when only links were asked and none changed, nothing is written (no version, no event), unless the actor holds a running lease and leases are on; then it renews the lease. |
@@ -371,8 +371,8 @@ Tests assert the `code` and the status, never the message.
 | `POST /api/cards/:id/release` | `{"force"?: false, "column"?}` | `{"card"}`; `NOT_CLAIMER` unless `force` |
 | `POST /api/cards/:id/move` | `{"column", "position"?, "force"?: false}` | `{"card"}`; `CLAIMED` if another agent holds it, `BLOCKED` into the done column with an open dependency; `force` skips both |
 | `POST /api/cards/:id/done` | `{"force"?: false}` | `{"card"}`: moved to the done column, claim cleared; `NOT_CLAIMER` or `BLOCKED` (an open dependency) unless `force` |
-| `POST /api/cards/:id/archive` | `{"force"?: false}` (the web session may send it, with `X-Kanban-Agent`, but never `force`: 401) | `{"card"}` with `archived_at`: hidden from the board, the lists, `next`, claims and readiness; kept in the database, the journal (`card.archived`) and `GET /api/cards/:id`. No role is checked (the coordinator's by agreement); `CLAIMED` unless `force`, which drops the claim. An archived card is archived again with no new event. Every other write on it is `NOT_FOUND`. A dependency on it no longer blocks |
-| `POST /api/cards/:id/unarchive` | `{}` | `{"card"}`: back at the end of its column (a card of a done column keeps its `done_at`); a `card.unarchived` event. Unarchiving a card that is not archived writes nothing |
+| `POST /api/cards/:id/archive` | `{"force"?: false}` (the web session may send it, with `X-Kanban-Agent`, but never `force`: 401) | `{"card"}` with `archived_at`: hidden from the board, the lists, `next`, claims and readiness; kept in the database, the journal (`card.archived`) and `GET /api/cards/:id`. No role is checked (the coordinator's by agreement); `CLAIMED` unless `force`, which drops the claim. An archived card is archived again with no new event. Every other write on it is `NOT_FOUND`. A dependency on it no longer blocks, so the web asks for a confirmation before it archives a card that is not done |
+| `POST /api/cards/:id/unarchive` | `{}` | `{"card"}`: back on top of a done column (it keeps its `done_at`) or at the end of any other; a `card.unarchived` event. Unarchiving a card that is not archived writes nothing |
 | `POST /api/boards/:board/archive-done` | `{"days": N}` (0 to 36500) | `{"archived": n, "days": N, "cards": [ids]}`: in one transaction, archives the cards of a done column whose `done_at` is at least N days old (0: every done card) and that nobody holds; a `card.archived` event per card and, when n is above 0, one `board.done_archived` event (`data`: `count`, `days`, `cards`) for the board. Cards of other columns are never touched |
 | `POST /api/cards/:id/comments` | `{"body"}` | 201 `{"comment": {"id", "card_id", "author", "body", "created_at"}}` |
 | `POST /api/cards/:id/deps` | `{"depends_on": id, "force"?: false}` | 201 `{"card"}`; `CYCLE`; `CLAIMED` if another agent holds the card, unless `force`. The holder can add one: the card keeps its column and claim and shows blocked. A new card in the done column with an open dependency is `BLOCKED` too |
@@ -456,7 +456,7 @@ kanban card update ID [--title T] [--body TEXT | --body-file F] [--label L]...
 kanban card comment ID TEXT | --file F    `-` reads stdin
 kanban card done ID [--force]
 kanban card archive ID [--force]          hides the card (the coordinator's)
-kanban card unarchive ID                  puts it back at the end of its column
+kanban card unarchive ID                  puts it back (on top of a done column, else at the end)
 kanban board archive-done [--days N]      archives the done cards that were done N days ago or more (3 by default)
 kanban card dep add ID DEPENDS_ON_ID [--force]
 kanban card dep remove ID DEPENDS_ON_ID [--force]
@@ -467,7 +467,7 @@ kanban prime                              print the agent rules (the skill, shor
 ```
 
 `--board` applies to every command that needs a board. `card list` hides
-done cards unless `--all`, and archived cards always; `--archived` lists them.
+done cards unless `--all`, and archived cards always; `--archived` lists them (not with `--all` or `--ready`: `USAGE`).
 
 `kanban prime` prints the short form of the skill (the loop and the rules),
 as `bd prime` and `flux prime` do. An orchestrator can paste it into a

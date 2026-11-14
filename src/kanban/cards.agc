@@ -145,6 +145,7 @@ end
 
 def list(pool: Database.Pool, board: String, filters: Filters) -> Result[List[Card]]
   return error("INVALID:board") if board.empty?
+  return error("INVALID:ready") if filters.archived and filters.ready.some?
   return error("INVALID:limit") if filters.limit.some? and (filters.limit.unwrap! < 1 or filters.limit.unwrap! > 1000)
 
   Database.with_connection(pool) do |conn| Db.transaction(conn) do |tx| list_open(tx, board, filters) end end

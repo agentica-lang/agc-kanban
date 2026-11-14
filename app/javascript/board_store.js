@@ -50,6 +50,7 @@ export function useBoard(slug, listener) {
     loadArchived: function () { return fetchArchived(); },
   });
   var timer = null;
+  var archivedTimer = null; // a bulk archive is many events and one fetch of the archived list
   var synced = 0; // the newest event id that the feed is known to hold with nothing missing before it
 
   function same(a, b) {
@@ -206,8 +207,11 @@ export function useBoard(slug, listener) {
     } else if (message.type.indexOf("label.") === 0) {
       listener(null);
     }
-    if (state.watchArchived && ARCHIVE_KINDS.indexOf(message.type) !== -1) {
-      fetchArchived();
+    if (state.watchArchived && ARCHIVE_KINDS.indexOf(message.type) !== -1 && archivedTimer === null) {
+      archivedTimer = setTimeout(function () {
+        archivedTimer = null;
+        fetchArchived();
+      }, REFETCH_MS);
     }
     if (timer === null) {
       timer = setTimeout(load, REFETCH_MS);
