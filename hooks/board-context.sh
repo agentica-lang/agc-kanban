@@ -72,6 +72,7 @@ if [ "$status" -ne 0 ]; then
 else
   add "agc-kanban: this project's work queue is a kanban board; the agc-kanban and kanban-cli skills have the rules and the commands."
   add "Every command that writes (and \`card next\`, \`card list --mine\`) needs the agent's own name, from KANBAN_AGENT or --agent; reads do not."
+  add "When you open a PR for a card, link it at once: \`kanban card update ID --link PR_URL\` (one link per PR)."
   case $MODE in
     subagent)
       add "A subagent's name comes from its coordinator's brief, and a subagent without one asks its coordinator before any write."
