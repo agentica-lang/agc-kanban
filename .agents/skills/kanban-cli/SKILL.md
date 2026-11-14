@@ -68,6 +68,7 @@ kanban board create "Project" --columns "Todo,Doing,Done"   # last column is the
 kanban board create "Project" --slug project   # slug: --slug, else KANBAN_BOARD, else the name
 # without --columns: Todo, Doing, Review, Done
 kanban board show [BOARD]
+kanban board auto-archive --days 7 | --off   # the server archives the done cards by itself (off by default)
 kanban board archive-done [--days 3]   # archive the cards of the done columns done 3 or more days ago (0: all)
 
 kanban column add Review --position 2 [--done] [--wip 3]   # --done moves the done flag off the old done column
@@ -114,7 +115,8 @@ lists the archived cards, newest first, and `card unarchive 12` puts one back, o
 that is not archived is left alone, with no event). `board archive-done --days N` archives, in one transaction, the
 cards of the done columns whose done time is N or more days ago (3 by default, 0 for every done card; a card
 somebody holds and a card of any other column are never touched): a `card.archived` event per card and one
-`board.done_archived` event, and it prints `archived 5 done cards older than 3 days`. The web has an Archive button
+`board.done_archived` event, and it prints `archived 5 done cards older than 3 days`. `board auto-archive --days N` makes the server run the same rule every ten minutes for that board (actor
+`auto-archive`; `--off` stops it; `board show` prints `auto-archive: N days` when it is on). The web has an Archive button
 on a card, and an Archive drawer with the same bulk archive, the archived list and Unarchive; the web session may
 write nothing else besides label colors, and never `--force`. The server checks no role, so it is the coordinator's by agreement, like `done`:
 any named agent may run it, and a card that another agent holds needs `--force`, as for the other writes. The

@@ -1,4 +1,6 @@
 import Answers from "../answers"
+import AutoArchive from "../../kanban/auto_archive"
+import Boards from "../../kanban/boards"
 import Bond from "pkg/bond/bond"
 import Database from "../../kanban/repo/database"
 import Failure from "../failure"
@@ -52,7 +54,36 @@ def archive_done(conn: Bond.Conn, pool: Optional[Database.Pool]) -> Result[Bond.
   ok(Bond.json_as(conn, 200, Transitions.ArchivedDone.codec, result.unwrap!))
 end
 
+def auto_archive(conn: Bond.Conn, pool: Optional[Database.Pool]) -> Result[Bond.Conn]
+  return ok(Failure.reject(conn, 503, "BUSY", "database unavailable")) if not pool.some?
+
+  body = Bond.body_text(conn)
+  return ok(Failure.reject(conn, 400, "INVALID", "invalid body", some("body"))) if not body.ok?
+
+  decoded = JSON.decode(body.unwrap!, AutoArchiveInput)
+  return ok(Failure.reject(conn, 400, "INVALID", "invalid body", some("body"))) if not decoded.ok?
+
+  input = AutoArchive.Setting(
+    board: Bond.param(conn, "board").unwrap_or(""),
+    days: decoded.unwrap!.days,
+    actor: Bond.request_header(conn, "X-Kanban-Agent").unwrap_or(""),
+  )
+
+  result = AutoArchive.set(pool.unwrap!, input)
+  return ok(Failure.answer(conn, result.message)) if not result.ok?
+
+  ok(Bond.json_as(conn, 200, BoardAnswer.codec, BoardAnswer(board: result.unwrap!)))
+end
+
 private
+
+struct BoardAnswer
+  board: Boards.Board
+end
+
+struct AutoArchiveInput
+  days: Optional[Int]
+end
 
 struct ArchiveDoneInput
   days: Int

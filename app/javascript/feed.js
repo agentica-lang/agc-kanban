@@ -26,6 +26,7 @@ var KINDS = {
   "label.updated": { verb: "changed the label", group: "board" },
   "board.created": { verb: "created the board", group: "board" },
   "board.done_archived": { verb: "archived", group: "board" },
+  "board.updated": { verb: "changed the board", group: "board" },
 };
 
 // The groups in the order of the filter, with their names there.
@@ -128,6 +129,8 @@ export function entry(event, titles) {
     var count = Number.isInteger(data.count) ? data.count : 0;
     var days = Number.isInteger(data.days) ? data.days : 0;
     result.name = count + (count === 1 ? " done card" : " done cards") + " older than " + days + (days === 1 ? " day" : " days");
+  } else if (event.kind === "board.updated") {
+    result.name = Number.isInteger(data.auto_archive_days) ? "to archive done cards after " + data.auto_archive_days + (data.auto_archive_days === 1 ? " day" : " days") : "to keep done cards";
   } else if (result.group === "board") {
     result.name = typeof data.name === "string" ? cut(data.name, TITLE_MAX) : "";
   }

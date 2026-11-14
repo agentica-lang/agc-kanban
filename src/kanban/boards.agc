@@ -24,6 +24,8 @@ struct Board
   name: String
   created_at: Int
   updated_at: Int
+  # None: the done cards stay until somebody archives them. Some(n): the server archives the ones done n days ago.
+  auto_archive_days: Optional[Int]
   columns: List[Column]
 end
 
@@ -54,7 +56,7 @@ def get_open(conn: Db.Connection, reference: String) -> Result[Board]
 
   rows = try Db.query(
     conn,
-    "select id, slug, name, created_at, updated_at from boards where slug = ? or cast(id as text) = ? order by case when slug = ? then 0 else 1 end limit 1",
+    "select id, slug, name, created_at, updated_at, auto_archive_days from boards where slug = ? or cast(id as text) = ? order by case when slug = ? then 0 else 1 end limit 1",
     [Db.Value.Text(reference), Db.Value.Text(reference), Db.Value.Text(reference)],
   )
 
@@ -148,6 +150,7 @@ def board(row: Db.Row, columns: List[Column]) -> Board
     name: text_of(row, "name"),
     created_at: int_of(row, "created_at"),
     updated_at: int_of(row, "updated_at"),
+    auto_archive_days: optional_int(row, "auto_archive_days"),
     columns: columns,
   )
 end
@@ -156,6 +159,13 @@ def int_of(row: Db.Row, key: String) -> Int
   case row.get(key, Db.Value.Null)
     Db.Value.Int(value) -> value
     _ -> -1
+  end
+end
+
+def optional_int(row: Db.Row, key: String) -> Optional[Int]
+  case row.get(key, Db.Value.Null)
+    Db.Value.Int(value) -> some(value)
+    _ -> none
   end
 end
 

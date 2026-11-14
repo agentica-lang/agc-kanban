@@ -1,3 +1,4 @@
+import Archiver from "archiver"
 import Auth from "auth"
 import Bond from "pkg/bond/bond"
 import Cable from "cable"
@@ -16,6 +17,10 @@ def build(
   secure_cookie: Bool = false,
 ) -> Bond.App
   cable = Cable.start(pool)
+  if pool.some?
+    Archiver.start(pool.unwrap!)
+  end
+
   secret = Auth.session_secret(key)
   app = (
     Bond.app()
