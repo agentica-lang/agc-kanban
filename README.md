@@ -29,8 +29,8 @@ make install assets run
 
 The web view is a Vue 3 app in `app/`, built with pnpm and Vite (`make assets`; the Docker image builds it in a Node stage, and the runtime image has no Node). The build output is not in git. For a reload while you edit, run `make assets` under `entr -r`.
 
-Open `/login` and enter the API key. The pages are view-only: boards, cards and
-a live activity feed, with filters by label, agent and ready, and a search box in the Filters drawer (`/` opens it; Escape clears it), all in the URL, so a link keeps them. The search ranks the cards with SQLite FTS5 and `bm25` (the title counts most) over the title, body, labels and comments; `kanban card search QUERY` and `GET /api/boards/:slug/search?q=` give the same order. A card opens in a side panel (`?card=N` in the URL): each card you open is a step in the browser history, so Back and Forward walk through them. Writes go through the CLI or the API (`kanban card archive ID` hides a card for good). Behind HTTPS, set
+Open `/login` and enter the API key. The pages are view-only, except that a label color can be changed in the Filters drawer (the color input beside each label): boards, cards and
+a live activity feed, with filters by label, agent and ready, and a search box in the Filters drawer (`/` opens it; Escape clears it), all in the URL, so a link keeps them. The search ranks the cards with SQLite FTS5 and `bm25` (the title counts most) over the title, body, labels and comments; `kanban card search QUERY` and `GET /api/boards/:slug/search?q=` give the same order. A card opens in a side panel (`?card=N` in the URL): each card you open is a step in the browser history, so Back and Forward walk through them. Writes go through the CLI or the API (`kanban card archive ID` hides a card for good). Each label of a board has a color (`kanban label list`, `kanban label update NAME --color '#rrggbb'`): a new label gets one from a GitHub-like palette, and the chips on the cards use it. Behind HTTPS, set
 `KANBAN_COOKIE_SECURE=1`.
 
 ## The CLI

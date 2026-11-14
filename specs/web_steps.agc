@@ -13,6 +13,7 @@ def steps() -> List[BDD.Step]
     BDD.step("I get the page {string}", &get_page),
     BDD.step("I get the page {string} with the session", &get_page_signed),
     BDD.step("I post to {string} with the session", &post_signed),
+    BDD.step("I patch {string} with the session as agent {string} and the body {string}", &patch_signed),
     BDD.step("I get the built stylesheet", &get_stylesheet),
     BDD.step("I get the page {string} with the key {string} as the apikey header", &get_page_with_key),
     BDD.step("the response sets the session cookie", &sets_cookie),
@@ -83,6 +84,16 @@ end
 # A write with the cookie and no `apikey` header: the session never writes the API.
 def post_signed(ctx: BDD.Context, args: List[String]) -> BDD.Context
   fetch(ctx, "POST", args[0], "{}", [HTTP.Header(name: "Cookie", value: text_of(ctx, "cookie"))])
+end
+
+# The write that the session may make (a label color): the cookie, the agent name of the page, and no `apikey` header.
+def patch_signed(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  headers = [HTTP.Header(name: "Cookie", value: text_of(ctx, "cookie"))]
+  if not args[1].empty?
+    headers = headers.push(HTTP.Header(name: "X-Kanban-Agent", value: args[1]))
+  end
+
+  fetch(ctx, "PATCH", args[0], args[2], headers)
 end
 
 def get_page_with_key(ctx: BDD.Context, args: List[String]) -> BDD.Context

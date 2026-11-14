@@ -8,6 +8,7 @@ import { closesPanel } from "../outside.js";
 import { active, count, matches } from "../filters.js";
 import { useSearch } from "../search_store.js";
 import { useTheme } from "../theme.js";
+import { chipStyle, colorsOf } from "../labels.js";
 import { useWide } from "../wide.js";
 import CardPanel from "./CardPanel.vue";
 import Column from "./Column.vue";
@@ -49,6 +50,8 @@ followDrawer(drawer, card);
 // A card on the board opens its detail; the open one is marked.
 provide("openCard", drawer.showCard);
 provide("openCardId", drawer.card);
+var labelColors = computed(function () { return colorsOf(state.labels); });
+provide("labelStyle", function (name) { return chipStyle(labelColors.value[name]) || null; });
 
 // The filters hide cards on the board only: the feed stays the whole history of the board, and the card named by `?card=`
 // opens even when it is hidden. A hidden card still counts for the blocked marks below.
@@ -216,7 +219,7 @@ var filtersLabel = computed(function () { return filterCount.value ? "Filters ·
         <Feed :state="state" />
       </Drawer>
       <Drawer v-else-if="panel === 'filters'" title="Filters" focus @close="drawer.close()">
-        <FilterPanel ref="filterPanel" :store="filter" :cards="state.cards" :search="search" />
+        <FilterPanel ref="filterPanel" :store="filter" :cards="state.cards" :search="search" :labels="state.labels" @color="state.setLabelColor" />
       </Drawer>
       <Drawer v-else-if="panel === 'card'" ref="cardDrawer" :title="'Card #' + drawer.card.value" modal :dialog="wide" focus @close="drawer.close()">
         <CardPanel :state="card" :slug="slug" @open="drawer.showCard" />

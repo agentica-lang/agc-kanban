@@ -36,7 +36,22 @@
 
   &:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 }
-.filter-panel > .filters-clear { justify-self: start; }
+.filter-panel > // A label in the drawer: its chip in its color, and the color input that changes it. The selected chip keeps its color
+// and takes a ring.
+.label-choice { display: inline-flex; align-items: center; gap: 0.25rem; max-width: 100%; }
+.label-choice .chip[aria-pressed="true"] { outline: 2px solid var(--accent); outline-offset: 1px; }
+.label-color {
+  flex: none;
+  width: 1.25rem;
+  height: 1.25rem;
+  padding: 0;
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.filters-clear { justify-self: start; }
 
 .chip {
   max-width: 100%;
@@ -70,5 +85,5 @@
 // The claimer keeps the text of its own tone (_claimer.scss): only a label takes the card's text color.
 .card .pick { font: inherit; line-height: inherit; border: 0; cursor: pointer; }
 .card .label.pick { color: inherit; }
-.card .label.on { color: var(--card); background: var(--accent); }
+.card .label.on { outline: 2px solid var(--accent); outline-offset: 1px; }
 .card .claimer[aria-pressed="true"] { outline: 2px solid var(--accent); outline-offset: 1px; }

@@ -10,7 +10,7 @@ def test_schema_migrates_once() -> Result[Void]
   first = Migrate.up(conn, Migrations.all())
   second = Migrate.up(conn, Migrations.all())
   Db.close(conn)
-  try Test.eq(first, ok([1, 2, 3, 4, 5, 6, 7, 8]))
+  try Test.eq(first, ok([1, 2, 3, 4, 5, 6, 7, 8, 9]))
   Test.eq(second, ok([]))
 end
 
@@ -31,7 +31,7 @@ def test_a_card_from_before_links_has_none() -> Result[Void]
     [],
   )
 
-  try Test.eq(Migrate.up(conn, Migrations.all()), ok([7, 8]))
+  try Test.eq(Migrate.up(conn, Migrations.all()), ok([7, 8, 9]))
   card = Cards.load_at(conn, 1, 2)
   Db.close(conn)
   Test.eq((try card).links, [])
@@ -53,7 +53,7 @@ end
 
 def test_migration_versions_are_consecutive() -> Result[Void]
   versions = Migrations.all().map do |migration| migration.version end
-  Test.eq(versions, [1, 2, 3, 4, 5, 6, 7, 8])
+  Test.eq(versions, [1, 2, 3, 4, 5, 6, 7, 8, 9])
 end
 
 def test_migration_files_are_all_listed() -> Result[Void]
@@ -122,4 +122,49 @@ def test_search_index_backfills_and_follows_edits() -> Result[Void]
   try Test.eq(before.size, 1)
   try Test.eq(gone.size, 0)
   Test.eq(found.size, 1)
+end
+
+# The cards of a board before the labels table give it one row per name, in the palette order, once per board, with
+# no row for an empty or repeated name.
+def test_labels_backfill_from_the_cards() -> Result[Void]
+  conn = try Db.open("sqlite::memory:", [Sqlite.driver()])
+  _ = try Migrate.up(conn, Migrations.all().select do |migration| migration.version < 9 end)
+  for slug in ["p", "q"]
+    _ = try Db.execute(
+      conn,
+      "insert into boards (slug, name, created_at, updated_at) values (?, ?, 1, 1)",
+      [Db.Value.Text(slug), Db.Value.Text(slug)],
+    )
+  end
+
+  _ = try Db.execute(
+    conn,
+    "insert into columns (board_id, name, position, done, created_at) values (1, 'Todo', 0, 0, 1), (2, 'Todo', 0, 0, 1)",
+    [],
+  )
+
+  boards = [1, 1, 2, 2]
+  labels = ["[\"ui\",\"api\"]", "[\"api\",\"\"]", "[\"ui\"]", "[]"]
+  for index in 0...boards.size
+    _ = try Db.execute(
+      conn,
+      "insert into cards (board_id, column_id, position, title, labels, created_by, created_at, updated_at) values (?, ?, 0, 't', ?, 'agent', 1, 1)",
+      [Db.Value.Int(boards[index]), Db.Value.Int(boards[index]), Db.Value.Text(labels[index])],
+    )
+  end
+
+  _ = try Migrate.up(conn, Migrations.all())
+  rows = try Db.query(conn, "select board_id, name, color from labels order by board_id, name", [])
+  Db.close(conn)
+  try Test.eq(rows.size, 3)
+  try Test.eq(rows.map do |row| text(row, "name") end, ["api", "ui", "ui"])
+  try Test.eq(rows.map do |row| text(row, "color") end, ["#d73a4a", "#0075ca", "#d73a4a"])
+  Test.eq(rows.map do |row| number(row, "board_id") end, [1, 1, 2])
+end
+
+def text(row: Db.Row, key: String) -> String
+  case row.get(key, Db.Value.Null)
+    Db.Value.Text(value) -> value
+    _ -> ""
+  end
 end

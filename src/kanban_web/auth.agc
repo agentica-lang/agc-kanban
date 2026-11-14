@@ -18,12 +18,16 @@ def authorize(conn: Bond.Conn, key: String) -> Result[Bond.Conn]
   return ok(conn) if public?(conn.path)
   return ok(page_access(conn)) if not conn.path.start_with?("/api/")
 
-  # The session reads the API, never writes it: a write needs the key and the agent name.
+  # The session reads the API and edits the color of a label (the handler refuses a rename); every other write needs
+  # the key. A write needs the agent name,
+  # a header that a page of another site cannot send, so a label edit cannot be forged across sites.
   read = conn.method == "GET" or conn.method == "HEAD"
   return ok(conn) if read and signed_in?(conn)
 
   given = Bond.request_header(conn, "apikey").unwrap_or("")
-  return ok(Failure.reject(conn, 401, "UNAUTHORIZED", "unauthorized")) if not key_matches?(given, key)
+  keyed = key_matches?(given, key)
+  session_edit = not keyed and signed_in?(conn) and label_edit?(conn)
+  return ok(Failure.reject(conn, 401, "UNAUTHORIZED", "unauthorized")) if not keyed and not session_edit
 
   if not read
     agent = Bond.request_header(conn, "X-Kanban-Agent").unwrap_or("")
@@ -32,19 +36,29 @@ def authorize(conn: Bond.Conn, key: String) -> Result[Bond.Conn]
     end
   end
 
+  return ok(Bond.assign(conn, SESSION_WRITE, true)) if session_edit
+
   ok(conn)
 end
+
+## The request is a write of the web session, not of the key: a handler decides what that may change.
+def session_write?(conn: Bond.Conn) -> Bool = Bond.assigned?(conn, SESSION_WRITE)
 
 private
 
 SESSION_USER = "user"
 OWNER = "owner"
 SESSION_LABEL = "kanban session v1"
+SESSION_WRITE = "session_write"
 
 # Public by name, never by prefix (but the assets folder): a page added later must opt in explicitly. `/cable` checks
 # the session itself, in `connect`, as a redirect on the handshake would make the client retry in a loop.
 def public?(path: String) -> Bool
   path == "/api/health" or path == "/login" or path == "/cable" or path.start_with?("/assets/")
+end
+
+def label_edit?(conn: Bond.Conn) -> Bool
+  conn.method == "PATCH" and Regex.match?(conn.path, /^\/api\/labels\/[0-9]+$/)
 end
 
 def page_access(conn: Bond.Conn) -> Bond.Conn

@@ -46,6 +46,8 @@ def main() -> Void
       BDD.step("I read boards with key {string} and agent {string}", &read_boards_as),
       BDD.step("I create a board named {string} with key {string} and agent {string}", &create_board_as),
       BDD.step("I get card {int}", &get_card),
+      BDD.step("I send {string} to {string} with the body {string}", &send_body),
+      BDD.step("I get the labels of the project", &project_labels),
       BDD.step("I make card {int} depend on card {int}", &add_dependency),
       BDD.step("agent {string} makes card {int} depend on card {int}", &add_dependency_as),
       BDD.step("agent {string} forcibly makes card {int} depend on card {int}", &force_dependency_as),
@@ -461,6 +463,12 @@ end
 
 def get_card(ctx: BDD.Context, args: List[String]) -> BDD.Context
   api_request(ctx, "GET", "/api/cards/#{args[0]}", "")
+end
+
+def send_body(ctx: BDD.Context, args: List[String]) -> BDD.Context = api_request(ctx, args[0], args[1], args[2])
+
+def project_labels(ctx: BDD.Context, _args: List[String]) -> BDD.Context
+  api_request(ctx, "GET", "/api/boards/project/labels", "")
 end
 
 def api_request(ctx: BDD.Context, method: String, path: String, body: String) -> BDD.Context

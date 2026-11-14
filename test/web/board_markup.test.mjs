@@ -9,6 +9,7 @@ import vue from "@vitejs/plugin-vue";
 import { createSSRApp, ref } from "vue";
 import { renderToString } from "vue/server-renderer";
 import { useFilters } from "../../app/javascript/filter_store.js";
+import { chipStyle } from "../../app/javascript/labels.js";
 
 var ROOT = new URL("../../", import.meta.url).pathname;
 var server = await createServer({
@@ -44,6 +45,7 @@ function draw(component, props, search) {
   app.provide("filter", filter);
   app.provide("openCard", function () {});
   app.provide("openCardId", ref(null));
+  app.provide("labelStyle", function (name) { return chipStyle({ api: "#0075ca", ui: "#fbca04" }[name]) || null; });
   return renderToString(app);
 }
 
@@ -67,7 +69,15 @@ test("a card is a box with one link, and its agent and label chips are buttons o
   assert.ok(chips[0].includes("claimer") && chips[0].includes("line 1") && chips[0].includes('aria-pressed="false"'));
   assert.ok(chips[1].includes(">api<") && chips[1].includes('aria-pressed="true"'));
   assert.ok(chips[2].includes(">two words<") && chips[2].includes('aria-pressed="false"'));
-  assert.ok(html.includes('<span class="label">x,y</span>'), "a label with a comma cannot filter, so it is no button");
+  assert.ok(/<span class="label"[^>]*>x,y<\/span>/.test(html), "a label with a comma cannot filter, so it is no button");
+});
+
+test("a label chip takes the color of its board, with the ink for it, on the card and in the card panel", async function () {
+  var html = await draw(Card, { card: card({ labels: ["api", "ui"] }), blocked: false, flash: 0 }, "");
+  assert.ok(html.includes('style="background:#0075ca;color:#ffffff"'), "the chip has the color of its label");
+  assert.ok(html.includes('style="background:#fbca04;color:#1f2328"'), "a light color gets the dark ink");
+  var plain = await draw(Card, { card: card({ labels: ["other"] }), blocked: false, flash: 0 }, "");
+  assert.equal(plain.includes("background"), false, "a label with no color keeps the plain chip");
 });
 
 test("a card with no labels and no agent has the link and no chip", async function () {
@@ -208,4 +218,13 @@ test("the filters drawer has a search box that keeps its text, and says how many
   assert.equal(box.attrs.value, "logi");
   assert.ok(html.includes("1 card found, best first"));
   assert.ok(html.includes(">Clear all</button>"), "a search counts as something to clear");
+});
+
+test("the filters drawer shows each label in its color, with a color input for it", async function () {
+  var search = { q: ref(""), failed: ref(false), set: function () {}, clear: function () {}, on: function () { return false; }, count: function () { return null; } };
+  var labels = [{ id: 3, name: "api", color: "#0075ca" }];
+  var html = await draw(FilterPanel, { cards: [card({ labels: ["api", "other"] })], search: search, labels: labels }, "");
+  assert.ok(html.includes('style="background:#0075ca;color:#ffffff"'), "the chip has its color");
+  assert.equal((html.match(/type="color"/g) || []).length, 1, "a label the board has no row for has no input");
+  assert.ok(html.includes('value="#0075ca"') && html.includes('aria-label="Color of api"'));
 });

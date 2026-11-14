@@ -12,6 +12,12 @@ var props = defineProps({ state: Object, slug: String });
 var emit = defineEmits(["open"]);
 // The filters, so the link of a card opens the same view in a new tab, as the cards of the board do.
 var boardFilter = inject("filter");
+var labelStyle = inject("labelStyle", function () { return null; });
+
+// The colors are the ones of this board's labels: a card of another board keeps the plain chips.
+function chip(label) {
+  return props.state.detail.card.board === props.slug ? labelStyle(label) : null;
+}
 
 function refHref(id) {
   return cardSearch(boardFilter.filters.value, id);
@@ -84,7 +90,7 @@ function when(ms) {
         <dd>{{ state.detail.card.priority }}</dd>
         <template v-if="state.detail.card.labels.length">
           <dt>Labels</dt>
-          <dd><span v-for="label in state.detail.card.labels" :key="label" class="label">{{ label }}</span></dd>
+          <dd><span v-for="label in state.detail.card.labels" :key="label" class="label" :style="chip(label)">{{ label }}</span></dd>
         </template>
         <template v-if="state.detail.card.branch">
           <dt>Branch</dt>

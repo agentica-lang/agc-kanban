@@ -97,6 +97,10 @@ kanban card dep add 12 10 [--force]    # 12 needs 10 first; allowed on a card yo
                                        # remove it skips CLAIMED only (never CYCLE)
 kanban card dep remove 12 10 [--force]   # --force skips CLAIMED only
 
+kanban label list                      # one line per label of the board: name, tab, #rrggbb (--json adds the ids)
+kanban label update api --color '#0075ca' [--name backend]   # a color or a rename; a rename changes the cards that carry it
+#   a new label (first card that carries it) gets a palette color by itself; `card list` output does not show colors
+
 kanban events [--after 42 | --before 42] [--card 12] [--limit 50]   # --before: newest first
 ```
 
@@ -141,7 +145,7 @@ Labels and `--depends-on` take a
 comma-separated list.
 
 Card ids are global, so `card show`, `claim`, `comment`, `done` and `dep` need
-no board. `--board` is required by `column *`, `card add`, `card list`, `card search`,
+no board. `--board` is required by `column *`, `label *`, `card add`, `card list`, `card search`,
 `card next` and `events`; `board show` takes the board as a positional
 argument or from `KANBAN_BOARD`.
 

@@ -1,13 +1,15 @@
 <script setup>
 import { computed, ref } from "vue";
 import { active, options } from "../filters.js";
+import { chipStyle, colorsOf, validColor } from "../labels.js";
 
 // The filter choices, in the drawer that the Filters button opens. Each chip is a toggle; "Clear" takes every filter
 // off. The chips come from all the cards of the board, not from the ones that show, so a selected chip never
 // disappears with its cards.
 // The search box is the first group: it narrows the board to the cards that the server ranks for the text, together
 // with the filters below it. Escape clears the text; with no text it closes the drawer, as everywhere else.
-var props = defineProps({ store: Object, cards: Array, search: Object });
+var props = defineProps({ store: Object, cards: Array, search: Object, labels: { type: Array, default: function () { return []; } } });
+var emit = defineEmits(["color"]);
 var input = ref(null);
 defineExpose({ focus: function () { input.value && input.value.focus(); } });
 function onEscape(event) {
@@ -18,6 +20,19 @@ function onEscape(event) {
 }
 var filters = computed(function () { return props.store.filters.value; });
 var chips = computed(function () { return options(props.cards, filters.value); });
+// Each label chip shows its color, and the color input next to it changes it for the board (the server keeps it, and
+// every open page hears the event). `change` fires when the picker closes, not at each step of the drag.
+var colors = computed(function () { return colorsOf(props.labels); });
+var ids = computed(function () {
+  var map = {};
+  props.labels.forEach(function (label) { map[label.name] = label.id; });
+  return map;
+});
+function pick(name, event) {
+  if (ids.value[name] !== undefined && validColor(event.target.value)) {
+    emit("color", ids.value[name], event.target.value);
+  }
+}
 </script>
 
 <template>
@@ -38,7 +53,10 @@ var chips = computed(function () { return options(props.cards, filters.value); }
     <section class="filter-group" aria-labelledby="filter-labels">
       <h3 id="filter-labels">Labels</h3>
       <p v-if="!chips.labels.length" class="empty">No card has a label.</p>
-      <button v-for="name in chips.labels" :key="'l:' + name" type="button" class="chip" :aria-pressed="filters.labels.indexOf(name) !== -1" @click="store.label(name)">{{ name }}</button>
+      <span v-for="name in chips.labels" :key="'l:' + name" class="label-choice">
+        <button type="button" class="chip" :style="chipStyle(colors[name]) || null" :aria-pressed="filters.labels.indexOf(name) !== -1" @click="store.label(name)">{{ name }}</button>
+        <input v-if="ids[name] !== undefined" type="color" class="label-color" :value="colors[name]" :aria-label="'Color of ' + name" :title="'Color of ' + name" @change="pick(name, $event)" />
+      </span>
     </section>
     <button v-if="active(filters) || search.on()" type="button" class="filters-clear" @click="store.clear(); search.clear()">Clear all</button>
   </div>
