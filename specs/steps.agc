@@ -27,6 +27,7 @@ def main() -> Void
       BDD.step("I list boards", &list_boards),
       BDD.step("I get the project snapshot", &project_snapshot),
       BDD.step("the snapshot of the project dates card {int} as its card detail does", &snapshot_since_matches),
+      BDD.step("the snapshot of the project dates card {int} after its first visit", &snapshot_since_after_first),
       BDD.step("I add a card titled {string}", &add_card),
       BDD.step("I add a card titled {string} with the link {string}", &add_linked_card),
       BDD.step("I add a card titled {string} with labels {string} and priority {int}", &add_labelled_card),
@@ -526,6 +527,20 @@ def snapshot_since_matches(ctx: BDD.Context, args: List[String]) -> BDD.Context
   found = entries.select do |entry| JSON.int(JSON.get(entry, "id").unwrap!).unwrap! == args[0].to_i! end
   BDD.assert(ctx, found.size == 1, "no column_since for card #{args[0]}")
   BDD.assert(ctx, JSON.int(JSON.get(found[0], "since").unwrap!).unwrap! == expected, "since differs from #{expected}")
+end
+
+# A card that came back to its first column is there since it came back, not since it was created: its first event is
+# older than its `column_since`.
+def snapshot_since_after_first(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  snapshot = api_request(ctx, "GET", "/api/boards/project", "")
+  document = JSON.parse(JSON.string(BDD.get(snapshot, "body").unwrap!).unwrap!).unwrap!
+  entries = JSON.list(JSON.get(document, "column_since").unwrap!).unwrap!
+  found = entries.select do |entry| JSON.int(JSON.get(entry, "id").unwrap!).unwrap! == args[0].to_i! end
+  cards = JSON.list(JSON.get(document, "cards").unwrap!).unwrap!
+  made = cards.select do |entry| JSON.int(JSON.get(entry, "id").unwrap!).unwrap! == args[0].to_i! end
+  since = JSON.int(JSON.get(found[0], "since").unwrap!).unwrap!
+  created = JSON.int(JSON.get(made[0], "created_at").unwrap!).unwrap!
+  BDD.assert(ctx, since > created, "since #{since} is not after the creation #{created}")
 end
 
 def claim_card(ctx: BDD.Context, args: List[String]) -> BDD.Context

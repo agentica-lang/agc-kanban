@@ -25,14 +25,21 @@ test("each pair is listed once, from the needed card to the card that needs it, 
   assert.deepEqual(pairs(cards), [{ from: 1, to: 2 }, { from: 1, to: 3 }, { from: 2, to: 3 }]);
 });
 
-test("a hovered card is self, its relations are related and the rest are dim; with no hot card nothing is marked", function () {
+test("a hovered card is self and its relations are related; the rest are dim only for a pointer", function () {
   var byId = indexOf([card(1, [], [2]), card(2, [1]), card(3)]);
-  assert.equal(mark(byId, 1, 1), "self");
-  assert.equal(mark(byId, 1, 2), "related");
-  assert.equal(mark(byId, 1, 3), "dim");
-  assert.equal(mark(byId, 2, 1), "related", "from either side");
-  assert.equal(mark(byId, null, 1), "");
-  assert.equal(mark(byId, 99, 1), "", "a hot card that is gone marks nothing");
+  assert.equal(mark(byId, 1, 1, true), "self");
+  assert.equal(mark(byId, 1, 2, true), "related");
+  assert.equal(mark(byId, 1, 3, true), "dim");
+  assert.equal(mark(byId, 1, 3, false), "", "the keyboard focus dims nothing");
+  assert.equal(mark(byId, 1, 2, false), "related");
+  assert.equal(mark(byId, 2, 1, true), "related", "from either side");
+  assert.equal(mark(byId, null, 1, true), "");
+  assert.equal(mark(byId, 99, 1, true), "", "a hot card that is gone marks nothing");
+});
+
+test("a hot card with no related card marks and dims nothing", function () {
+  var byId = indexOf([card(1), card(2), card(3)]);
+  [1, 2, 3].forEach(function (id) { assert.equal(mark(byId, 1, id, true), ""); });
 });
 
 test("the line leaves the side that faces the other card, and two cards in one column are joined on their right sides", function () {

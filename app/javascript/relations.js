@@ -51,16 +51,24 @@ export function pairs(cards) {
   return found;
 }
 
-// How a card looks while `hot` (the card that is hovered or focused, or null) is marked: "self", "related" or "dim"; ""
-// when nothing is marked.
-export function mark(byId, hot, id) {
+// How a card looks while `hot` (the card that is hovered or focused, or null) is marked: "self" and "related"; with
+// `dim` (a pointer hover; not a keyboard focus) the other cards are "dim" too. A hot card that has no related card
+// marks nothing, so moving over the board does not make it flicker; "" when nothing is marked.
+export function mark(byId, hot, id, dim) {
   if (hot === null || hot === undefined || !byId[hot]) {
+    return "";
+  }
+  var kin = related(byId[hot]);
+  if (kin.length === 0) {
     return "";
   }
   if (hot === id) {
     return "self";
   }
-  return related(byId[hot]).indexOf(id) !== -1 ? "related" : "dim";
+  if (kin.indexOf(id) !== -1) {
+    return "related";
+  }
+  return dim ? "dim" : "";
 }
 
 // The curve from the card `a` (needed) to the card `b` (needing it); both are { left, right, top, bottom } in the same

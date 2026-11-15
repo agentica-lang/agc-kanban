@@ -296,8 +296,8 @@ test("the board page draws the columns that this viewer collapsed on this board 
 });
 
 // The relations of a card and what it shows, drawn with the display settings and the relation helpers the page provides.
-function related(cards, hot) {
-  return { cards: ref(cards), hot: ref(hot === undefined ? null : hot), hover: function () {}, reveal: function () {} };
+function related(cards, hot, dim) {
+  return { cards: ref(cards), hot: ref(hot === undefined ? null : hot), dim: ref(Boolean(dim)), hover: function () {}, reveal: function () {} };
 }
 
 test("a card shows a chip for each card it depends on, with that card's state, and one for each card it blocks, as buttons outside the link", async function () {
@@ -312,10 +312,10 @@ test("a card shows a chip for each card it depends on, with that card's state, a
   assert.equal(/<button/.test(anchors[0]), false, "a control inside the link");
   var chips = html.match(/<button\b[^>]*>[\s\S]*?<\/button>/g);
   assert.equal(chips.length, 4);
-  assert.ok(chips[0].includes("rel-ok") && chips[0].includes('aria-label="Depends on card 3, done. Go to it"'), chips[0]);
-  assert.ok(chips[1].includes("rel-wait") && chips[1].includes('aria-label="Depends on card 4, not done yet, in Doing. Go to it"'), chips[1]);
-  assert.ok(chips[2].includes("rel-ok") && chips[2].includes("no longer on the board"), "a card that is not on the board does not block");
-  assert.ok(chips[3].includes("rel-blocks") && chips[3].includes('aria-label="Blocks card 8. Go to it"'));
+  assert.ok(chips[0].includes("rel-ok") && chips[0].includes('aria-label="depends on #3: done. Go to it"'), chips[0]);
+  assert.ok(chips[1].includes("rel-wait") && chips[1].includes('aria-label="depends on #4: not done yet, in Doing. Go to it"'), chips[1]);
+  assert.ok(chips[2].includes("rel-ok") && chips[2].includes("depends on #99: no longer on the board. Open it"), "a card that is not on the board does not block");
+  assert.ok(chips[3].includes("rel-blocks") && chips[3].includes('aria-label="blocks #8. Go to it"'));
   assert.ok(html.includes("depends on #4<span"), "the visible text names the card");
   assert.equal(html.includes("blocked by"), false, "the chips say it, so the old mark is not drawn twice");
 });
@@ -344,15 +344,28 @@ test("the display settings choose the labels, the agent, the links, the time in 
   assert.equal(quiet.includes("preview") || quiet.includes("PR #12") || quiet.includes(" in Doing"), false, "off by default");
 });
 
-test("a hovered card marks its related cards and dims the others", async function () {
+test("a card hovered by the pointer marks its related cards and dims the others; a focused card only marks the related ones", async function () {
   var cards = [card({ id: 7, depends_on: [4] }), card({ id: 4, blocks: [7] }), card({ id: 9 })];
-  var provides = function (id) { return { display: DEFAULTS, relations: related(cards, id) }; };
-  var self = await draw(Card, { card: cards[0], blocked: false, flash: 0 }, "", provides(7));
-  var kin = await draw(Card, { card: cards[1], blocked: false, flash: 0 }, "", provides(7));
-  var other = await draw(Card, { card: cards[2], blocked: false, flash: 0 }, "", provides(7));
+  var provides = function (id, dim) { return { display: DEFAULTS, relations: related(cards, id, dim) }; };
+  var look = function (index, id, dim) { return draw(Card, { card: cards[index], blocked: false, flash: 0 }, "", provides(id, dim)); };
+  var self = await look(0, 7, true);
+  var kin = await look(1, 7, true);
+  var other = await look(2, 7, true);
   assert.ok(self.includes("mark-self") && kin.includes("mark-related") && other.includes("mark-dim"));
-  var none = await draw(Card, { card: cards[2], blocked: false, flash: 0 }, "", provides(null));
-  assert.equal(none.includes("mark-"), false);
+  var focused = await look(2, 7, false);
+  assert.equal(focused.includes("mark-"), false, "the keyboard focus dims nothing");
+  assert.ok((await look(1, 7, false)).includes("mark-related"));
+  assert.equal((await look(2, null, true)).includes("mark-"), false);
+  assert.equal((await look(0, 9, true)).includes("mark-"), false, "a card with no relations marks and dims nothing");
+});
+
+test("the hints of the display panel are described by, not part of, the name of each checkbox", async function () {
+  var html = await draw(DisplayPanel, { store: useDisplay("p") }, "");
+  var inside = Array.from(html.matchAll(/<label>([\s\S]*?)<\/label>/g)).map(function (one) { return one[1]; });
+  assert.equal(inside.length, OPTIONS.length);
+  assert.equal(inside.some(function (text) { return text.includes("class=\"display-hint\""); }), false, "no hint inside a label");
+  assert.ok(html.includes('aria-describedby="display-hint-relations"') && html.includes('id="display-hint-relations"'));
+  assert.equal(html.includes('aria-describedby="display-hint-labels"'), false, "no hint, nothing to describe it");
 });
 
 test("the display panel has a checkbox for each setting, checked as the settings are, and a reset that is off at the defaults", async function () {

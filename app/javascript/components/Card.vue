@@ -26,7 +26,7 @@ var href = computed(function () { return cardSearch(filter.filters.value, props.
 var byId = computed(function () { return indexOf(relations ? relations.cards.value : []); });
 var needs = computed(function () { return props.card.depends_on.map(function (id) { return dependency(byId.value, id); }); });
 var blocks = computed(function () { return props.card.blocks || []; });
-var marking = computed(function () { return relations ? mark(byId.value, relations.hot.value, props.card.id) : ""; });
+var marking = computed(function () { return relations ? mark(byId.value, relations.hot.value, props.card.id, relations.dim.value) : ""; });
 var links = computed(function () { return (props.card.links || []).map(cardLink); });
 var lead = computed(function () { return display.body ? preview(props.card.body) : ""; });
 var inColumn = computed(function () {
@@ -36,22 +36,25 @@ var showMeta = computed(function () {
   return (display.agent && props.card.claimed_by) || (!display.relations && props.blocked) || (display.labels && props.card.labels.length);
 });
 
+// The name of a chip starts with the words it shows, so a voice command that says them finds it.
 function needLabel(need) {
   if (!need.known) {
-    return "Depends on card " + need.id + ", which is no longer on the board";
+    return "depends on #" + need.id + ": no longer on the board. Open it";
   }
-  return "Depends on card " + need.id + (need.done ? ", done" : ", not done yet, in " + need.column) + ". Go to it";
+  return "depends on #" + need.id + ": " + (need.done ? "done" : "not done yet, in " + need.column) + ". Go to it";
 }
 
+// The pointer marks the related cards and dims the others; the keyboard focus only marks the related cards. When the
+// pointer leaves a card that still has the focus, the marks stay as the focus has them.
 function onEnter(event) {
   if (relations && event.pointerType === "mouse") {
-    relations.hover(props.card.id);
+    relations.hover(props.card.id, "pointer");
   }
 }
 
 function onLeave(event) {
   if (relations && event.pointerType === "mouse") {
-    relations.hover(null);
+    relations.hover(event.currentTarget.contains(document.activeElement) ? props.card.id : null, "focus");
   }
 }
 
@@ -81,7 +84,7 @@ watch(function () { return props.flash; }, function (count) {
 <template>
   <!-- The card is a box with a stretched title link (the whole card opens it) and real buttons and links above the link
        for the agent, the labels, the relations and the links, so no control sits inside another. -->
-  <div class="card" :data-card-id="card.id" :class="['priority-' + card.priority, { changed: flashing, 'card-done': card.done, open: open, ['mark-' + marking]: marking }]" @pointerenter="onEnter" @pointerleave="onLeave" @focusin="relations && relations.hover(card.id)" @focusout="onFocusOut">
+  <div class="card" :data-card-id="card.id" :class="['priority-' + card.priority, { changed: flashing, 'card-done': card.done, open: open, ['mark-' + marking]: marking }]" @pointerenter="onEnter" @pointerleave="onLeave" @focusin="relations && relations.hover(card.id, 'focus')" @focusout="onFocusOut">
     <a class="title" :href="href" :data-card="card.id" :aria-current="open ? 'true' : null" @click="onClick"><span class="id">#{{ card.id }}</span> {{ card.title }}</a>
     <p v-if="lead" class="preview">{{ lead }}</p>
     <div v-if="showMeta" class="meta">
@@ -96,7 +99,7 @@ watch(function () { return props.flash; }, function (count) {
     </div>
     <div v-if="display.relations && (needs.length || blocks.length)" class="meta relations">
       <button v-for="need in needs" :key="'n' + need.id" type="button" class="rel pick" :class="need.known && !need.done ? 'rel-wait' : 'rel-ok'" :aria-label="needLabel(need)" :title="needLabel(need)" @click="relations ? relations.reveal(need.id) : null">depends on #{{ need.id }}<span class="rel-state" aria-hidden="true">{{ need.known ? need.column : "gone" }}</span></button>
-      <button v-for="id in blocks" :key="'b' + id" type="button" class="rel rel-blocks pick" :aria-label="'Blocks card ' + id + '. Go to it'" :title="'Blocks card ' + id + '. Go to it'" @click="relations ? relations.reveal(id) : null">blocks #{{ id }}</button>
+      <button v-for="id in blocks" :key="'b' + id" type="button" class="rel rel-blocks pick" :aria-label="'blocks #' + id + '. Go to it'" :title="'blocks #' + id + '. Go to it'" @click="relations ? relations.reveal(id) : null">blocks #{{ id }}</button>
     </div>
     <div v-if="(display.links && links.length) || inColumn" class="meta facts">
       <template v-if="display.links">

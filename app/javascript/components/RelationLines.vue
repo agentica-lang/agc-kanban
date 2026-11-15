@@ -1,5 +1,6 @@
 <script setup>
 import { onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { watchLines } from "../lines_watch.js";
 import { curve, pairs, visible } from "../relations.js";
 
 // The lines between related cards, drawn over the board in an SVG that takes no pointer. A card sits in a column that
@@ -11,13 +12,14 @@ var svg = ref(null);
 var paths = ref([]);
 var size = ref({ width: 0, height: 0 });
 var frame = 0;
-var observer = null;
+var watcher = null;
 
-function box(id, origin) {
+function box(id, origin, seen) {
   var element = document.querySelector('.board-body .card[data-card-id="' + id + '"]');
   if (!element) {
     return null;
   }
+  seen.push(element);
   var rect = element.getBoundingClientRect();
   var column = element.closest(".cards");
   var clip = column ? column.getBoundingClientRect() : rect;
@@ -38,14 +40,16 @@ function measure() {
   var area = { left: view.left - origin.left, right: view.right - origin.left, top: 0, bottom: origin.height };
   size.value = { width: origin.width, height: origin.height };
   var next = [];
+  var seen = [];
   pairs(props.cards).forEach(function (pair) {
-    var a = box(pair.from, origin);
-    var b = box(pair.to, origin);
+    var a = box(pair.from, origin, seen);
+    var b = box(pair.to, origin, seen);
     if (a && b && visible(a, area) && visible(b, area)) {
       next.push({ key: pair.from + ">" + pair.to, d: curve(a, b), from: pair.from, to: pair.to });
     }
   });
   paths.value = next;
+  watcher && watcher.sync(seen);
 }
 
 function schedule() {
@@ -55,23 +59,12 @@ function schedule() {
 }
 
 onMounted(function () {
-  var host = svg.value.parentElement;
-  host.addEventListener("scroll", schedule, { capture: true, passive: true });
-  window.addEventListener("resize", schedule);
-  if (typeof ResizeObserver === "function") {
-    observer = new ResizeObserver(schedule);
-    observer.observe(host);
-  }
+  watcher = watchLines(svg.value.parentElement, schedule, window, globalThis.ResizeObserver);
   schedule();
 });
 
 onBeforeUnmount(function () {
-  var host = svg.value && svg.value.parentElement;
-  if (host) {
-    host.removeEventListener("scroll", schedule, { capture: true });
-  }
-  window.removeEventListener("resize", schedule);
-  observer && observer.disconnect();
+  watcher && watcher.stop();
   frame && cancelAnimationFrame(frame);
 });
 

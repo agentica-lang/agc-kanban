@@ -37,6 +37,8 @@ export function writeCollapsed(store, slug, ids) {
 // Kept by column id, so a renamed column stays collapsed and a live refresh of the board does not open it.
 export function useCollapsed(slug) {
   var ids = ref(readCollapsed(storage(), slug));
+  // Columns opened for this visit only (a chip took the viewer to a card in one): shown open, still saved as collapsed.
+  var visiting = ref([]);
 
   function set(next) {
     ids.value = next;
@@ -45,14 +47,27 @@ export function useCollapsed(slug) {
 
   return {
     ids: function () { return ids.value; },
-    has: function (id) { return ids.value.includes(id); },
+    has: function (id) { return ids.value.includes(id) && !visiting.value.includes(id); },
+    // Opens a collapsed column without saving it: the viewer's choice is kept, and the next load shows the strip again.
+    reveal: function (id) {
+      if (ids.value.includes(id) && !visiting.value.includes(id)) {
+        visiting.value = visiting.value.concat([id]);
+      }
+    },
+    // The button of a column that is open for this visit collapses it again, with nothing to save; any other toggle is
+    // the viewer's choice and is saved.
     toggle: function (id) {
+      if (visiting.value.includes(id)) {
+        visiting.value = visiting.value.filter(function (one) { return one !== id; });
+        return;
+      }
       set(ids.value.includes(id) ? ids.value.filter(function (one) { return one !== id; }) : ids.value.concat([id]));
     },
     // The database gives the id of a deleted column to the next new one, so the ids of the columns the board no longer
     // has are dropped as soon as the page sees them go. A column deleted and another added while the page was closed
     // still cannot be told apart: the new one shows collapsed.
     keep: function (columnIds) {
+      visiting.value = visiting.value.filter(function (id) { return columnIds.includes(id); });
       var next = ids.value.filter(function (id) { return columnIds.includes(id); });
       if (next.length !== ids.value.length) {
         set(next);

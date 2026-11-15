@@ -42,3 +42,14 @@ Feature: Boards
     When agent "agent-1" comments on card 2 with "later"
     Then the snapshot of the project dates card 1 as its card detail does
     And the snapshot of the project dates card 2 as its card detail does
+
+  Scenario: A card moved from A to B and back to A is in A since it came back
+    Given the database server is running
+    When I post a board named "Project" with slug "project" as "agent-1"
+    And I add a card titled "First"
+    And agent "agent-1" claims card 1
+    And I move card 1 to "Doing"
+    And I move card 1 to "Todo"
+    Then the response status is 200
+    And the snapshot of the project dates card 1 as its card detail does
+    And the snapshot of the project dates card 1 after its first visit

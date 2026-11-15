@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, provide, ref, watch } from "vue";
 import { useBoard } from "../board_store.js";
 import { useCollapsed } from "../collapse.js";
 import { useDisplay } from "../display.js";
+import { reveal } from "../reveal.js";
 import { followDrawer, useCard } from "../card_store.js";
 import { useDrawer } from "../drawer.js";
 import { useFilters } from "../filter_store.js";
@@ -207,24 +208,26 @@ var blocked = computed(function () {
 // show); `reveal` takes a chip to its card: the page scrolls to it and the focus goes to its title (a card the filters
 // hide, or one that is not on the board, opens in the panel instead).
 var hot = ref(null);
+var dim = ref(false);
 var relations = {
   cards: computed(function () { return state.cards; }),
   hot: hot,
-  hover: function (id) { hot.value = display.settings.relations || display.settings.lines ? id : null; },
+  dim: dim,
+  // `via` is "pointer" or "focus": only a pointer dims the cards that are not related.
+  hover: function (id, via) {
+    var on = display.settings.relations || display.settings.lines;
+    hot.value = on ? id : null;
+    dim.value = on && via === "pointer";
+  },
   reveal: function (id) {
-    var found = state.cards.find(function (one) { return one.id === id; });
-    if (found && collapsed.has(found.column_id)) {
-      collapsed.toggle(found.column_id);
-    }
-    nextTick(function () {
-      var link = document.querySelector('.board .card a.title[data-card="' + id + '"]');
-      if (!link) {
-        drawer.showCard(id);
-        return;
-      }
-      link.scrollIntoView({ block: "center", inline: "center", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
-      link.focus({ preventScroll: true });
-    });
+    reveal({
+      cards: function () { return state.cards; },
+      collapsed: collapsed,
+      document: document,
+      reduced: function () { return matchMedia("(prefers-reduced-motion: reduce)").matches; },
+      open: drawer.showCard,
+      later: nextTick,
+    }, id);
   },
 };
 provide("relations", relations);
