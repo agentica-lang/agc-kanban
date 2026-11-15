@@ -3,6 +3,7 @@ import Db from "pkg/db/db"
 import Sqlite from "pkg/db/sqlite"
 import HTTP from "std/http"
 import URI from "std/uri"
+import DriftSteps from "drift_steps"
 import WebSteps from "web_steps"
 
 struct RaceReply
@@ -131,7 +132,9 @@ def main() -> Void
       BDD.step("whoami output contains {string}", &whoami_output),
       BDD.step("I get {string} with key {string}", &request),
       BDD.step("the response status is {int}", &status),
-    ].concat(WebSteps.steps()),
+    ]
+      .concat(WebSteps.steps())
+      .concat(DriftSteps.steps()),
   )
 end
 

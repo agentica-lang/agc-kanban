@@ -105,7 +105,18 @@ kanban label update api --color '#0075ca' [--name backend]   # a color or a rena
 #   a new label (first card that carries it) gets a palette color by itself; `card list` output does not show colors
 
 kanban events [--after 42 | --before 42] [--card 12] [--limit 50]   # --before: newest first
+
+kanban doctor [--stale-minutes 180] [--no-github] [--json]   # where the board no longer matches reality (below)
 ```
+
+`kanban doctor` reads the open cards and prints one line per finding, `#12  Review  pr-merged  REASON (URL); next: ACTION`,
+or `no drift on BOARD (N open cards)`. It needs no agent name and writes nothing. The kinds: `pr-merged` (every PR the
+card links is merged; a card that also links an open issue is a part of it, and is reported only in Review or Doing), `issue-closed` (every issue it links is closed), `review-no-pr` (in Review with no PR link) and
+`doing-stale` (in Doing, and neither the card nor its journal changed for more than `--stale-minutes`; a comment counts).
+GitHub is read with `gh` (a logged-in `gh` or `GH_TOKEN`): one GraphQL call per 40 linked items, across every
+repository, so the number of calls does not grow with the cards; only `https://github.com/OWNER/REPO/issues|pull/N`
+links are looked up. `--no-github` skips the two checks that need `gh`. `--json` prints
+`{"board", "cards", "github", "github_error", "findings": [{"card", "column", "kind", "reason", "action", "url"}]}`.
 
 `card archive` hides a card from the board page, the home page counts, `card list` (even with
 `--all`), `card next`, claims and the readiness of the cards that depend on it. The card stays in the
@@ -198,6 +209,8 @@ $ kanban card list --format tsv
 | 2 | usage: unknown command, missing argument, missing agent name or board; the code printed is `USAGE` |
 | 3 | no server, `UNAUTHORIZED`, `BUSY` after the retries, `UNSUPPORTED` (a server too old for the request), or any other failure |
 | 4 | lost the race: `CLAIMED`, `BLOCKED`, `DONE` (but `BLOCKED` on `done` or `move` of a card you hold is not a lost race: wait or comment, and keep the card) |
+| 5 | `kanban doctor` only: drift was found (the findings are on stdout) |
+| 6 | `kanban doctor` only: `gh` could not be read; the findings that need no GitHub are still printed (no server is 3, as everywhere) |
 
 `bin/kanban` exits 141, silently, when its standard output is closed (`kanban board show | head -1`), as a Unix tool killed by SIGPIPE does.
 

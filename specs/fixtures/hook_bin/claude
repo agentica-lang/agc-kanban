@@ -1,0 +1,4 @@
+#!/bin/sh
+# Stands for `claude -p` in the hook specs: records how it was run and answers with FAKE_CLAUDE_REPLY.
+printf 'child=%s args=%s\n' "${KANBAN_HOOK_CHILD:-}" "$*" >> "${FAKE_CLAUDE_LOG:-/dev/null}"
+printf '%s\n' "${FAKE_CLAUDE_REPLY:-}"

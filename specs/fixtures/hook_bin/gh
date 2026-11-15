@@ -1,0 +1,30 @@
+#!/usr/bin/env python3
+"""Stands for `gh api graphql` in the doctor specs. FAKE_GH_STATE is a JSON object from "owner/repo#N" to
+"open", "closed", "merged" (a pull) or "closed-pull" (a pull closed without a merge); a number that is not in it
+does not exist. FAKE_GH_FAIL=1 makes gh fail. Every call is logged to FAKE_GH_LOG, one line per call."""
+import json
+import os
+import re
+import sys
+
+log = os.environ.get("FAKE_GH_LOG")
+if log:
+    with open(log, "a") as handle:
+        handle.write(" ".join(sys.argv[1:3]) + "\n")
+if os.environ.get("FAKE_GH_FAIL"):
+    sys.stderr.write("gh: not logged in\n")
+    sys.exit(4)
+
+state = json.loads(os.environ.get("FAKE_GH_STATE", "{}"))
+query = next(arg[6:] for arg in sys.argv if arg.startswith("query="))
+data = {}
+for alias, owner, repo, number in re.findall(r'(\w+): repository\(owner: "([^"]+)", name: "([^"]+)"\) \{ issueOrPullRequest\(number: (\d+)\)', query):
+    kind = state.get(f"{owner}/{repo}#{number}")
+    if kind is None:
+        data[alias] = {"issueOrPullRequest": None}
+    elif kind in ("open", "closed"):
+        data[alias] = {"issueOrPullRequest": {"__typename": "Issue", "state": kind.upper()}}
+    else:
+        pull = {"merged": ("MERGED", True), "closed-pull": ("CLOSED", False), "open-pull": ("OPEN", False)}[kind]
+        data[alias] = {"issueOrPullRequest": {"__typename": "PullRequest", "state": pull[0], "merged": pull[1]}}
+print(json.dumps({"data": data}))
