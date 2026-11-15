@@ -112,7 +112,7 @@ def current_branch(cwd):
     return done.stdout.strip()
 
 
-OPERATORS = set("();<>|&")
+OPERATORS = set("();<>|&\n")
 REPO = re.compile(r"^[\w.-]+/[\w.-]+$")
 MERGE_VALUED = {"-R", "--repo", "-b", "--body", "-F", "--body-file", "-t", "--subject", "-A", "--author-email", "--match-head-commit"}
 CLOSE_VALUED = {"-R", "--repo", "-c", "--comment", "-r", "--reason"}
@@ -123,7 +123,9 @@ def segments(command):
     """The simple commands of a shell line, as lists of words with the quotes resolved: text inside a quoted
     argument (a PR body that says `-H x`) is one word and never a flag."""
     try:
-        lexer = shlex.shlex(command, posix=True, punctuation_chars=True)
+        # A newline ends a command, as `;` does; inside quotes it stays in the word.
+        lexer = shlex.shlex(command, posix=True, punctuation_chars="();<>|&\n")
+        lexer.whitespace = " \t\r"
         lexer.whitespace_split = True
         words = list(lexer)
     except ValueError:
@@ -139,22 +141,33 @@ def segments(command):
     return found
 
 
+def command_words(words):
+    """The words of a simple command from its command word on: leading `NAME=value` assignments are dropped."""
+    start = 0
+    while start < len(words) and re.match(r"^[A-Za-z_]\w*=", words[start]):
+        start += 1
+    return words[start:]
+
+
 def gh_args(command, *sub):
-    """The arguments of the first `gh ... SUB` command of the line, without the subcommand words, or None."""
+    """The arguments of the first `gh ... SUB` command of the line, without the subcommand words, or None. `gh`
+    (or a path that ends in /gh) must be the command word: `echo gh pr create` is not a command."""
     for words in segments(command):
-        for start, word in enumerate(words):
-            if word == "gh":
-                rest = words[start + 1 :]
-                for index in range(len(rest) - len(sub) + 1):
-                    if rest[index : index + len(sub)] == list(sub):
-                        return rest[:index] + rest[index + len(sub) :]
+        words = command_words(words)
+        if words and os.path.basename(words[0]) == "gh":
+            rest = words[1:]
+            for index in range(len(rest) - len(sub) + 1):
+                if rest[index : index + len(sub)] == list(sub):
+                    return rest[:index] + rest[index + len(sub) :]
     return None
 
 
 def script_args(command, script):
+    """The arguments of a command that runs `script`: it is the command word or the one after an interpreter."""
     for words in segments(command):
-        for start, word in enumerate(words):
-            if word.endswith(script):
+        words = command_words(words)
+        for start, word in enumerate(words[:2]):
+            if os.path.basename(word) == script:
                 return words[start + 1 :]
     return None
 
@@ -232,10 +245,14 @@ def pr_created(data, args, text):
     if any(url in card.get("links", []) for card in cards):
         return ""
     agent, candidates = whose_cards(data, cards)
+    # A card that links other repositories only cannot be this PR's.
+    candidates = [card for card in candidates if not link_repos(card) or repo.lower() in link_repos(card)]
     head = head_flag(args) or current_branch(data.get("cwd") or "")
     sure = [card for card in candidates if head and card_matches(card, repo, head)]
     if len(sure) != 1:
-        which = ", ".join(str(card["id"]) for card in candidates) or "its card"
+        if not candidates:
+            return ""
+        which = ", ".join(str(card["id"]) for card in candidates)
         return (
             f"agc-kanban: PR {url} is not linked on a card. Link it to {which}, if it is the card's PR: "
             f"kanban card update ID --link {url}"

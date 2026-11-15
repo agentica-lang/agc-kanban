@@ -161,12 +161,15 @@ def bash_input(command: String, output: String) -> Map[String, JSON.Value]
   }
 end
 
+# A literal \n in the feature is a line break of the command.
+def lines_of(command: String) -> String = command.split("\\n").join("\n")
+
 def post_tool(ctx: BDD.Context, args: List[String]) -> BDD.Context
-  run_hook(ctx, "post-tool", args[0], JSON.object(bash_input(args[1], args[2])))
+  run_hook(ctx, "post-tool", args[0], JSON.object(bash_input(lines_of(args[1]), args[2])))
 end
 
 def post_tool_subagent(ctx: BDD.Context, args: List[String]) -> BDD.Context
-  input = bash_input(args[0], args[1]).put("agent_id", JSON.from("a1"))
+  input = bash_input(lines_of(args[0]), args[1]).put("agent_id", JSON.from("a1"))
   run_hook(ctx, "post-tool", "coordinator", JSON.object(input))
 end
 

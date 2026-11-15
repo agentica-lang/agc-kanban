@@ -31,13 +31,21 @@ Feature: Drift hooks of the plugin
     When I get card 1
     Then the response does not contain "pull/7"
 
-  Scenario: A PR of another repository is not linked, whatever its branch
+  Scenario: A PR of another repository is not linked, and no card that is only about other repositories is offered
     When a card "x" is in "Doing" held by "worker" with the link "https://github.com/o/r/issues/3"
     And agent "worker" sets the branch of card 1 to "feat-x"
     And I run the post-tool hook as agent "worker" for the command "gh pr create --head feat-x" with the output "https://github.com/x/y/pull/7"
-    Then kanban stdout contains "is not linked on a card"
+    Then kanban exits with code 0
+    And kanban stdout is empty
     When I get card 1
     Then the response does not contain "pull/7"
+
+  Scenario: The hint offers the cards of the PR's repository and the cards with no link
+    When a card "x" is in "Doing" held by "worker" with the link "https://github.com/o/r/issues/3"
+    And a card "x" is in "Doing" held by "worker" with the link "https://github.com/x/y/issues/4"
+    And a card "x" is in "Doing" held by "worker" with the link ""
+    And I run the post-tool hook as agent "worker" for the command "gh pr create" with the output "https://github.com/x/y/pull/7"
+    Then kanban stdout contains "Link it to 2, 3, if it is"
 
   Scenario: An agent with two cards in Doing is told which cards could take the link, and nothing is written
     When a card "x" is in "Doing" held by "worker" with the link ""
@@ -220,3 +228,22 @@ Feature: Drift hooks of the plugin
     And I run the subagent-stop hook for a transcript that starts with "You are worker (KANBAN_AGENT=worker)." and ends with "done"
     Then kanban exits with code 0
     And the hook queue is empty
+
+  Scenario: A line break ends a command, and inside quotes it stays in the argument
+    When a card "x" is in "Review" held by "worker" with the link "https://github.com/x/y/pull/5"
+    And gh says "{\"x/y#5\":\"merged\"}"
+    And I run the post-tool hook as agent "coordinator" for the command "gh pr merge 5\\ngh pr view 5 -R x/y" with the output "✓ Merged pull request #5 (Fix it)"
+    Then kanban exits with code 0
+    And kanban stdout is empty
+    When a card "x" is in "Doing" held by "worker" with the link "https://github.com/o/r/issues/3"
+    And agent "worker" sets the branch of card 2 to "feat-x"
+    And I run the post-tool hook as agent "worker" for the command "gh pr create --body 'built\\nwith -H other' --head feat-x" with the output "https://github.com/o/r/pull/7"
+    Then kanban stdout contains "linked https://github.com/o/r/pull/7 to card 2"
+
+  Scenario: gh counts only as the command word, by name or by path
+    When a card "x" is in "Doing" held by "worker" with the link "https://github.com/o/r/issues/3"
+    And agent "worker" sets the branch of card 1 to "feat-x"
+    And I run the post-tool hook as agent "worker" for the command "echo gh pr create --head feat-x" with the output "https://github.com/o/r/pull/7"
+    Then kanban stdout is empty
+    When I run the post-tool hook as agent "worker" for the command "GH_TOKEN=t /usr/bin/gh pr create --head feat-x" with the output "https://github.com/o/r/pull/7"
+    Then kanban stdout contains "linked https://github.com/o/r/pull/7 to card 1"
