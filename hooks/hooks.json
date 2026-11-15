@@ -14,7 +14,7 @@
     "PostToolUse": [
       {
         "matcher": "Bash|Agent|Task",
-        "hooks": [{"type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/drift.sh\" post-tool", "timeout": 15, "statusMessage": "Checking the agc-kanban cards..."}]
+        "hooks": [{"type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/drift.sh\" post-tool", "timeout": 25, "statusMessage": "Checking the agc-kanban cards..."}]
       }
     ],
     "UserPromptSubmit": [

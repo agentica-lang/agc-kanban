@@ -71,3 +71,11 @@ Feature: kanban doctor
     When a card "x" is in "Review" held by "worker" with the link "https://github.com/o/r/pull/2"
     And I run kanban doctor "" while gh says "{\"o/r#2\":\"closed-pull\"}"
     Then kanban exits with code 0
+
+  Scenario: --cards limits the check to the named cards
+    When a card "x" is in "Review" held by "worker" with the link ""
+    And a card "x" is in "Review" held by "worker" with the link ""
+    And I run kanban doctor "--cards 2" while gh says "{}"
+    Then kanban exits with code 5
+    And kanban stdout contains "#2  Review  review-no-pr"
+    And kanban output does not contain "#1  "

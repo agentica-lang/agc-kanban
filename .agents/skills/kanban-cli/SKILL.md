@@ -106,7 +106,7 @@ kanban label update api --color '#0075ca' [--name backend]   # a color or a rena
 
 kanban events [--after 42 | --before 42] [--card 12] [--limit 50]   # --before: newest first
 
-kanban doctor [--stale-minutes 180] [--no-github] [--json]   # where the board no longer matches reality (below)
+kanban doctor [--stale-minutes 180] [--no-github] [--cards 12,15] [--json]   # where the board no longer matches reality (below)
 ```
 
 `kanban doctor` reads the open cards and prints one line per finding, `#12  Review  pr-merged  REASON (URL); next: ACTION`,
@@ -115,7 +115,7 @@ card links is merged; a card that also links an open issue is a part of it, and 
 `doing-stale` (in Doing, and neither the card nor its journal changed for more than `--stale-minutes`; a comment counts).
 GitHub is read with `gh` (a logged-in `gh` or `GH_TOKEN`): one GraphQL call per 40 linked items, across every
 repository, so the number of calls does not grow with the cards; only `https://github.com/OWNER/REPO/issues|pull/N`
-links are looked up. `--no-github` skips the two checks that need `gh`. `--json` prints
+links are looked up. `--no-github` skips the two checks that need `gh`; `--cards` checks only those card ids. `--json` prints
 `{"board", "cards", "github", "github_error", "findings": [{"card", "column", "kind", "reason", "action", "url"}]}`.
 
 `card archive` hides a card from the board page, the home page counts, `card list` (even with
