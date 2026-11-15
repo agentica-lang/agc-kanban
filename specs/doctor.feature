@@ -55,3 +55,19 @@ Feature: kanban doctor
     And I run kanban doctor "--no-github" while gh says "{\"o/r#2\":\"merged\"}"
     Then kanban exits with code 0
     And the gh log has 0 calls
+
+  Scenario: Merged work of a card whose issue is still open is reported only in Review or Doing
+    When a card "x" is in "Todo" held by "" with the link "https://github.com/o/r/issues/1"
+    And agent "agent-1" links card 1 to "https://github.com/o/r/pull/2"
+    And a card "x" is in "Review" held by "worker" with the link "https://github.com/o/r/issues/1"
+    And agent "worker" links card 2 to "https://github.com/o/r/pull/2"
+    And I run kanban doctor "" while gh says "{\"o/r#1\":\"open\",\"o/r#2\":\"merged\"}"
+    Then kanban exits with code 5
+    And kanban output does not contain "#1  "
+    And kanban stdout contains "#2  Review  pr-merged  its linked PRs are all merged"
+    And kanban stdout contains "kanban card move 2 Todo for the next slice"
+
+  Scenario: A PR closed without a merge is not drift
+    When a card "x" is in "Review" held by "worker" with the link "https://github.com/o/r/pull/2"
+    And I run kanban doctor "" while gh says "{\"o/r#2\":\"closed-pull\"}"
+    Then kanban exits with code 0

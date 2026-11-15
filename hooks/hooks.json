@@ -24,7 +24,7 @@
     ],
     "SubagentStop": [
       {
-        "hooks": [{"type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/drift.sh\" subagent-stop", "timeout": 60, "statusMessage": "Checking the cards of the subagent..."}]
+        "hooks": [{"type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/drift.sh\" subagent-stop", "async": true, "timeout": 60, "statusMessage": "Checking the cards of the subagent..."}]
       }
     ]
   }

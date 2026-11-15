@@ -270,7 +270,8 @@ def remote_of(data: JSON.Value, alias: String) -> Optional[Remote]
 end
 
 # A card may link several PRs and issues (a parent card, a part of an issue): it has drifted only when every PR it
-# links is merged, or every issue it links is closed. A closed PR that was not merged says nothing.
+# links is merged (and no issue it links is open, unless it is in Review or Doing), or every issue it links is closed.
+# A closed PR that was not merged says nothing.
 def card_findings(card: Card, remote: Map[String, Remote], quiet_ms: Int, stale_ms: Int) -> List[Finding]
   found: List[Finding] = []
   has_pull = false
@@ -298,14 +299,24 @@ def card_findings(card: Card, remote: Map[String, Remote], quiet_ms: Int, stale_
     end
   end
 
-  if not pulls_merged.empty? and pulls_open == 0
+  # A card whose issue is still open is a part of it: merged work in Backlog or Todo waits on later slices, so only a
+  # card in Review or Doing, which has nothing more to wait for, is reported.
+  active = card.column == "Review" or card.column == "Doing"
+  if not pulls_merged.empty? and pulls_open == 0 and (issues_open == 0 or active)
+    action = "kanban card done #{card.id}"
+    if issues_open > 0
+      action = (
+        "kanban card move #{card.id} Todo for the next slice, or kanban card done #{card.id} if the issue is finished"
+      )
+    end
+
     found = found.push(
       Finding(
         card: card.id,
         column: card.column,
         kind: "pr-merged",
         reason: "its linked PRs are all merged",
-        action: "kanban card done #{card.id}",
+        action: action,
         url: some(pulls_merged[0]),
       ),
     )

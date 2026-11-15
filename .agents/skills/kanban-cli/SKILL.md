@@ -111,7 +111,7 @@ kanban doctor [--stale-minutes 180] [--no-github] [--json]   # where the board n
 
 `kanban doctor` reads the open cards and prints one line per finding, `#12  Review  pr-merged  REASON (URL); next: ACTION`,
 or `no drift on BOARD (N open cards)`. It needs no agent name and writes nothing. The kinds: `pr-merged` (every PR the
-card links is merged), `issue-closed` (every issue it links is closed), `review-no-pr` (in Review with no PR link) and
+card links is merged; a card that also links an open issue is a part of it, and is reported only in Review or Doing), `issue-closed` (every issue it links is closed), `review-no-pr` (in Review with no PR link) and
 `doing-stale` (in Doing, and neither the card nor its journal changed for more than `--stale-minutes`; a comment counts).
 GitHub is read with `gh` (a logged-in `gh` or `GH_TOKEN`): one GraphQL call per 40 linked items, across every
 repository, so the number of calls does not grow with the cards; only `https://github.com/OWNER/REPO/issues|pull/N`

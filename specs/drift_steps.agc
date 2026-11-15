@@ -11,7 +11,15 @@ def steps() -> List[BDD.Step]
   [
     BDD.step("a card {string} is in {string} held by {string} with the link {string}", &seed_card),
     BDD.step("I run kanban doctor {string} while gh says {string}", &run_doctor),
+    BDD.step("agent {string} sets the branch of card {int} to {string}", &set_branch),
     BDD.step("the fake claude answers {string}", &fake_claude_answers),
+    BDD.step("the hook queue has {string}", &queue_has),
+    BDD.step("I run the prompt-submit hook as agent {string} with a doctor that hangs", &prompt_submit_hung),
+    BDD.step("the hung doctor and its child are gone", &hung_gone),
+    BDD.step(
+      "I run the subagent-stop hook for a transcript that starts with {string}, runs {string} and hands back {string}",
+      &subagent_handback,
+    ),
     BDD.step(
       "I run the post-tool hook as agent {string} for the command {string} with the output {string}",
       &post_tool,
@@ -209,4 +217,73 @@ end
 
 def queue_contains(ctx: BDD.Context, args: List[String]) -> BDD.Context
   BDD.assert(ctx, queue_text(ctx).include?(args[0]), "queue was #{queue_text(ctx)}")
+end
+
+def set_branch(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  body = JSON.encode(JSON.from({"branch": args[2]}))
+  changed = call(ctx, args[0], "PATCH", "/api/cards/#{args[1]}", body)
+  BDD.assert(ctx, changed.status == 200, "branch update failed with #{changed.status}")
+end
+
+def queue_has(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  _ = Dir.mkdir(cache_dir(ctx))
+  _ = Dir.mkdir("#{cache_dir(ctx)}/agc-kanban")
+  File.write_text("#{cache_dir(ctx)}/agc-kanban/queue-project.txt", "#{args[0]}\n").unwrap!
+  ctx
+end
+
+def pid_file(ctx: BDD.Context) -> String = "#{data_dir(ctx)}/doctor.pid"
+
+# The doctor of the hook sleeps for 30 s; the hook gives up after 1 s.
+def prompt_submit_hung(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  here = Path.cwd().unwrap!
+  env = (
+    base_env(ctx)
+      .put("KANBAN_AGENT", args[0])
+      .put("KANBAN_DOCTOR_TIMEOUT", "1")
+      .put("FAKE_PID_FILE", pid_file(ctx))
+  )
+
+  env = env.put("PATH", "#{here}/specs/fixtures/slow_bin:#{env.get("PATH").unwrap!}")
+  process = Process.spawn_captured("hooks/drift.sh", ["prompt-submit"], Process.Options(env: env)).unwrap!
+  Process.send(process, "{\"hook_event_name\":\"UserPromptSubmit\",\"prompt\":\"hi\"}", 30000).unwrap!
+  Process.close_stdin(process, 30000).unwrap!
+  record(ctx, process)
+end
+
+# Linux: field 3 of /proc/PID/stat is the state; a gone process has none and a killed one waiting to be reaped is Z.
+def hung_gone(ctx: BDD.Context, _args: List[String]) -> BDD.Context
+  pid = read_or_empty(pid_file(ctx)).strip
+  script = "s=$(cut -d' ' -f3 /proc/$1/stat 2>/dev/null); [ \"$s\" != S ] && [ \"$s\" != R ]"
+  process = Process.spawn_captured("sh", ["-c", script, "sh", pid]).unwrap!
+  code = Process.wait(process, 10000).unwrap!
+  Process.close(process)
+  BDD.assert(ctx, not pid.empty? and code == 0, "the child #{pid} of the doctor is still running")
+end
+
+def tool_line(name: String, input: Map[String, JSON.Value]) -> String
+  line_of(
+    "assistant",
+    JSON.array([JSON.object({"type": JSON.from("tool_use"), "name": JSON.from(name), "input": JSON.object(input)})]),
+  )
+end
+
+def subagent_handback(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  path = "#{data_dir(ctx)}/agent.jsonl"
+  lines = [
+    user_line(args[0]),
+    tool_line("Bash", {"command": JSON.from(args[1])}),
+    tool_line("SubagentHandback", {"message": JSON.from(args[2])}),
+    assistant_line("ok"),
+  ]
+
+  File.write_text(path, "#{lines.join("\n")}\n").unwrap!
+  input = {
+    "hook_event_name": JSON.from("SubagentStop"),
+    "agent_id": JSON.from("a1"),
+    "agent_transcript_path": JSON.from(path),
+    "last_assistant_message": JSON.from("ok"),
+  }
+
+  run_hook(ctx, "subagent-stop", "coordinator", JSON.object(input))
 end
