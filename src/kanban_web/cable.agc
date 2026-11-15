@@ -21,6 +21,7 @@ import Routes from "routes"
 ## What the writes need: the hub of the channels. The publisher is reached by name.
 struct Cable
   hub: Channels.Hub
+  pool: Optional[Database.Pool]
 end
 
 ## Starts the hub and, with a database, the publisher under a supervisor and its timer. Call it from the main task:
@@ -39,13 +40,23 @@ def start(pool: Optional[Database.Pool]) -> Cable
     _ = Task.spawn(&ticker)
   end
 
-  Cable(hub: hub)
+  Cable(hub: hub, pool: pool)
 end
 
 ## Mounts `/cable`.
 def mount(app: Bond.App, cable: Cable) -> Bond.App
-  options = Channels.MountOptions(connect: &connect, handlers: {BOARD_CHANNEL: Channels.handler(&board_subscribed)})
+  options = Channels.MountOptions(
+    connect: ->(conn) { connect(conn, cable.pool) },
+    handlers: {BOARD_CHANNEL: Channels.handler(&board_subscribed)},
+  )
+
   Channels.mount(app, Routes.CABLE, cable.hub, options).unwrap!
+end
+
+## Closes the live sockets of the session whose key is `session_key` (`Auth.session_key`): a sign-out takes the live
+## view away at once, not at the next reconnect.
+def end_session(cable: Cable, session_key: String) -> Void
+  _ = Channels.disconnect(cable.hub, session_key, false)
 end
 
 ## Tells the publisher that a write may have added events. Only the nudge that sets the flag is sent.
@@ -78,10 +89,11 @@ enum Msg
 end
 
 # The session was checked at the handshake: no session is an `unauthorized` disconnect, and the client stays out.
-def connect(conn: Bond.Conn) -> Result[Channels.Identity]
-  return error("no session") if not Auth.signed_in?(conn)
+def connect(conn: Bond.Conn, pool: Optional[Database.Pool]) -> Result[Channels.Identity]
+  key = Auth.session_key(conn, pool)
+  return error("no session") if not key.some?
 
-  ok(Channels.Identity(id: "owner", data: JSON.from("owner")))
+  ok(Channels.Identity(id: key.unwrap!, data: JSON.from("web")))
 end
 
 def board_subscribed(session: Channels.Session, params: JSON.Value) -> Result[Channels.Subscription]

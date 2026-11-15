@@ -74,8 +74,10 @@ This file is the plan only. There is no product code yet.
 - The CLI sends the API key in the `apikey` header, as evolution-api does.
   It sends the agent name in the `X-Kanban-Agent` header.
 - The browser cannot set headers on a WebSocket. So the owner signs in once
-  on `/login` with the API key. The server then sets a signed session cookie
-  (`Bond.sessions`). The web reads `/api/` and opens `/cable` with that
+  on `/login` with a username and a password (the API key is for the CLI and
+  the API only). The server then sets a signed session cookie
+  (`Bond.sessions`) that holds a random session id, kept hashed in the
+  `sessions` table. The web reads `/api/` and opens `/cable` with that
   cookie.
 - Live updates go over bond-channels (the Action Cable protocol,
   `actioncable-v1-json`). The server broadcasts one JSON event per change.
@@ -137,6 +139,35 @@ Many agents can call it at once and each gets a different card.
 The session cookie is signed with a key derived from the API key
 (HMAC-SHA256 of a fixed label). So there is one secret, and a new API key
 signs everyone out.
+
+### Web login
+
+- Tables `users` (username in lowercase, `scrypt$N$r$p$salt$key` hash with
+  N = 2^17, r = 8, p = 1, a salt per user) and `sessions` (SHA-256 of the
+  session id, the user, the end: 7 days). Migration 11.
+- Passwords: 8 to 16 characters with an uppercase letter, a lowercase letter, a
+  number and a special character, checked on the server (`kanban/passwords.agc`).
+  Usernames: 3 to 32 of letters, numbers, `.`, `_`, `-`.
+- First run: while `users` is empty, `/login` is the form that creates the
+  first user (`POST /register`). The insert has its own check (`insert ...
+  select ... where not exists (select 1 from users)`), so two visitors at
+  once cannot both register; the loser gets 403. With a user, `/register` is
+  closed and the page is only the sign-in form. There is no other way to add
+  a user.
+- Sign-in: the same answer (401) and the same scrypt work for an unknown user and
+  a wrong password; the key is compared in constant time. A username that
+  cannot exist (not 3 to 32 valid characters) gets the same 401 before the
+  limiter keeps anything. Limits per five-minute window, in memory
+  (`limiter.agc`): 30 tries per address, then 5 per username and address,
+  then 50 per username; past that, 429 with `Retry-After`. Keys are small (an
+  address or a SHA-256); a full table drops past windows and then refuses new
+  keys. At most four scrypt hashes run or wait at once; more get 429 at once.
+  The address is `remote_addr`: behind a proxy it is one bucket.
+- Cookie: `HttpOnly`, `SameSite=Lax`, `Secure` (and the `__Host-` name) with
+  `KANBAN_COOKIE_SECURE=1`. Logout deletes the session row. `Bond.csrf` refuses
+  a cross-site POST (`Sec-Fetch-Site` and `Origin`); the CLI sends neither.
+- `/cable` checks the same session in `connect`; the connection's identity is the
+  session key, and logout closes its sockets (`Channels.disconnect`).
 
 ### Repository layout
 
@@ -507,8 +538,8 @@ and a retry would duplicate it.
 
 ### Pages
 
-- `/login`: a form with the API key. A good key sets the session cookie and
-  sends you to `/`.
+- `/login`: a form with a username and a password (see "Web login"). A good
+  pair sets the session cookie and sends you to `/boards`.
 - `/`: the list of boards with counts per column and the number of claimed
   cards.
 - `/boards/:slug`: the columns side by side and the cards in them. A card
@@ -706,7 +737,7 @@ Built small (the owner asked for a minimal, fast dashboard): the view is
 read-only, the browser fetches the board again after each event, the list of
 boards is not live, and the build uses pnpm (`corepack pnpm`).
 
-- [x] Features first: `web.feature` (login sets the cookie, a wrong key
+- [x] Features first: `web.feature` (login sets the cookie, a wrong password
       does not, a page needs the session, the page names the fingerprinted
       assets) and `cable.feature`.
 - [x] `specs/fixtures/ws_client/cable_client.agc`: the browser of

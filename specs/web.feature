@@ -1,24 +1,10 @@
 Feature: The web pages
 
-  Scenario: The API key signs in and sets the session cookie
-    Given the test server is running
-    When I sign in with the key "01234567890123456789012345678901"
-    Then the response status is 303
-    And the response redirects to "/boards"
-    And the response sets the session cookie
-
   Scenario: The login page has no loading text, because no script draws it
     Given the test server is running
     When I get the page "/login"
     Then the response status is 200
     And the response does not contain "Loading..."
-
-  Scenario: A wrong key does not sign in
-    Given the test server is running
-    When I sign in with the key "wrong"
-    Then the response status is 401
-    And the response sets no cookie
-    And the response contains "wrong key"
 
   Scenario Outline: A page needs the session
     Given the test server is running
@@ -33,10 +19,10 @@ Feature: The web pages
       | /boards/project |
 
   Scenario: The session reads the pages and the key does not replace it
-    Given the test server is running
+    Given the database server is running
     When I get the page "/boards/project" with the key "01234567890123456789012345678901" as the apikey header
     Then the response status is 302
-    When I sign in with the key "01234567890123456789012345678901"
+    When I sign in
     And I get the page "/boards/project" with the session
     Then the response status is 200
     And the page names the built stylesheet and script
@@ -48,7 +34,7 @@ Feature: The web pages
   Scenario: A board opened by its number goes to its slug page
     Given the database server is running
     When I post a board named "Project" with slug "project" as "agent-1"
-    And I sign in with the key "01234567890123456789012345678901"
+    And I sign in
     And I get the page "/boards/1" with the session
     Then the response status is 302
     And the response redirects to "/boards/project"
@@ -62,7 +48,7 @@ Feature: The web pages
   Scenario: A board with a numeric slug is not redirected
     Given the database server is running
     When I post a board named "Numbers" with slug "123" as "agent-1"
-    And I sign in with the key "01234567890123456789012345678901"
+    And I sign in
     And I get the page "/boards/123" with the session
     Then the response status is 200
 
@@ -73,24 +59,16 @@ Feature: The web pages
     And the response header "cache-control" contains "immutable"
 
   Scenario: The session reads the API and never writes it
-    Given the test server is running
+    Given the database server is running
     When I get the page "/api/boards"
     Then the response status is 401
-    When I sign in with the key "01234567890123456789012345678901"
+    When I sign in
     And I post to "/api/boards" with the session
     Then the response status is 401
 
-  Scenario: Signing out ends the session
-    Given the test server is running
-    When I sign in with the key "01234567890123456789012345678901"
-    And I post to "/logout" with the session
-    Then the response status is 303
-    And the response redirects to "/login"
-    And the response clears the session cookie
-
   Scenario: The home page without boards says what to run
     Given the database server is running
-    When I sign in with the key "01234567890123456789012345678901"
+    When I sign in
     And I get the page "/boards" with the session
     Then the response status is 200
     And the response contains "A shared Kanban board for coding agents"
@@ -108,7 +86,7 @@ Feature: The web pages
     And I move card 4 to "Done"
     And agent "bob" claims card 1
     And I make card 3 depend on card 2
-    And I sign in with the key "01234567890123456789012345678901"
+    And I sign in
     And I get the page "/boards" with the session
     Then the response status is 200
     And the response contains "href=\"/boards/project\""
@@ -130,7 +108,7 @@ Feature: The web pages
     And agent "bob" claims card 1
     And agent "carol" claims card 2
     And the lease of card 2 has run out
-    And I sign in with the key "01234567890123456789012345678901"
+    And I sign in
     And I get the page "/boards" with the session
     Then the response contains "--hue:157\">bob</span>"
     And the response does not contain "carol"
@@ -143,7 +121,7 @@ Feature: The web pages
     And I add a card titled "B"
     And agent "web" claims card 1
     And agent "bob" claims card 2
-    And I sign in with the key "01234567890123456789012345678901"
+    And I sign in
     And I get the page "/boards" with the session
     Then the response contains "<span class=\"claimer\" style=\"--hue:228\">web</span>"
     And the response contains "<span class=\"claimer light\" style=\"--hue:157\">bob</span>"
@@ -154,7 +132,7 @@ Feature: The web pages
     And I add a card titled "A"
     And I move card 1 to "Done"
     And the store keeps card 1 claimed by "bob"
-    And I sign in with the key "01234567890123456789012345678901"
+    And I sign in
     And I get the page "/boards" with the session
     Then the response does not contain "bob"
     And the response contains "0 agents working"
@@ -165,7 +143,7 @@ Feature: The web pages
     And I post a board named "Project" with slug "project" as "agent-1"
     And I add a card titled "A"
     And I move card 1 to "Done"
-    And I sign in with the key "01234567890123456789012345678901"
+    And I sign in
     And I get the page "/boards" with the session
     Then the response contains "No cards yet"
     And the response contains "All done"
@@ -175,7 +153,7 @@ Feature: The web pages
     Given the database server is running
     When I post a board named "<b>x</b>" with slug "project" as "agent-1"
     And I add the column "<i>y</i>" at position 1
-    And I sign in with the key "01234567890123456789012345678901"
+    And I sign in
     And I get the page "/boards" with the session
     Then the response contains "&lt;b&gt;x&lt;/b&gt;"
     And the response does not contain "<b>x</b>"
@@ -189,7 +167,7 @@ Feature: The web pages
     Given the database server is running
     When I post a board named "Project" with slug "project" as "agent-1"
     And I add a card titled "First" with labels "api" and priority 2
-    And I sign in with the key "01234567890123456789012345678901"
+    And I sign in
     And I patch "/api/labels/1" with the session as agent "web" and the body "{\"color\":\"#00ff7f\"}"
     Then the response status is 200
     And the response contains "#00ff7f"

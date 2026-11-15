@@ -153,7 +153,7 @@ Feature: Archive the done cards, list the archived and unarchive
     And I add a card titled "Beta"
     And I move card 1 to "Done"
     And card 1 was done 5 days ago
-    And I sign in with the key "01234567890123456789012345678901"
+    And I sign in
     And I post "/api/cards/2/archive" with the session as agent "web" and the body "{}"
     Then the response status is 200
     And the response contains "\"archived_at\":"
@@ -184,7 +184,7 @@ Feature: Archive the done cards, list the archived and unarchive
     When I post a board named "Project" with slug "project" as "agent-1"
     And I add a card titled "First"
     And I move card 1 to "Done"
-    And I sign in with the key "01234567890123456789012345678901"
+    And I sign in
     And a live client with the session subscribes to the board "project"
     Then the live client receives a frame containing "confirm_subscription"
     When I run kanban "board archive-done --board project --days 0"

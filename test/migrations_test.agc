@@ -10,7 +10,7 @@ def test_schema_migrates_once() -> Result[Void]
   first = Migrate.up(conn, Migrations.all())
   second = Migrate.up(conn, Migrations.all())
   Db.close(conn)
-  try Test.eq(first, ok([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]))
+  try Test.eq(first, ok([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]))
   Test.eq(second, ok([]))
 end
 
@@ -31,7 +31,7 @@ def test_a_card_from_before_links_has_none() -> Result[Void]
     [],
   )
 
-  try Test.eq(Migrate.up(conn, Migrations.all()), ok([7, 8, 9, 10]))
+  try Test.eq(Migrate.up(conn, Migrations.all()), ok([7, 8, 9, 10, 11]))
   card = Cards.load_at(conn, 1, 2)
   Db.close(conn)
   Test.eq((try card).links, [])
@@ -53,7 +53,7 @@ end
 
 def test_migration_versions_are_consecutive() -> Result[Void]
   versions = Migrations.all().map do |migration| migration.version end
-  Test.eq(versions, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+  Test.eq(versions, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11])
 end
 
 def test_migration_files_are_all_listed() -> Result[Void]

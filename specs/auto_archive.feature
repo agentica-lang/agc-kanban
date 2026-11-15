@@ -33,7 +33,7 @@ Feature: Automatic archive of the done cards
     And kanban stderr contains "NOT_FOUND"
     When I run kanban without an agent "board auto-archive --board project --days 3"
     Then kanban exits with code 2
-    When I sign in with the key "01234567890123456789012345678901"
+    When I sign in
     And I post "/api/boards/project/auto-archive" with the session as agent "web" and the body "{\"days\":3}"
     Then the response status is 401
     When I get board events for "project" after 0
