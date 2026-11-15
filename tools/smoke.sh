@@ -2,8 +2,7 @@
 # Black-box smoke test of the board API. Without SMOKE_URL it starts the real
 # server on a temporary data directory and an ephemeral port; with SMOKE_URL
 # (and SMOKE_KEY) it runs against a target that is already up, such as the
-# compose network at http://172.28.0.10:4580. Run with `make smoke` or
-# `make smoke-docker`.
+# compose container (`make url`). Run with `make smoke` or `make smoke-docker`.
 set -uo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"

@@ -25,13 +25,17 @@ test: assets
 	node --test 'test/web/*.test.mjs'
 smoke:
 	tools/smoke.sh
+# The container's address: KANBAN_URL from the environment, or its IP on its first network (no port is published).
+KANBAN_URL ?= http://$$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}' agc-kanban | cut -d' ' -f1):4580
+url:
+	@echo "$(KANBAN_URL)"
 smoke-docker:
 	docker compose down -v
 	docker compose up -d --build --wait
-	SMOKE_URL=http://172.28.0.10:4580 SMOKE_KEY="$$(sed -n 's/^KANBAN_API_KEY=//p' .env)" tools/smoke.sh
+	SMOKE_URL="$(KANBAN_URL)" SMOKE_KEY="$$(sed -n 's/^KANBAN_API_KEY=//p' .env)" tools/smoke.sh
 	docker compose restart --timeout 10
-	@for i in $$(seq 1 60); do curl -sf http://172.28.0.10:4580/api/health >/dev/null && break; sleep 0.5; done
-	@curl -sf -H "apikey: $$(sed -n 's/^KANBAN_API_KEY=//p' .env)" http://172.28.0.10:4580/api/boards/project | grep -Fq '"slug":"project"' && echo "PASS the board survives a container restart"
+	@for i in $$(seq 1 60); do curl -sf "$(KANBAN_URL)/api/health" >/dev/null && break; sleep 0.5; done
+	@curl -sf -H "apikey: $$(sed -n 's/^KANBAN_API_KEY=//p' .env)" "$(KANBAN_URL)/api/boards/project" | grep -Fq '"slug":"project"' && echo "PASS the board survives a container restart"
 up:
 	docker compose up -d --build --wait
 down:
