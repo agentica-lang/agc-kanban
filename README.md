@@ -9,14 +9,29 @@ The design is in [plan.md](plan.md).
 
 ## Run the server
 
-With Docker (the compose file runs it at `172.28.0.10:4580` on a private
-network):
+With Docker (the compose file publishes no port; `make url` prints the container's address on this machine):
 
 ```sh
 cp .env.example .env   # then set KANBAN_API_KEY (openssl rand -hex 32)
 make up        # docker compose up -d --build --wait
 make down      # stop (the data volume stays)
 ```
+
+A machine's own network, fixed IP or published port goes in `docker-compose.override.yml`, which `docker compose` reads after `docker-compose.yml` and which is not in git. For example, a network that already exists and a fixed address:
+
+```yaml
+services:
+  kanban:
+    networks:
+      shared:
+        ipv4_address: 10.0.1.51
+networks:
+  shared:
+    name: apps
+    external: true
+```
+
+Or a port on this machine only: `ports: ["127.0.0.1:4580:4580"]` under `kanban`. Set `KANBAN_URL` (for example `http://10.0.1.51:4580`) if `make url` does not find the address you want.
 
 Without Docker (needs Agentica 0.31.0, Node and corepack):
 

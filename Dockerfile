@@ -1,5 +1,5 @@
 # Image of the agc-kanban server (API and live web): plain HTTP, SQLite in /data. Build with
-# `docker compose build`; the compose file runs it on the private 172.28.0.10.
+# `docker compose build`; the compose file runs it with no published port.
 # Stage 1 builds the stylesheet and the script, so Node and pnpm never reach the image. Stage 2 holds the tools that
 # must not reach it either: curl and git (`agentica install` fetches with git) and the C compiler that builds the
 # native SQLite driver of agentica-db.
