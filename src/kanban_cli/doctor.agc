@@ -1,6 +1,7 @@
 import OP from "std/option_parser"
 import Regex from "std/regex"
 import Client from "client"
+import Input from "input"
 import Output from "output"
 import Settings from "settings"
 import Support from "support"
@@ -22,6 +23,7 @@ def run(words: List[String]) -> Result[Void]
         help: "minutes without an event before a card in Doing is stale",
       ),
       Opt(name: "no-github", kind: Kind.Flag, help: "skip the checks that need gh"),
+      Opt(name: "cards", help: "check only these card ids, comma-separated"),
     ] +
     Settings.common_opts(),
   )
@@ -30,7 +32,12 @@ def run(words: List[String]) -> Result[Void]
   config = try Settings.load(Settings.read_flags(parsed))
   board = Support.board_of(config)
   client = Client.from(config)
+  only = try Input.ids(OP.optional_string(parsed, "cards"))
   cards = open_cards(client, config, board)
+  if not only.empty?
+    cards = cards.select do |card| only.include?(card.id) end
+  end
+
   stale_ms = OP.int(parsed, "stale-minutes") * 60000
   checked = not OP.flag(parsed, "no-github")
   remote: Map[String, Remote] = {}

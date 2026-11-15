@@ -13,6 +13,7 @@ def steps() -> List[BDD.Step]
     BDD.step("I run kanban doctor {string} while gh says {string}", &run_doctor),
     BDD.step("agent {string} sets the branch of card {int} to {string}", &set_branch),
     BDD.step("the fake claude answers {string}", &fake_claude_answers),
+    BDD.step("gh says {string}", &gh_says),
     BDD.step("the hook queue has {string}", &queue_has),
     BDD.step("I run the prompt-submit hook as agent {string} with a doctor that hangs", &prompt_submit_hung),
     BDD.step("the hung doctor and its child are gone", &hung_gone),
@@ -94,13 +95,15 @@ def record(ctx: BDD.Context, process: Process) -> BDD.Context
   BDD.set(with_err, "kanban_stderr", JSON.from(output.stderr))
 end
 
+def gh_says(ctx: BDD.Context, args: List[String]) -> BDD.Context = BDD.set(ctx, "gh_state", JSON.from(args[0]))
+
 def base_env(ctx: BDD.Context) -> Map[String, String]
   here = Path.cwd().unwrap!
   path = (
     "#{here}/specs/fixtures/hook_bin:#{here}/specs/fixtures/plugin_bin:#{System.env("PATH").unwrap_or("/usr/bin:/bin")}"
   )
 
-  {
+  env = {
     "KANBAN_URL": "http://127.0.0.1:#{port_of(ctx)}",
     "KANBAN_API_KEY": KEY,
     "KANBAN_BOARD": "project",
@@ -110,6 +113,15 @@ def base_env(ctx: BDD.Context) -> Map[String, String]
     "FAKE_GH_LOG": gh_log(ctx),
     "FAKE_CLAUDE_LOG": claude_log(ctx),
   }
+
+  state = BDD.get(ctx, "gh_state")
+  if state.ok? and JSON.string(state.unwrap!).unwrap! == "fail"
+    env = env.put("FAKE_GH_FAIL", "1")
+  elsif state.ok?
+    env = env.put("FAKE_GH_STATE", JSON.string(state.unwrap!).unwrap!)
+  end
+
+  env
 end
 
 def run_doctor(ctx: BDD.Context, args: List[String]) -> BDD.Context
@@ -149,12 +161,15 @@ def bash_input(command: String, output: String) -> Map[String, JSON.Value]
   }
 end
 
+# A literal \n in the feature is a line break of the command.
+def lines_of(command: String) -> String = command.split("\\n").join("\n")
+
 def post_tool(ctx: BDD.Context, args: List[String]) -> BDD.Context
-  run_hook(ctx, "post-tool", args[0], JSON.object(bash_input(args[1], args[2])))
+  run_hook(ctx, "post-tool", args[0], JSON.object(bash_input(lines_of(args[1]), args[2])))
 end
 
 def post_tool_subagent(ctx: BDD.Context, args: List[String]) -> BDD.Context
-  input = bash_input(args[0], args[1]).put("agent_id", JSON.from("a1"))
+  input = bash_input(lines_of(args[0]), args[1]).put("agent_id", JSON.from("a1"))
   run_hook(ctx, "post-tool", "coordinator", JSON.object(input))
 end
 

@@ -31,13 +31,21 @@ Feature: Drift hooks of the plugin
     When I get card 1
     Then the response does not contain "pull/7"
 
-  Scenario: A PR of another repository is not linked, whatever its branch
+  Scenario: A PR of another repository is not linked, and no card that is only about other repositories is offered
     When a card "x" is in "Doing" held by "worker" with the link "https://github.com/o/r/issues/3"
     And agent "worker" sets the branch of card 1 to "feat-x"
     And I run the post-tool hook as agent "worker" for the command "gh pr create --head feat-x" with the output "https://github.com/x/y/pull/7"
-    Then kanban stdout contains "is not linked on a card"
+    Then kanban exits with code 0
+    And kanban stdout is empty
     When I get card 1
     Then the response does not contain "pull/7"
+
+  Scenario: The hint offers the cards of the PR's repository and the cards with no link
+    When a card "x" is in "Doing" held by "worker" with the link "https://github.com/o/r/issues/3"
+    And a card "x" is in "Doing" held by "worker" with the link "https://github.com/x/y/issues/4"
+    And a card "x" is in "Doing" held by "worker" with the link ""
+    And I run the post-tool hook as agent "worker" for the command "gh pr create" with the output "https://github.com/x/y/pull/7"
+    Then kanban stdout contains "Link it to 2, 3, if it is"
 
   Scenario: An agent with two cards in Doing is told which cards could take the link, and nothing is written
     When a card "x" is in "Doing" held by "worker" with the link ""
@@ -68,13 +76,15 @@ Feature: Drift hooks of the plugin
   Scenario: A merged PR names the card that is not done, in the repository of the command
     When a card "x" is in "Review" held by "worker" with the link "https://github.com/o/r/pull/5"
     And a card "x" is in "Review" held by "worker" with the link "https://github.com/x/y/pull/5"
+    And gh says "{\"o/r#5\":\"merged\",\"x/y#5\":\"open-pull\"}"
     And I run the post-tool hook as agent "coordinator" for the command "gh pr merge 5 --merge -R o/r" with the output "✓ Merged pull request #5 (Fix it)"
-    Then kanban stdout contains "card 1 still in Review; mark it done"
+    Then kanban stdout contains "card 1 still in Review; next: kanban card done 1"
     And kanban output does not contain "card 2"
 
   Scenario: A merge by URL names the card of that repository
     When a card "x" is in "Review" held by "worker" with the link "https://github.com/o/r/pull/5"
     And a card "x" is in "Review" held by "worker" with the link "https://github.com/x/y/pull/5"
+    And gh says "{\"o/r#5\":\"open-pull\",\"x/y#5\":\"merged\"}"
     And I run the post-tool hook as agent "coordinator" for the command "gh pr merge https://github.com/x/y/pull/5 --squash" with the output "✓ Squashed and merged pull request #5 (Fix it)"
     Then kanban stdout contains "card 2 still in Review"
     And kanban output does not contain "card 1"
@@ -82,6 +92,7 @@ Feature: Drift hooks of the plugin
   Scenario: A merge with no argument takes the repository and number from what gh printed
     When a card "x" is in "Review" held by "worker" with the link "https://github.com/o/r/pull/5"
     And a card "x" is in "Review" held by "worker" with the link "https://github.com/x/y/pull/5"
+    And gh says "{\"o/r#5\":\"merged\",\"x/y#5\":\"open-pull\"}"
     And I run the post-tool hook as agent "coordinator" for the command "gh pr merge --squash" with the output "✓ Squashed and merged pull request o/r#5 (Fix it)"
     Then kanban stdout contains "card 1 still in Review"
     And kanban output does not contain "card 2"
@@ -93,6 +104,7 @@ Feature: Drift hooks of the plugin
 
   Scenario: A watch_ci run that merged is a merge, one that failed is not
     When a card "x" is in "Review" held by "worker" with the link "https://github.com/o/r/pull/5"
+    And gh says "{\"o/r#5\":\"merged\"}"
     And I run the post-tool hook as agent "coordinator" for the command "python3 watch_ci.py 5 --repo o/r --merge" with the output "verdict: failed (build)"
     Then kanban stdout is empty
     When I run the post-tool hook as agent "coordinator" for the command "python3 watch_ci.py 5 --repo o/r --merge" with the output "verdict: green (all passed; merged)"
@@ -100,8 +112,9 @@ Feature: Drift hooks of the plugin
 
   Scenario: A closed issue names the cards that link it
     When a card "x" is in "Todo" held by "" with the link "https://github.com/o/r/issues/9"
+    And gh says "{\"o/r#9\":\"closed\"}"
     And I run the post-tool hook as agent "coordinator" for the command "gh issue close 9 -R o/r" with the output "✓ Closed issue o/r#9 (Title)"
-    Then kanban stdout contains "card 1 still in Todo; mark it done"
+    Then kanban stdout contains "card 1 still in Todo; next: kanban card done 1"
 
   Scenario: The coordinator gets the drift of the board, at most every ten minutes
     When a card "x" is in "Review" held by "worker" with the link ""
@@ -176,3 +189,61 @@ Feature: Drift hooks of the plugin
     Then kanban exits with code 0
     And the fake claude was run with "REPORT: PR 9 opened, CI green"
     And the hook queue contains "card 1 (worker stopped, now in Doing): suggested Review - PR open"
+
+  Scenario: A merged PR of a parent card whose issue is still open says nothing in Todo and a slice hint in Doing
+    When a card "x" is in "Todo" held by "" with the link "https://github.com/o/r/issues/9"
+    And agent "agent-1" links card 1 to "https://github.com/o/r/pull/5"
+    And a card "x" is in "Doing" held by "worker" with the link "https://github.com/o/r/issues/9"
+    And agent "worker" links card 2 to "https://github.com/o/r/pull/5"
+    And gh says "{\"o/r#9\":\"open\",\"o/r#5\":\"merged\"}"
+    And I run the post-tool hook as agent "coordinator" for the command "gh pr merge 5 -R o/r" with the output "✓ Merged pull request #5 (Slice)"
+    Then kanban stdout contains "card 2 still in Doing; next: kanban card move 2 Todo for the next slice, or kanban card done 2 if the issue is finished"
+    And kanban output does not contain "card 1"
+
+  Scenario: A merge notice is silent when gh cannot be read
+    When a card "x" is in "Review" held by "worker" with the link "https://github.com/o/r/pull/5"
+    And gh says "fail"
+    And I run the post-tool hook as agent "coordinator" for the command "gh pr merge 5 -R o/r" with the output "✓ Merged pull request #5 (Slice)"
+    Then kanban exits with code 0
+    And kanban stdout is empty
+
+  Scenario: A flag inside the quoted body of a PR is not a flag
+    When a card "x" is in "Doing" held by "worker" with the link "https://github.com/o/r/issues/3"
+    And agent "worker" sets the branch of card 1 to "feat-x"
+    And I run the post-tool hook as agent "worker" for the command "gh pr create --body 'built with -H feat-x' --title t" with the output "https://github.com/o/r/pull/7"
+    Then kanban stdout contains "is not linked on a card"
+    When I get card 1
+    Then the response does not contain "pull/7"
+    When I run the post-tool hook as agent "worker" for the command "gh pr create --body 'built with -H other' --head=feat-x && echo done" with the output "https://github.com/o/r/pull/7"
+    Then kanban stdout contains "linked https://github.com/o/r/pull/7 to card 1"
+
+  Scenario: A command that only quotes gh pr create is not one
+    When a card "x" is in "Doing" held by "worker" with the link "https://github.com/o/r/issues/3"
+    And I run the post-tool hook as agent "worker" for the command "echo 'run gh pr create later'" with the output "https://github.com/o/r/pull/7"
+    Then kanban stdout is empty
+
+  Scenario: A card id that is a boolean in the answer of Haiku is dropped
+    When a card "x" is in "Doing" held by "worker" with the link ""
+    And the fake claude answers "[{\"card\": true, \"suggest\": \"Todo\", \"reason\": \"x\"}]"
+    And I run the subagent-stop hook for a transcript that starts with "You are worker (KANBAN_AGENT=worker)." and ends with "done"
+    Then kanban exits with code 0
+    And the hook queue is empty
+
+  Scenario: A line break ends a command, and inside quotes it stays in the argument
+    When a card "x" is in "Review" held by "worker" with the link "https://github.com/x/y/pull/5"
+    And gh says "{\"x/y#5\":\"merged\"}"
+    And I run the post-tool hook as agent "coordinator" for the command "gh pr merge 5\\ngh pr view 5 -R x/y" with the output "✓ Merged pull request #5 (Fix it)"
+    Then kanban exits with code 0
+    And kanban stdout is empty
+    When a card "x" is in "Doing" held by "worker" with the link "https://github.com/o/r/issues/3"
+    And agent "worker" sets the branch of card 2 to "feat-x"
+    And I run the post-tool hook as agent "worker" for the command "gh pr create --body 'built\\nwith -H other' --head feat-x" with the output "https://github.com/o/r/pull/7"
+    Then kanban stdout contains "linked https://github.com/o/r/pull/7 to card 2"
+
+  Scenario: gh counts only as the command word, by name or by path
+    When a card "x" is in "Doing" held by "worker" with the link "https://github.com/o/r/issues/3"
+    And agent "worker" sets the branch of card 1 to "feat-x"
+    And I run the post-tool hook as agent "worker" for the command "echo gh pr create --head feat-x" with the output "https://github.com/o/r/pull/7"
+    Then kanban stdout is empty
+    When I run the post-tool hook as agent "worker" for the command "GH_TOKEN=t /usr/bin/gh pr create --head feat-x" with the output "https://github.com/o/r/pull/7"
+    Then kanban stdout contains "linked https://github.com/o/r/pull/7 to card 1"

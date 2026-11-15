@@ -6,6 +6,7 @@ Every path swallows its errors and ends with exit 0: a hook must never block a s
 import json
 import os
 import re
+import shlex
 import signal
 import subprocess
 import sys
@@ -14,6 +15,7 @@ import time
 KANBAN_TIMEOUT = 10
 DOCTOR_TIMEOUT = float(os.environ.get("KANBAN_DOCTOR_TIMEOUT") or 25)
 DOCTOR_EVERY = 600
+LINK_CHECK_TIMEOUT = 12
 HAIKU_TIMEOUT = 40
 MAX_LINES = 15
 NAME = r"[A-Za-z0-9._@/-]{1,64}"
@@ -110,9 +112,99 @@ def current_branch(cwd):
     return done.stdout.strip()
 
 
-def repo_flag(command):
-    found = re.search(r"(?:-R|--repo)[ =]+([\w.-]+/[\w.-]+)", command)
-    return found.group(1) if found else None
+OPERATORS = set("();<>|&\n")
+REPO = re.compile(r"^[\w.-]+/[\w.-]+$")
+MERGE_VALUED = {"-R", "--repo", "-b", "--body", "-F", "--body-file", "-t", "--subject", "-A", "--author-email", "--match-head-commit"}
+CLOSE_VALUED = {"-R", "--repo", "-c", "--comment", "-r", "--reason"}
+WATCH_VALUED = {"--repo", "--sha", "--require", "--interval", "--timeout", "--grace", "--stuck-after", "--checkout"}
+
+
+def segments(command):
+    """The simple commands of a shell line, as lists of words with the quotes resolved: text inside a quoted
+    argument (a PR body that says `-H x`) is one word and never a flag."""
+    try:
+        # A newline ends a command, as `;` does; inside quotes it stays in the word.
+        lexer = shlex.shlex(command, posix=True, punctuation_chars="();<>|&\n")
+        lexer.whitespace = " \t\r"
+        lexer.whitespace_split = True
+        words = list(lexer)
+    except ValueError:
+        return []
+    found, current = [], []
+    for word in words:
+        if word and set(word) <= OPERATORS:
+            found.append(current)
+            current = []
+        else:
+            current.append(word)
+    found.append(current)
+    return found
+
+
+def command_words(words):
+    """The words of a simple command from its command word on: leading `NAME=value` assignments are dropped."""
+    start = 0
+    while start < len(words) and re.match(r"^[A-Za-z_]\w*=", words[start]):
+        start += 1
+    return words[start:]
+
+
+def gh_args(command, *sub):
+    """The arguments of the first `gh ... SUB` command of the line, without the subcommand words, or None. `gh`
+    (or a path that ends in /gh) must be the command word: `echo gh pr create` is not a command."""
+    for words in segments(command):
+        words = command_words(words)
+        if words and os.path.basename(words[0]) == "gh":
+            rest = words[1:]
+            for index in range(len(rest) - len(sub) + 1):
+                if rest[index : index + len(sub)] == list(sub):
+                    return rest[:index] + rest[index + len(sub) :]
+    return None
+
+
+def script_args(command, script):
+    """The arguments of a command that runs `script`: it is the command word or the one after an interpreter."""
+    for words in segments(command):
+        words = command_words(words)
+        for start, word in enumerate(words[:2]):
+            if os.path.basename(word) == script:
+                return words[start + 1 :]
+    return None
+
+
+def flag(args, names):
+    """The value of a flag: `--name value`, `--name=value` or `-Nvalue`."""
+    for index, arg in enumerate(args):
+        for name in names:
+            if arg == name and index + 1 < len(args):
+                return args[index + 1]
+            if name.startswith("--") and arg.startswith(name + "="):
+                return arg[len(name) + 1 :]
+            if not name.startswith("--") and arg.startswith(name) and len(arg) > len(name) and not arg.startswith("--"):
+                return arg[len(name) :]
+    return None
+
+
+def positional(args, valued):
+    skip = False
+    for arg in args:
+        if skip:
+            skip = False
+        elif arg.startswith("-"):
+            skip = arg in valued
+        else:
+            return arg
+    return None
+
+
+def repo_flag(args):
+    repo = flag(args, ["--repo", "-R"])
+    return repo if repo and REPO.match(repo) else None
+
+
+def head_flag(args):
+    head = flag(args, ["--head", "-H"])
+    return head.split(":", 1)[-1] if head else None
 
 
 def item_cards(cards, kind, number, repo):
@@ -126,11 +218,6 @@ def item_cards(cards, kind, number, repo):
                 found.append(card)
                 break
     return found
-
-
-def head_flag(command):
-    found = re.search(r"(?:--head|-H)[ =]+[\"']?(?:[\w.-]+:)?([^\s\"']+)", command)
-    return found.group(1) if found else None
 
 
 def link_repos(card):
@@ -148,7 +235,7 @@ def card_matches(card, repo, head):
     return bool(branch) and branch == head and repo.lower() in repos
 
 
-def pr_created(data, command, text):
+def pr_created(data, args, text):
     match = PULL_URL.search(text)
     if not match:
         return ""
@@ -158,10 +245,14 @@ def pr_created(data, command, text):
     if any(url in card.get("links", []) for card in cards):
         return ""
     agent, candidates = whose_cards(data, cards)
-    head = head_flag(command) or current_branch(data.get("cwd") or "")
+    # A card that links other repositories only cannot be this PR's.
+    candidates = [card for card in candidates if not link_repos(card) or repo.lower() in link_repos(card)]
+    head = head_flag(args) or current_branch(data.get("cwd") or "")
     sure = [card for card in candidates if head and card_matches(card, repo, head)]
     if len(sure) != 1:
-        which = ", ".join(str(card["id"]) for card in candidates) or "its card"
+        if not candidates:
+            return ""
+        which = ", ".join(str(card["id"]) for card in candidates)
         return (
             f"agc-kanban: PR {url} is not linked on a card. Link it to {which}, if it is the card's PR: "
             f"kanban card update ID --link {url}"
@@ -181,64 +272,63 @@ def whose_cards(data, cards):
     return agent, [card for card in doing if card.get("claimed_by") == agent] if agent else doing
 
 
-def not_done_notice(cards, what, number_kind, number, repo, hint):
-    lines = [
-        f"agc-kanban: card {card['id']} still in {card['column']}; {hint}"
-        for card in item_cards(cards, number_kind, number, repo)
-    ]
-    if not lines:
+def link_notice(what, kind, number, repo):
+    """The cards that link the item and that `kanban doctor` finds drifted, so the rule (a card whose issue is still
+    open is a part of it) is the doctor's and is written once."""
+    linked = item_cards(open_cards(), kind, number, repo)
+    if not linked:
         return ""
-    return f"agc-kanban: {what}.\n" + "\n".join(lines)
+    ids = ",".join(str(card["id"]) for card in linked)
+    _, out = kanban("doctor", "--json", "--cards", ids, timeout=LINK_CHECK_TIMEOUT)
+    report = json.loads(out)
+    if not report.get("github"):
+        return ""
+    lines = [
+        f"card {f['card']} still in {f['column']}; next: {clean(f['action'], 200)}"
+        for f in report["findings"]
+        if f["kind"] in ("pr-merged", "issue-closed")
+    ]
+    return f"agc-kanban: {what}.\n" + "\n".join(lines) if lines else ""
 
 
 def merged_pull(data, command, text):
-    repo = repo_flag(command)
-    numbers = []
-    if re.search(r"watch_ci", command):
+    repo, number = None, None
+    watch = script_args(command, "watch_ci.py")
+    if watch is not None:
         if not re.search(r"verdict: green \([^)]*merged", text):
             return ""
-        found = re.search(r"watch_ci\.py\s+(?:\S+\s+)*?(\d+)(?:\s|$)", command)
-        numbers = [found.group(1)] if found else []
+        repo, number = repo_flag(watch), positional(watch, WATCH_VALUED)
     else:
-        if not re.search(r"merged pull request", text, re.I):
+        args = gh_args(command, "pr", "merge")
+        if args is None or not re.search(r"merged pull request", text, re.I):
             return ""
-        arg = re.search(r"pr\s+merge\s+(?:-\S+\s+)*(\S+)", command)
-        url = PULL_URL.search(arg.group(1)) if arg else None
+        repo, arg = repo_flag(args), positional(args, MERGE_VALUED) or ""
+        url = PULL_URL.search(arg)
         if url:
-            repo, numbers = f"{url.group(1)}/{url.group(2)}", [url.group(3)]
-        elif arg and arg.group(1).isdigit():
-            numbers = [arg.group(1)]
+            repo, number = f"{url.group(1)}/{url.group(2)}", url.group(3)
+        elif arg.isdigit():
+            number = arg
         else:
             said = re.search(r"merged pull request (?:([\w.-]+/[\w.-]+))?#(\d+)", text, re.I)
             if said:
-                repo, numbers = said.group(1) or repo, [said.group(2)]
-    if not numbers:
+                repo, number = said.group(1) or repo, said.group(2)
+    if not number or not number.isdigit():
         return ""
-    repo = repo or origin_repo(data.get("cwd"))
-    cards = open_cards()
-    return not_done_notice(
-        cards, f"PR {numbers[0]} is merged", "pull", numbers[0], repo, "mark it done (the coordinator does)"
-    )
+    return link_notice(f"PR {number} is merged", "pull", number, repo or origin_repo(data.get("cwd")))
 
 
-def closed_issue(data, command, text):
+def closed_issue(data, args, text):
     if not re.search(r"closed issue", text, re.I):
         return ""
-    arg = re.search(r"issue\s+close\s+(?:-\S+\s+)*(\S+)", command)
-    repo = repo_flag(command)
-    number = None
-    if arg:
-        url = re.search(r"github\.com/([\w.-]+/[\w.-]+)/issues/(\d+)", arg.group(1))
-        if url:
-            repo, number = url.group(1), url.group(2)
-        elif arg.group(1).lstrip("#").isdigit():
-            number = arg.group(1).lstrip("#")
-    if not number:
+    repo, arg = repo_flag(args), positional(args, CLOSE_VALUED) or ""
+    url = re.search(r"github\.com/([\w.-]+/[\w.-]+)/issues/(\d+)", arg)
+    if url:
+        repo, number = url.group(1), url.group(2)
+    else:
+        number = arg.lstrip("#")
+    if not number.isdigit():
         return ""
-    repo = repo or origin_repo(data.get("cwd"))
-    return not_done_notice(
-        open_cards(), f"issue {number} is closed", "issues", number, repo, "mark it done (the coordinator does)"
-    )
+    return link_notice(f"issue {number} is closed", "issues", number, repo or origin_repo(data.get("cwd")))
 
 
 def safely(function, *args):
@@ -253,12 +343,14 @@ def post_tool(data):
     if data.get("tool_name") == "Bash":
         command = (data.get("tool_input") or {}).get("command") or ""
         text = response_text(data)
-        if re.search(r"\bgh\s+(?:-\S+\s+\S+\s+)*pr\s+create\b", command):
-            texts.append(safely(pr_created, data, command, text))
-        if re.search(r"\bgh\s+(?:-\S+\s+\S+\s+)*pr\s+merge\b|watch_ci", command):
+        created = gh_args(command, "pr", "create")
+        if created is not None:
+            texts.append(safely(pr_created, data, created, text))
+        if gh_args(command, "pr", "merge") is not None or script_args(command, "watch_ci.py") is not None:
             texts.append(safely(merged_pull, data, command, text))
-        if re.search(r"\bgh\s+(?:-\S+\s+\S+\s+)*issue\s+close\b", command):
-            texts.append(safely(closed_issue, data, command, text))
+        closed = gh_args(command, "issue", "close")
+        if closed is not None:
+            texts.append(safely(closed_issue, data, closed, text))
     if is_coordinator(data):
         texts.append(take_queue().strip())
     say("PostToolUse", "\n".join(text for text in texts if text))
@@ -387,7 +479,10 @@ def parse_suggestions(text, wanted):
     found = {}
     for item in json.loads(text[start : end + 1]):
         try:
-            card, suggest = int(item["card"]), item["suggest"]
+            card, suggest = item["card"], item["suggest"]
+            if isinstance(card, bool) or not isinstance(card, (int, str)):
+                continue
+            card = int(card)
             if card in wanted and suggest in SUGGESTIONS:
                 found[card] = (suggest, clean(item.get("reason", ""), 200))
         except (TypeError, ValueError, KeyError, AttributeError):
