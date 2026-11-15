@@ -68,6 +68,17 @@ Feature: The web login
       | Abcdefgh!          | needs a number                                  |
       | Abcdefg12          | needs a special character                       |
 
+  Scenario Outline: Any character that is not a letter or a number is special
+    Given the database server is running
+    When I register the user "owner" with the password "<password>"
+    Then the response status is 303
+    And the store has 1 users
+
+    Examples:
+      | password |
+      | Abcdef 1 |
+      | Abcdef1€ |
+
   Scenario: Every broken rule is named at once
     Given the database server is running
     When I register the user "owner" with the password "abc"
@@ -142,7 +153,7 @@ Feature: The web login
     Then the response status is 401
     And the response sets no cookie
 
-  Scenario: Too many wrong tries are refused, even with the right password
+  Scenario: Too many wrong tries of one user from one address are refused, even with the right password
     Given the database server is running
     When I register the user "owner" with the password "Sup3r-secret!"
     And I try to sign in 5 times as "owner" with the password "Wrong-pass1!"
@@ -162,11 +173,34 @@ Feature: The web login
     When I get the page "/boards" with the session
     Then the response status is 200
 
-  Scenario: A form from another site cannot sign in or register
+  Scenario Outline: A form from another site cannot sign in or register
     Given the database server is running
-    When I post to "/register" with the cookie and the origin "https://evil.example"
+    When I post to "<path>" with the cookie and the origin "https://evil.example"
     Then the response status is 403
     And the store has 0 users
+
+    Examples:
+      | path      |
+      | /register |
+      | /login    |
+
+  Scenario: A username that cannot exist is refused at once and counts for nothing
+    Given the database server is running
+    When I register the user "owner" with the password "Sup3r-secret!"
+    And I try to sign in 40 times as "an-account-name-that-is-longer-than-thirty-two" with the password "Wrong-pass1!"
+    Then the response status is 401
+    And the response contains "Invalid username or password."
+    When I sign in as "owner" with the password "Sup3r-secret!"
+    Then the response status is 303
+    And the response sets the session cookie
+
+  Scenario: Logins past the hash cap are refused at once with a retry time
+    Given the database server is running
+    When I register the user "owner" with the password "Sup3r-secret!"
+    And sixteen visitors sign in at once
+    Then some were refused as busy and some were answered
+    When I sign in as "owner" with the password "Sup3r-secret!"
+    Then the response status is 303
 
   Scenario: The CLI and the API key keep working with a user registered
     Given the database server is running

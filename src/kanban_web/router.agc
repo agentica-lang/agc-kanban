@@ -1,6 +1,7 @@
 import Archives from "controllers/archives"
 import Boards from "controllers/boards"
 import Bond from "pkg/bond/bond"
+import Cable from "cable"
 import Cards from "controllers/cards"
 import Claims from "controllers/claims"
 import Columns from "controllers/columns"
@@ -13,14 +14,14 @@ import Labels from "controllers/labels"
 import Pages from "controllers/pages"
 import Routes from "routes"
 
-def install(app: Bond.App, pool: Optional[Database.Pool], lease_minutes: Int) -> Bond.App
+def install(app: Bond.App, pool: Optional[Database.Pool], lease_minutes: Int, cable: Cable.Cable) -> Bond.App
   (
     app
     |> Bond.get(Routes.ROOT, &Pages.root)
     |> Bond.get(Routes.LOGIN, ->(conn) { Pages.login_form(conn, pool) })
     |> Bond.post(Routes.LOGIN, ->(conn) { Pages.login(conn, pool) })
     |> Bond.post(Routes.REGISTER, ->(conn) { Pages.register(conn, pool) })
-    |> Bond.post(Routes.LOGOUT, ->(conn) { Pages.logout(conn, pool) })
+    |> Bond.post(Routes.LOGOUT, ->(conn) { Pages.logout(conn, pool, cable) })
     |> Bond.get(Routes.BOARDS_PAGE, ->(conn) { Pages.boards(conn, pool) })
     |> Bond.get(Routes.BOARD_PAGE, ->(conn) { Pages.board(conn, pool) })
     |> Bond.get(Routes.HEALTH, ->(conn) { Health.health(conn) })

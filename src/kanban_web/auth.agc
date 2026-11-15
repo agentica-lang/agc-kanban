@@ -22,12 +22,18 @@ end
 def new_session_id() -> String = OpenSSL.Random.hex(SESSION_ID_BYTES)
 
 ## The connection carries a signed cookie with the id of a session that is stored and has not ended.
-def signed_in?(conn: Bond.Conn, pool: Optional[Database.Pool]) -> Bool
-  token = Bond.get_session(conn, SESSION_ID).unwrap_or("")
-  return false if token.empty? or not pool.some?
+def signed_in?(conn: Bond.Conn, pool: Optional[Database.Pool]) -> Bool = session_key(conn, pool).some?
 
-  found = Users.session_user(pool.unwrap!, Users.token_hash(token), Time.now_ms())
-  found.ok? and found.unwrap!.some?
+## The key of that session (the hash of its id, which the store keeps), or none when the connection has none.
+def session_key(conn: Bond.Conn, pool: Optional[Database.Pool]) -> Optional[String]
+  token = Bond.get_session(conn, SESSION_ID).unwrap_or("")
+  return none if token.empty? or not pool.some?
+
+  key = Users.token_hash(token)
+  found = Users.session_user(pool.unwrap!, key, Time.now_ms())
+  return some(key) if found.ok? and found.unwrap!.some?
+
+  none
 end
 
 ## The connection with a fresh cookie that holds `session_id` (nothing of an earlier session is kept). The caller

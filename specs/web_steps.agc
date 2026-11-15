@@ -13,6 +13,7 @@ import AssetNames from "../src/kanban_web/asset_names"
 struct Reply
   status: Int
   cookies: Int
+  retry: Bool
 end
 
 def steps() -> List[BDD.Step]
@@ -27,6 +28,8 @@ def steps() -> List[BDD.Step]
     BDD.step("I try to sign in {int} times as {string} with the password {string}", &sign_in_times),
     BDD.step("I post to {string} with the cookie and the origin {string}", &post_with_origin),
     BDD.step("two visitors register at once", &register_race),
+    BDD.step("sixteen visitors sign in at once", &sign_in_race),
+    BDD.step("some were refused as busy and some were answered", &assert_busy),
     BDD.step("the response has {int} sign-ins and {int} refusals", &assert_race),
     BDD.step("the store has {int} users", &users_count),
     BDD.step("the store has {int} sessions", &sessions_count),
@@ -159,20 +162,44 @@ def register_race(ctx: BDD.Context, _args: List[String]) -> BDD.Context
 end
 
 def race_register(port: Int, name: String) -> Result[Reply]
+  race_post(port, "/register", form([name, TEST_PASSWORD, TEST_PASSWORD]))
+end
+
+# Sixteen made-up users sign in together: only four may hash at once, the rest are refused with 429 at once.
+def sign_in_race(ctx: BDD.Context, _args: List[String]) -> BDD.Context
+  port = port_of(ctx)
+  names = (1..16).map { |n| "visitor#{n}" }
+  replies = Task.map(names, 16, 120000) do |name| race_post(port, "/login", sign_in_form(name)) end
+  statuses: List[Reply] = []
+  for reply in replies
+    statuses = statuses.push(reply.unwrap!)
+  end
+
+  BDD.set(ctx, "race", JSON.from(statuses))
+end
+
+def sign_in_form(name: String) -> String = URI.encode_www_form(pairs(["username", "password"], [name, "Wrong-pass1!"]))
+
+def race_post(port: Int, path: String, body: String) -> Result[Reply]
   client = try HTTP.client()
   headers = [HTTP.Header(name: "Content-Type", value: "application/x-www-form-urlencoded")]
-  response = HTTP.request(
-    client,
-    "POST",
-    "http://127.0.0.1:#{port}/register",
-    form([name, TEST_PASSWORD, TEST_PASSWORD]).bytes,
-    headers,
-  )
-
+  response = HTTP.request(client, "POST", "http://127.0.0.1:#{port}#{path}", body.bytes, headers)
   HTTP.close_client(client)
   reply = try response
   cookies = reply.headers.select { |field| field.name == "set-cookie" }
-  ok(Reply(status: reply.status, cookies: cookies.size))
+  retry = reply.headers.any? { |field| field.name == "retry-after" }
+  ok(Reply(status: reply.status, cookies: cookies.size, retry: retry))
+end
+
+def assert_busy(ctx: BDD.Context, _args: List[String]) -> BDD.Context
+  replies = JSON.decode(BDD.get(ctx, "race").unwrap!, List[Reply]).unwrap!
+  busy = replies.select { |reply| reply.status == 429 and reply.retry }
+  answered = replies.select { |reply| reply.status == 401 }
+  BDD.assert(
+    ctx,
+    not busy.empty? and not answered.empty? and busy.size + answered.size == 16,
+    "replies were #{JSON.encode(JSON.from(replies))}",
+  )
 end
 
 def assert_race(ctx: BDD.Context, args: List[String]) -> BDD.Context

@@ -22,3 +22,11 @@ Feature: Live board updates
     And I post to "/logout" with the session
     And a live client with the session subscribes to the board "project"
     Then the live client receives a frame containing "unauthorized"
+
+  Scenario: Signing out closes the live view of the session
+    Given the database server is running
+    When I sign in
+    And a live client with the session subscribes to the board "project"
+    Then the live client receives a frame containing "confirm_subscription"
+    When I post to "/logout" with the session
+    Then the live client receives a frame containing "remote"

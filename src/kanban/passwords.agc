@@ -25,8 +25,8 @@ def problems(password: String) -> List[String]
     found = found.push("needs a number (0-9)")
   end
 
-  if not special?(password)
-    found = found.push("needs a special character such as ! @ # $ % & * - _ ?")
+  if not Regex.match?(password, /[^A-Za-z0-9]/)
+    found = found.push("needs a special character (any that is not a letter or a number, such as ! @ # $ % & * - _ ?)")
   end
 
   found
@@ -59,10 +59,6 @@ KEY_BYTES = 32
 NOBODY = (
   "scrypt$131072$8$1$00000000000000000000000000000000$0000000000000000000000000000000000000000000000000000000000000000"
 )
-
-SPECIALS = "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~"
-
-def special?(password: String) -> Bool = password.split("").any? { |char| SPECIALS.include?(char) }
 
 def matches(password: String, stored: String) -> Result[Bool]
   parts = stored.split("$")

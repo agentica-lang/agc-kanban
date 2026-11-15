@@ -53,6 +53,12 @@ def mount(app: Bond.App, cable: Cable) -> Bond.App
   Channels.mount(app, Routes.CABLE, cable.hub, options).unwrap!
 end
 
+## Closes the live sockets of the session whose key is `session_key` (`Auth.session_key`): a sign-out takes the live
+## view away at once, not at the next reconnect.
+def end_session(cable: Cable, session_key: String) -> Void
+  _ = Channels.disconnect(cable.hub, session_key, false)
+end
+
 ## Tells the publisher that a write may have added events. Only the nudge that sets the flag is sent.
 def nudge(_cable: Cable) -> Void
   return if not NAMES.get(NAME).ok?
@@ -84,9 +90,10 @@ end
 
 # The session was checked at the handshake: no session is an `unauthorized` disconnect, and the client stays out.
 def connect(conn: Bond.Conn, pool: Optional[Database.Pool]) -> Result[Channels.Identity]
-  return error("no session") if not Auth.signed_in?(conn, pool)
+  key = Auth.session_key(conn, pool)
+  return error("no session") if not key.some?
 
-  ok(Channels.Identity(id: "web", data: JSON.from("web")))
+  ok(Channels.Identity(id: key.unwrap!, data: JSON.from("web")))
 end
 
 def board_subscribed(session: Channels.Session, params: JSON.Value) -> Result[Channels.Subscription]

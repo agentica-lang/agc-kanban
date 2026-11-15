@@ -1,6 +1,7 @@
 import Bond from "pkg/bond/bond"
 import Regex from "std/regex"
 import Auth from "../auth"
+import Cable from "../cable"
 import Limiter from "../limiter"
 import Passwords from "../../kanban/passwords"
 import Users from "../../kanban/users"
@@ -19,33 +20,26 @@ def login_form(conn: Bond.Conn, pool: Optional[Database.Pool]) -> Result[Bond.Co
 end
 
 ## Signs in with a username and a password. An unknown user and a wrong password get the same answer, and the same
-## work, so the answer does not tell which usernames exist. Too many tries of one username or one address get 429.
+## work, so the answer does not tell which usernames exist. Too many tries from one address, of one username from one
+## address, or of one username get 429; so does a login while the server hashes as many as it allows.
 def login(conn: Bond.Conn, pool: Optional[Database.Pool]) -> Result[Bond.Conn]
   return ok(unavailable(conn)) if not pool.some?
 
   name = Users.normalize(Bond.form(conn, "username").unwrap_or(""))
   password = Bond.form(conn, "password").unwrap_or("")
+  # No user can have such a name: the answer is the usual one, before the limiter keeps anything about it.
+  return ok(refused(conn, pool, "")) if Users.username_problem(name).some?
+
   now = Time.now_ms()
-  if (
-    not Limiter.attempt("user:#{name}", USER_ATTEMPTS, now) or
-    not Limiter.attempt(address_key(conn), ADDRESS_ATTEMPTS, now)
-  )
-    return ok(too_many(conn, now))
+  return ok(too_many(conn, now)) if not Limiter.login_allowed?(name, conn.remote_addr, now)
+  return ok(busy(conn)) if not Limiter.start_hash()
+
+  checked = authenticate(pool.unwrap!, name, password)
+  Limiter.end_hash()
+  case checked
+    ok(account) -> ok(answer_login(conn, pool.unwrap!, name, account, now))
+    error(_) -> ok(unavailable(conn))
   end
-
-  found = Users.find(pool.unwrap!, name)
-  return ok(unavailable(conn)) if not found.ok?
-
-  if not password_matches?(found.unwrap!, password)
-    return ok(entry(conn, pool, 401, ["Invalid username or password."], name))
-  end
-
-  session_id = Auth.new_session_id()
-  opened = Users.open_session(pool.unwrap!, found.unwrap!.unwrap!.id, Users.token_hash(session_id), now)
-  return ok(unavailable(conn)) if not opened.ok?
-
-  Limiter.forgive("user:#{name}", now)
-  ok(Bond.redirect(Auth.with_session(conn, session_id), "/boards", 303))
 end
 
 ## Creates the first user and signs it in. Once a user exists it answers 403 and the page is the sign-in form.
@@ -53,7 +47,7 @@ def register(conn: Bond.Conn, pool: Optional[Database.Pool]) -> Result[Bond.Conn
   return ok(unavailable(conn)) if not pool.some?
 
   now = Time.now_ms()
-  return ok(too_many(conn, now)) if not Limiter.attempt(address_key(conn), ADDRESS_ATTEMPTS, now)
+  return ok(too_many(conn, now)) if not Limiter.register_allowed?(conn.remote_addr, now)
 
   taken = Users.any?(pool.unwrap!)
   return ok(unavailable(conn)) if not taken.ok?
@@ -65,7 +59,10 @@ def register(conn: Bond.Conn, pool: Optional[Database.Pool]) -> Result[Bond.Conn
   notes = register_notes(name, password, confirm)
   return ok(Bond.html(conn, 400, Views.register(notes, name))) if not notes.empty?
 
+  return ok(busy(conn)) if not Limiter.start_hash()
+
   hashed = Passwords.hash(password)
+  Limiter.end_hash()
   return ok(unavailable(conn)) if not hashed.ok?
 
   session_id = Auth.new_session_id()
@@ -77,10 +74,16 @@ def register(conn: Bond.Conn, pool: Optional[Database.Pool]) -> Result[Bond.Conn
   end
 end
 
-## Ends the session: its row is deleted, so the cookie is no good even if someone kept a copy. Without a session, the
-## filter already sent the client to the login.
-def logout(conn: Bond.Conn, pool: Optional[Database.Pool]) -> Result[Bond.Conn]
-  ok(Bond.redirect(Auth.sign_out(conn, pool), "/login", 303))
+## Ends the session: its row is deleted, so the cookie is no good even if someone kept a copy, and its live sockets
+## are closed. Without a session, the filter already sent the client to the login.
+def logout(conn: Bond.Conn, pool: Optional[Database.Pool], cable: Cable.Cable) -> Result[Bond.Conn]
+  key = Auth.session_key(conn, pool)
+  signed_out = Auth.sign_out(conn, pool)
+  if key.some?
+    Cable.end_session(cable, key.unwrap!)
+  end
+
+  ok(Bond.redirect(signed_out, "/login", 303))
 end
 
 ## The home page: every board with its counts. The page is drawn here, in one read of the store.
@@ -119,11 +122,46 @@ end
 
 private
 
-USER_ATTEMPTS = 5
-ADDRESS_ATTEMPTS = 30
 LONGEST_PASSWORD = 1024
+BUSY_RETRY_SECONDS = 2
 
-def address_key(conn: Bond.Conn) -> String = "address:#{conn.remote_addr}"
+def authenticate(pool: Database.Pool, name: String, password: String) -> Result[Optional[Users.Account]]
+  found = try Users.find(pool, name)
+  return ok(none) if not password_matches?(found, password)
+
+  ok(found)
+end
+
+def answer_login(
+  conn: Bond.Conn,
+  pool: Database.Pool,
+  name: String,
+  account: Optional[Users.Account],
+  now: Int,
+) -> Bond.Conn
+  case account
+    some(found) -> start_session(conn, pool, found, now)
+    none -> refused(conn, some(pool), name)
+  end
+end
+
+def start_session(conn: Bond.Conn, pool: Database.Pool, account: Users.Account, now: Int) -> Bond.Conn
+  session_id = Auth.new_session_id()
+  opened = Users.open_session(pool, account.id, Users.token_hash(session_id), now)
+  return unavailable(conn) if not opened.ok?
+
+  Limiter.login_succeeded(account.username, conn.remote_addr, now)
+  Bond.redirect(Auth.with_session(conn, session_id), "/boards", 303)
+end
+
+def refused(conn: Bond.Conn, pool: Optional[Database.Pool], name: String) -> Bond.Conn
+  entry(conn, pool, 401, ["Invalid username or password."], name)
+end
+
+def busy(conn: Bond.Conn) -> Bond.Conn
+  page = Bond.html(conn, 429, Views.login(["The server is busy. Try again in a moment."], ""))
+  Bond.header(page, "Retry-After", BUSY_RETRY_SECONDS.to_s)
+end
 
 # The register form while no user exists, the sign-in form after.
 def entry(conn: Bond.Conn, pool: Optional[Database.Pool], status: Int, notes: List[String], name: String) -> Bond.Conn

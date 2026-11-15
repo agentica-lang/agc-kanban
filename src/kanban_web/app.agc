@@ -38,7 +38,7 @@ def build(
     |> Bond.before(->(conn) { Auth.authorize(conn, key, pool) })
     |> Bond.after(->(conn) { wake(cable, conn) })
     |> Bond.static(Routes.ASSETS, assets_dir, ASSET_MAX_BYTES, 0, true)
-    |> Router.install(pool, lease_minutes)
+    |> Router.install(pool, lease_minutes, cable)
   )
 
   Cable.mount(app, cable)

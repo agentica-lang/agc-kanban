@@ -157,7 +157,7 @@ def login_form(notes: List[String], username: String) -> String
       <h1>agc-kanban</h1>
     <%== problems(notes) %>
       <label>Username <input type="text" name="username" value="<%= username %>" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="64" autofocus required></label>
-      <label>Password <input type="password" name="password" autocomplete="current-password" maxlength="1024" required></label>
+      <label>Password <input type="password" name="password" autocomplete="current-password" required></label>
       <button type="submit">Sign in</button>
     </form>
   EAG
@@ -172,9 +172,9 @@ def register_form(notes: List[String], username: String) -> String
     <%== problems(notes) %>
       <label>Username <input type="text" name="username" value="<%= username %>" autocomplete="username" autocapitalize="none" spellcheck="false" minlength="3" maxlength="32" autofocus required></label>
       <p class="hint">3 to 32 characters: letters, numbers, dots, dashes and underscores.</p>
-      <label>Password <input type="password" name="password" autocomplete="new-password" minlength="8" maxlength="16" required></label>
-      <label>Repeat the password <input type="password" name="confirm" autocomplete="new-password" minlength="8" maxlength="16" required></label>
-      <p class="hint">8 to 16 characters, with an uppercase letter, a lowercase letter, a number and a special character.</p>
+      <label>Password <input type="password" name="password" autocomplete="new-password" required></label>
+      <label>Repeat the password <input type="password" name="confirm" autocomplete="new-password" required></label>
+      <p class="hint">8 to 16 characters, with an uppercase letter, a lowercase letter, a number and a special character (any that is not a letter or a number).</p>
       <button type="submit">Create the user</button>
     </form>
   EAG

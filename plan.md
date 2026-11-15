@@ -155,13 +155,19 @@ signs everyone out.
   closed and the page is only the sign-in form. There is no other way to add
   a user.
 - Sign-in: the same answer (401) and the same scrypt work for an unknown user and
-  a wrong password; the key is compared in constant time. Five tries per
-  username and thirty per address in a five-minute window, in memory
-  (`limiter.agc`); past that, 429 with `Retry-After`.
+  a wrong password; the key is compared in constant time. A username that
+  cannot exist (not 3 to 32 valid characters) gets the same 401 before the
+  limiter keeps anything. Limits per five-minute window, in memory
+  (`limiter.agc`): 30 tries per address, then 5 per username and address,
+  then 50 per username; past that, 429 with `Retry-After`. Keys are small (an
+  address or a SHA-256); a full table drops past windows and then refuses new
+  keys. At most four scrypt hashes run or wait at once; more get 429 at once.
+  The address is `remote_addr`: behind a proxy it is one bucket.
 - Cookie: `HttpOnly`, `SameSite=Lax`, `Secure` (and the `__Host-` name) with
   `KANBAN_COOKIE_SECURE=1`. Logout deletes the session row. `Bond.csrf` refuses
   a cross-site POST (`Sec-Fetch-Site` and `Origin`); the CLI sends neither.
-- `/cable` checks the same session in `connect`.
+- `/cable` checks the same session in `connect`; the connection's identity is the
+  session key, and logout closes its sockets (`Channels.disconnect`).
 
 ### Repository layout
 
