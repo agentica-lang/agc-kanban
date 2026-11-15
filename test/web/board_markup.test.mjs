@@ -31,6 +31,7 @@ var FilterBar = (await server.ssrLoadModule("/app/javascript/components/FilterBa
 var Drawer = (await server.ssrLoadModule("/app/javascript/components/Drawer.vue")).default;
 var ArchivePanel = (await server.ssrLoadModule("/app/javascript/components/ArchivePanel.vue")).default;
 var BoardPage = (await server.ssrLoadModule("/app/javascript/components/BoardPage.vue")).default;
+var Column = (await server.ssrLoadModule("/app/javascript/components/Column.vue")).default;
 
 // The page code reads the filters from `location`; a plain object stands in for it.
 function filtersAt(search) {
@@ -243,4 +244,42 @@ test("the filters drawer shows each label in its color, with a color input for i
   assert.ok(html.includes('style="background:#0075ca;color:#ffffff"'), "the chip has its color");
   assert.equal((html.match(/type="color"/g) || []).length, 1, "a label the board has no row for has no input");
   assert.ok(html.includes('value="#0075ca"') && html.includes('aria-label="Color of api"'));
+});
+
+test("a column header has a collapse button and the count; a collapsed column is one expand button with the count", async function () {
+  var column = { id: 3, name: "Review", done: false, wip_limit: 4 };
+  var cards = [card({ id: 7 }), card({ id: 8, title: "Second" })];
+  var open = await draw(Column, { column: column, cards: cards, total: 2, filtering: false, blocked: {}, flash: {}, collapsed: false }, "");
+  var collapse = only(open, "column-collapse");
+  assert.equal(collapse.tag, "button");
+  assert.equal(collapse.attrs["aria-expanded"], "true");
+  assert.equal(collapse.attrs["aria-label"], "Collapse column Review");
+  assert.match(open, /<span class="count"[^>]*>2\/4<\/span>/);
+  assert.equal(tagsWith(open, "card").length, 2);
+  assert.equal(tagsWith(open, "column-collapsed").length, 0);
+
+  var shut = await draw(Column, { column: column, cards: cards.slice(0, 1), total: 2, filtering: true, blocked: {}, flash: {}, collapsed: true }, "");
+  assert.ok(only(shut, "column").attrs.class.split(" ").includes("column-collapsed"));
+  var strip = only(shut, "column-strip");
+  assert.equal(strip.tag, "button");
+  assert.equal(strip.attrs["aria-expanded"], "false");
+  assert.equal(strip.attrs["aria-label"], "Expand column Review, 1 card");
+  assert.match(shut, /<span class="count" title="1 of 2 cards">1<\/span><span class="name">Review<\/span>/);
+  assert.equal(tagsWith(shut, "card").length, 0, "a collapsed column draws no card");
+  assert.equal(tagsWith(shut, "column-collapse").length, 0);
+});
+
+test("the board page draws the columns that this viewer collapsed on this board as strips", async function () {
+  var kept = { "agc-kanban.collapsed.p": "[1]" };
+  Object.defineProperty(globalThis, "localStorage", { configurable: true, writable: true, value: { getItem: function (key) { return kept[key] || null; } } });
+  try {
+    var { html } = await drawPage("", true);
+    assert.equal(only(html, "column-strip").attrs["aria-label"], "Expand column Todo, 1 card");
+    kept = {};
+    var { html: other } = await drawPage("", true);
+    assert.equal(tagsWith(other, "column-strip").length, 0);
+    assert.equal(only(other, "column-collapse").attrs["aria-label"], "Collapse column Todo");
+  } finally {
+    delete globalThis.localStorage;
+  }
 });

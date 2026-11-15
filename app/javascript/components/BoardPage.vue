@@ -1,6 +1,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, provide, ref, watch } from "vue";
 import { useBoard } from "../board_store.js";
+import { useCollapsed } from "../collapse.js";
 import { followDrawer, useCard } from "../card_store.js";
 import { useDrawer } from "../drawer.js";
 import { useFilters } from "../filter_store.js";
@@ -46,6 +47,7 @@ onBeforeUnmount(function () {
 });
 var card = useCard();
 var state = useBoard(props.slug, card.changed);
+var collapsed = useCollapsed(props.slug);
 
 followDrawer(drawer, card);
 
@@ -228,7 +230,7 @@ var filtersLabel = computed(function () { return filterCount.value ? "Filters ·
     <FilterBar :store="filter" :shown="shown" :inert="modal" />
     <div class="board-body">
       <main class="board" :inert="modal">
-        <Column v-for="entry in columns" :key="entry.column.id" :column="entry.column" :cards="entry.cards" :total="entry.total" :filtering="filtering" :blocked="blocked" :flash="state.flash" />
+        <Column v-for="entry in columns" :key="entry.column.id" :column="entry.column" :cards="entry.cards" :total="entry.total" :filtering="filtering" :blocked="blocked" :flash="state.flash" :collapsed="collapsed.has(entry.column.id)" @toggle="collapsed.toggle" />
         <p v-if="!columns.length" class="empty">This board has no columns.</p>
       </main>
       <div v-if="panel !== ''" class="backdrop" :class="{ 'backdrop-modal': panel === 'card' }" aria-hidden="true" @click="closeByPointer()"></div>
