@@ -72,3 +72,4 @@ This skill is only the rules.
 
 Give each agent its board, its card id and its own name (`KANBAN_AGENT`; the CLI
 has no default name), and tell it to load this skill or to run `kanban prime`.
+Mark a card done in the same step as the merge of its PR.
