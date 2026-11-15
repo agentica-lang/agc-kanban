@@ -111,7 +111,14 @@ Set `KANBAN_AGENT` to a different name for each agent, and `KANBAN_BOARD` to the
 
 ## Install the Claude Code plugin
 
-The repository is also a Claude Code plugin (`.claude-plugin/`): it carries the three skills and two hooks. The hooks run `hooks/board-context.sh` at the start of a session and of a subagent and add to the context the rule about the agent name and the cards in progress, at most 15 card lines in all, then "and N more". A session start lists the coordinator's own cards first, then the Doing cards of the other agents; a subagent start lists every Doing card, the coordinator's too. They only read the board.
+The repository is also a Claude Code plugin (`.claude-plugin/`): it carries the three skills and the hooks of `hooks/hooks.json`. They are for Claude Code only; the Codex section below uses only `board-context.sh`.
+
+- `SessionStart` and `SubagentStart` run `hooks/board-context.sh`, which adds to the context the rule about the agent name and the cards in progress, at most 15 card lines in all, then "and N more". A session start lists the coordinator's own cards first, then the Doing cards of the other agents; a subagent start lists every Doing card, the coordinator's too. They only read the board.
+- `PostToolUse` (on `Bash`, `Agent` and `Task`) runs `hooks/drift.sh post-tool`. After `gh pr create` it links the new PR to the card that `KANBAN_AGENT` holds in Doing, when it holds exactly one (or when the branch or worktree of one of its cards is the current one): this is the only write a hook makes by itself. Otherwise, and after `gh pr merge`, a `watch_ci.py` run that merged, or `gh issue close`, it adds context that names the card that should get the link or that is not done yet. An unrelated command leaves after one `case`, with no network.
+- `UserPromptSubmit` runs `hooks/drift.sh prompt-submit`: for the coordinator only (`KANBAN_AGENT=coordinator`, or the `KANBAN_COORDINATOR` name), `kanban doctor` at most once every 10 minutes (a stamp under `~/.cache/agc-kanban/`), and its findings go to the context.
+- `SubagentStop` runs `hooks/drift.sh subagent-stop`: it finds the kanban name of the subagent in its transcript, and for each card that agent still holds asks `claude -p --model haiku` (hooks off, no tools, 40 s) to suggest keep, Review, Todo or Done. It never moves a card. Claude Code gives a `SubagentStop` hook no way to reach the parent session, so a suggestion other than keep is written as a comment of the agent `kanban-hook` on the card, and in a queue file under `~/.cache/agc-kanban/` that the coordinator's next `PostToolUse` or `UserPromptSubmit` hook prints once.
+
+Every drift hook needs `python3`, exits 0 whatever happens and prints nothing when it has nothing to say. `SubagentStop` also needs `claude` on `PATH`.
 
 ```sh
 claude plugin marketplace add agentica-lang/agc-kanban

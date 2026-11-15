@@ -1,5 +1,5 @@
 {
-  "description": "Show the agc-kanban rules and the cards in progress at the start of a session and of a subagent",
+  "description": "Show the agc-kanban rules and the cards in progress, and keep the board close to the PRs and issues it links",
   "hooks": {
     "SessionStart": [
       {
@@ -9,6 +9,22 @@
     "SubagentStart": [
       {
         "hooks": [{"type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/board-context.sh\" subagent", "timeout": 15, "statusMessage": "Loading the agc-kanban board..."}]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash|Agent|Task",
+        "hooks": [{"type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/drift.sh\" post-tool", "timeout": 15, "statusMessage": "Checking the agc-kanban cards..."}]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [{"type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/drift.sh\" prompt-submit", "timeout": 30, "statusMessage": "Checking the agc-kanban board..."}]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [{"type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/drift.sh\" subagent-stop", "timeout": 60, "statusMessage": "Checking the cards of the subagent..."}]
       }
     ]
   }
