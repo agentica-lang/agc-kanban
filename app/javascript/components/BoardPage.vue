@@ -1,6 +1,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, provide, ref, watch } from "vue";
 import { useBoard } from "../board_store.js";
+import { useCollapsed } from "../collapse.js";
 import { followDrawer, useCard } from "../card_store.js";
 import { useDrawer } from "../drawer.js";
 import { useFilters } from "../filter_store.js";
@@ -46,6 +47,14 @@ onBeforeUnmount(function () {
 });
 var card = useCard();
 var state = useBoard(props.slug, card.changed);
+var collapsed = useCollapsed(props.slug);
+watch(function () {
+  return state.board && state.board.columns.map(function (column) { return column.id; });
+}, function (ids) {
+  if (ids) {
+    collapsed.keep(ids);
+  }
+}, { immediate: true });
 
 followDrawer(drawer, card);
 
@@ -92,7 +101,17 @@ function origin(closed, id) {
   if (closed === "archive") {
     return archiveButton.value;
   }
-  return id === null ? null : document.querySelector('.card a.title[data-card="' + id + '"]');
+  return id === null ? null : cardOrigin(id);
+}
+
+// The card's link on the board, or the strip of its column when that is collapsed.
+function cardOrigin(id) {
+  var link = document.querySelector('.card a.title[data-card="' + id + '"]');
+  var found = state.cards.find(function (one) { return one.id === id; });
+  if (link || !found || !collapsed.has(found.column_id)) {
+    return link;
+  }
+  return document.querySelector('.column-strip[data-column="' + found.column_id + '"]');
 }
 
 watch([panel, drawer.card], function (now, before) {
@@ -228,7 +247,7 @@ var filtersLabel = computed(function () { return filterCount.value ? "Filters ·
     <FilterBar :store="filter" :shown="shown" :inert="modal" />
     <div class="board-body">
       <main class="board" :inert="modal">
-        <Column v-for="entry in columns" :key="entry.column.id" :column="entry.column" :cards="entry.cards" :total="entry.total" :filtering="filtering" :blocked="blocked" :flash="state.flash" />
+        <Column v-for="entry in columns" :key="entry.column.id" :column="entry.column" :cards="entry.cards" :total="entry.total" :filtering="filtering" :blocked="blocked" :flash="state.flash" :collapsed="collapsed.has(entry.column.id)" @toggle="collapsed.toggle" />
         <p v-if="!columns.length" class="empty">This board has no columns.</p>
       </main>
       <div v-if="panel !== ''" class="backdrop" :class="{ 'backdrop-modal': panel === 'card' }" aria-hidden="true" @click="closeByPointer()"></div>

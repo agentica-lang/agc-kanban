@@ -329,3 +329,11 @@ test("the stylesheet and wide.js have the same width for the card window, and no
   assert.ok(built.includes(WIDE), WIDE);
   assert.equal(built.includes("701px"), false);
 });
+
+test("a collapsed column stays a strip on a phone: its rule wins over the phone width of a column", function () {
+  var strip = { tag: "section", classes: ["column", "column-collapsed"], ancestors: ["board", "board-body", "board-page"] };
+  assert.equal(winner(rules(built), strip, "flex").value, "0 0 2.75rem");
+  assert.equal(winner(rules(built), strip, "max-width").value, "2.75rem");
+  var column = { tag: "section", classes: ["column"], ancestors: strip.ancestors };
+  assert.equal(winner(rules(built), column, "flex").value, "0 0 85vw", "the phone rule of a column is the last one");
+});
