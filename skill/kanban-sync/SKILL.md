@@ -58,6 +58,8 @@ that direction, and list it in the plan first.
 4. **Check items the filter hides.** A card linked to an item that is not in
    your list may be closed, moved out of the scope, or dead: read that item
    alone (`gh issue view URL --json state,url,milestone`) before judging.
+   A card may link a PR as well as, or instead of, an issue: read each PR link
+   too (`gh pr view URL --json state,mergedAt,url`). MERGED counts as closed.
 5. **Build the plan** and show it with the counts (below).
 6. **Apply** (below), then **report**: created, updated, proposed, skipped,
    each with the card id.
@@ -71,10 +73,12 @@ Five lists, each with a count:
 - **Update**: add a missing link; add a label a new card would get and the
   card lacks. `card update --label` replaces the whole list, so send the old
   labels and the new ones. Never remove a label.
-- **Propose done**: cards whose item closed or merged. Only the coordinator
-  marks done: comment the closing link on the card and list it for the
-  coordinator, or run `card done` only when you are the coordinator and the
-  person asked.
+- **Propose done**: cards whose item closed or merged, and cards whose own
+  PR merged while a linked issue stays open (a part card, `#N part K`). A PR
+  the card only points to does not count. List first the stale cards: in
+  Review or Doing with a merged or closed PR. Only the coordinator marks
+  done: comment the closing link on the card and list it for the coordinator,
+  or run `card done` only when you are the coordinator and the person asked.
 - **Report only**: a title that differs (people shorten titles here on
   purpose; rewrite only when asked), a card whose item left the scope, an item
   reopened after its card was done, a card with no remote item or a dead link.
