@@ -2,6 +2,8 @@
 import { computed, nextTick, onBeforeUnmount, provide, ref, watch } from "vue";
 import { useBoard } from "../board_store.js";
 import { useCollapsed } from "../collapse.js";
+import { useDisplay } from "../display.js";
+import { reveal } from "../reveal.js";
 import { followDrawer, useCard } from "../card_store.js";
 import { useDrawer } from "../drawer.js";
 import { useFilters } from "../filter_store.js";
@@ -14,7 +16,9 @@ import { useWide } from "../wide.js";
 import ArchivePanel from "./ArchivePanel.vue";
 import CardPanel from "./CardPanel.vue";
 import Column from "./Column.vue";
+import DisplayPanel from "./DisplayPanel.vue";
 import Drawer from "./Drawer.vue";
+import RelationLines from "./RelationLines.vue";
 import FilterBar from "./FilterBar.vue";
 import FilterPanel from "./FilterPanel.vue";
 import Feed from "./Feed.vue";
@@ -48,6 +52,8 @@ onBeforeUnmount(function () {
 var card = useCard();
 var state = useBoard(props.slug, card.changed);
 var collapsed = useCollapsed(props.slug);
+var display = useDisplay(props.slug);
+provide("display", display.settings);
 watch(function () {
   return state.board && state.board.columns.map(function (column) { return column.id; });
 }, function (ids) {
@@ -89,6 +95,7 @@ var filterPanel = ref(null);
 var filtersButton = ref(null);
 var activityButton = ref(null);
 var archiveButton = ref(null);
+var displayButton = ref(null);
 var closedByPointer = false;
 
 function origin(closed, id) {
@@ -100,6 +107,9 @@ function origin(closed, id) {
   }
   if (closed === "archive") {
     return archiveButton.value;
+  }
+  if (closed === "display") {
+    return displayButton.value;
   }
   return id === null ? null : cardOrigin(id);
 }
@@ -194,6 +204,59 @@ var blocked = computed(function () {
   return map;
 });
 
+// The card that is hovered or focused marks its related cards and dims the others (while the relations or the lines
+// show); `reveal` takes a chip to its card: the page scrolls to it and the focus goes to its title (a card the filters
+// hide, or one that is not on the board, opens in the panel instead).
+var hot = ref(null);
+var dim = ref(false);
+var relations = {
+  cards: computed(function () { return state.cards; }),
+  hot: hot,
+  dim: dim,
+  // `via` is "pointer" or "focus": only a pointer dims the cards that are not related.
+  hover: function (id, via) {
+    var on = display.settings.relations || display.settings.lines;
+    hot.value = on ? id : null;
+    dim.value = on && via === "pointer";
+  },
+  reveal: function (id) {
+    reveal({
+      cards: function () { return state.cards; },
+      collapsed: collapsed,
+      document: document,
+      reduced: function () { return matchMedia("(prefers-reduced-motion: reduce)").matches; },
+      open: drawer.showCard,
+      later: nextTick,
+    }, id);
+  },
+};
+provide("relations", relations);
+watch(function () { return display.settings.relations || display.settings.lines; }, function (on) {
+  if (!on) {
+    hot.value = null;
+  }
+});
+
+// The time in the column counts on: one tick a minute, only while it shows.
+var clock = ref(Date.now());
+provide("clock", clock);
+var ticking = null;
+watch(function () { return display.settings.time; }, function (on) {
+  clearInterval(ticking);
+  ticking = null;
+  if (on) {
+    clock.value = Date.now();
+    ticking = setInterval(function () { clock.value = Date.now(); }, 60000);
+  }
+}, { immediate: true });
+onBeforeUnmount(function () { clearInterval(ticking); });
+
+// The lines are measured again when what they join changes: the cards shown, the collapsed columns and the setting.
+var linesVersion = computed(function () {
+  return [display.settings.lines, display.settings.relations, display.settings.labels, display.settings.links, display.settings.body, display.settings.agent, display.settings.time, panel.value,
+    collapsed.ids(), columns.value.map(function (entry) { return entry.cards.map(function (card) { return card.id + ":" + card.depends_on.join(",") + ":" + (card.blocks || []).join(","); }).join(" "); }).join("|")].join(";");
+});
+
 var columns = computed(function () {
   return state.board.columns.slice().sort(function (a, b) { return a.position - b.position; }).map(function (column) {
     var all = state.cards.filter(function (card) { return card.column_id === column.id; });
@@ -236,6 +299,9 @@ var filtersLabel = computed(function () { return filterCount.value ? "Filters ·
         <span class="filters-word">{{ filtersLabel }}</span>
         <span v-if="filterCount" class="badge" aria-hidden="true">{{ filterCount }}</span>
       </button>
+      <button ref="displayButton" type="button" class="toggle" aria-label="Display settings" title="Display settings" aria-controls="drawer" :aria-expanded="panel === 'display'" @click="drawer.toggleDisplay()">
+        <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M6.7 1.5h2.6l.4 1.9 1.2.5 1.7-1 1.8 1.8-1 1.7.5 1.2 1.9.4v2.6l-1.9.4-.5 1.2 1 1.7-1.8 1.8-1.7-1-1.2.5-.4 1.9H6.7l-.4-1.9-1.2-.5-1.7 1-1.8-1.8 1-1.7-.5-1.2-1.9-.4V6.7l1.9-.4.5-1.2-1-1.7 1.8-1.8 1.7 1 1.2-.5z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round" /><circle cx="8" cy="8" r="2.2" fill="none" stroke="currentColor" stroke-width="1.2" /></svg>
+      </button>
       <button ref="archiveButton" type="button" class="toggle" aria-label="Archive" title="Archive" aria-controls="drawer" :aria-expanded="panel === 'archive'" @click="drawer.toggleArchive()">
         <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M2 3h12v3H2zM3 6v7h10V6M6.5 9h3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" /></svg>
       </button>
@@ -250,6 +316,7 @@ var filtersLabel = computed(function () { return filterCount.value ? "Filters ·
         <Column v-for="entry in columns" :key="entry.column.id" :column="entry.column" :cards="entry.cards" :total="entry.total" :filtering="filtering" :blocked="blocked" :flash="state.flash" :collapsed="collapsed.has(entry.column.id)" @toggle="collapsed.toggle" />
         <p v-if="!columns.length" class="empty">This board has no columns.</p>
       </main>
+      <RelationLines v-if="display.settings.lines" :cards="state.cards" :hot="hot" :version="linesVersion" />
       <div v-if="panel !== ''" class="backdrop" :class="{ 'backdrop-modal': panel === 'card' }" aria-hidden="true" @click="closeByPointer()"></div>
       <Drawer v-if="panel === 'activity'" title="Activity" @close="drawer.close()">
         <Feed :state="state" />
@@ -262,6 +329,9 @@ var filtersLabel = computed(function () { return filterCount.value ? "Filters ·
       </Drawer>
       <Drawer v-else-if="panel === 'archive'" title="Archive" @close="drawer.close()">
         <ArchivePanel :state="state" />
+      </Drawer>
+      <Drawer v-else-if="panel === 'display'" title="Display" focus @close="drawer.close()">
+        <DisplayPanel :store="display" />
       </Drawer>
     </div>
   </div>

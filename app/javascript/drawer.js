@@ -31,8 +31,8 @@ function cardInUrl() {
 }
 
 // The right-side drawer of the board page shows one panel at a time: `panel` is "filters" (the filter choices), "card"
-// (the detail of `card`), "archive" (the archived cards and the bulk archive), "activity" (the feed) or "" while it is
-// closed. Only the activity choice is kept in
+// (the detail of `card`), "archive" (the archived cards and the bulk archive), "display" (what the cards show),
+// "activity" (the feed) or "" while it is closed. Only the activity choice is kept in
 // localStorage; with nothing kept, it is closed. The open card is in the URL, so a reload or a shared link opens it
 // again. Closing the card or the filters shows the activity again when that was open; opening a card closes the
 // filters.
@@ -41,6 +41,7 @@ export function useDrawer() {
   var card = ref(cardInUrl());
   var filters = ref(false);
   var archive = ref(false);
+  var display = ref(false);
   var panel = computed(function () {
     if (card.value !== null) {
       return "card";
@@ -50,6 +51,9 @@ export function useDrawer() {
     }
     if (archive.value) {
       return "archive";
+    }
+    if (display.value) {
+      return "display";
     }
     return activity.value ? "activity" : "";
   });
@@ -115,6 +119,7 @@ export function useDrawer() {
         showCard(null);
         filters.value = false;
         archive.value = false;
+        display.value = false;
         showActivity(true);
       }
     },
@@ -124,6 +129,7 @@ export function useDrawer() {
       } else {
         showCard(null);
         archive.value = false;
+        display.value = false;
         filters.value = true;
       }
     },
@@ -133,7 +139,18 @@ export function useDrawer() {
       } else {
         showCard(null);
         filters.value = false;
+        display.value = false;
         archive.value = true;
+      }
+    },
+    toggleDisplay: function () {
+      if (panel.value === "display") {
+        display.value = false;
+      } else {
+        showCard(null);
+        filters.value = false;
+        archive.value = false;
+        display.value = true;
       }
     },
     close: function () {
@@ -143,6 +160,8 @@ export function useDrawer() {
         filters.value = false;
       } else if (archive.value) {
         archive.value = false;
+      } else if (display.value) {
+        display.value = false;
       } else {
         showActivity(false);
       }

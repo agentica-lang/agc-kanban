@@ -84,6 +84,8 @@
 // A label or an agent on a card is a button that sets the filter.
 // The claimer keeps the text of its own tone (_claimer.scss): only a label takes the card's text color.
 .card .pick { font: inherit; line-height: inherit; border: 0; cursor: pointer; }
+.card .rel.pick { border: 1px solid var(--line); font-size: 0.75rem; }
+.card .rel-wait.pick { border-color: var(--warn); }
 .card .label.pick { color: inherit; }
 .card .label.on { outline: 2px solid var(--accent); outline-offset: 1px; }
 .card .claimer[aria-pressed="true"] { outline: 2px solid var(--accent); outline-offset: 1px; }

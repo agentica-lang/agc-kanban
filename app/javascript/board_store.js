@@ -60,7 +60,14 @@ export function useBoard(slug, listener) {
   function reconcile(snapshot) {
     var old = {};
     state.cards.forEach(function (card) { old[card.id] = card; });
-    state.cards = snapshot.cards.map(function (card) { return old[card.id] && same(old[card.id], card) ? old[card.id] : card; });
+    // `column_since` says since when each card is in its column; a card carries it as `since` (null from a server that
+    // does not send it).
+    var since = {};
+    (snapshot.column_since || []).forEach(function (entry) { since[entry.id] = entry.since; });
+    state.cards = snapshot.cards.map(function (card) {
+      var next = Object.assign({}, card, { since: since[card.id] === undefined ? null : since[card.id] });
+      return old[card.id] && same(old[card.id], next) ? old[card.id] : next;
+    });
     if (!state.board || !same(state.board, snapshot.board)) {
       state.board = snapshot.board;
     }
