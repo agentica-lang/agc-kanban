@@ -7,8 +7,15 @@ import AssetNames from "asset_names"
 import Overview from "../kanban/overview"
 import Claimer from "claimer"
 
-## The login form, with a `note` about the last try ("" shows none).
-def login(note: String) -> String = layout("Sign in", "login", "", form(note))
+## The login form, with the `notes` about the last try (none show nothing) and the `username` that was typed.
+def login(notes: List[String], username: String) -> String
+  layout("Sign in", "login", "", login_form(notes, username))
+end
+
+## The form that creates the first user, shown while no user exists.
+def register(notes: List[String], username: String) -> String
+  layout("Create the first user", "login", "", register_form(notes, username))
+end
 
 ## The home page: what the app is, then one card per board. It is drawn here, not by the script, so a link is a real
 ## link and the page needs no request after it. `now` is the time that "5 min ago" counts from.
@@ -143,18 +150,42 @@ def ago(now: Int, at: Int) -> String
   "#{elapsed / DAY} d ago"
 end
 
-def form(note: String) -> String
+def login_form(notes: List[String], username: String) -> String
   <<~EAG
     <%@ escape &Bond.escape %>
     <form class="login" method="post" action="/login">
       <h1>agc-kanban</h1>
-    <% if not note.empty? %>
-      <p class="note"><%= note %></p>
-    <% end %>
-      <label>API key <input type="password" name="key" autocomplete="current-password" autofocus required></label>
+    <%== problems(notes) %>
+      <label>Username <input type="text" name="username" value="<%= username %>" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="64" autofocus required></label>
+      <label>Password <input type="password" name="password" autocomplete="current-password" maxlength="1024" required></label>
       <button type="submit">Sign in</button>
     </form>
   EAG
+end
+
+def register_form(notes: List[String], username: String) -> String
+  <<~EAG
+    <%@ escape &Bond.escape %>
+    <form class="login" method="post" action="/register">
+      <h1>agc-kanban</h1>
+      <p class="hint">No user exists yet. Create the first one: it signs you in, and no one can register after it.</p>
+    <%== problems(notes) %>
+      <label>Username <input type="text" name="username" value="<%= username %>" autocomplete="username" autocapitalize="none" spellcheck="false" minlength="3" maxlength="32" autofocus required></label>
+      <p class="hint">3 to 32 characters: letters, numbers, dots, dashes and underscores.</p>
+      <label>Password <input type="password" name="password" autocomplete="new-password" minlength="8" maxlength="16" required></label>
+      <label>Repeat the password <input type="password" name="confirm" autocomplete="new-password" minlength="8" maxlength="16" required></label>
+      <p class="hint">8 to 16 characters, with an uppercase letter, a lowercase letter, a number and a special character.</p>
+      <button type="submit">Create the user</button>
+    </form>
+  EAG
+end
+
+# The notes of a refused try as a list, escaped; markup of this file.
+def problems(notes: List[String]) -> String
+  return "" if notes.empty?
+
+  items = notes.map { |note| "<li>#{Bond.escape(note)}</li>" }.join("")
+  "<ul class=\"notes\" role=\"alert\">#{items}</ul>"
 end
 
 # `content` is markup of this file (the form), never a value of a client; `title` and `slug` are escaped. A view of

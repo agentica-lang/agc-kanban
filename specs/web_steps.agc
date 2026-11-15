@@ -3,13 +3,35 @@
 ## frame as a line; a step reads those lines through a service, because a step cannot leave a task running.
 
 import BDD from "std/bdd"
+import Db from "pkg/db/db"
+import Sqlite from "pkg/db/sqlite"
 import HTTP from "std/http"
 import Regex from "std/regex"
+import URI from "std/uri"
 import AssetNames from "../src/kanban_web/asset_names"
+
+struct Reply
+  status: Int
+  cookies: Int
+end
 
 def steps() -> List[BDD.Step]
   [
-    BDD.step("I sign in with the key {string}", &sign_in),
+    BDD.step("I sign in", &sign_in),
+    BDD.step("I register the user {string} with the password {string}", &register),
+    BDD.step(
+      "I register the user {string} with the password {string} and the confirmation {string}",
+      &register_confirmed,
+    ),
+    BDD.step("I sign in as {string} with the password {string}", &sign_in_as),
+    BDD.step("I try to sign in {int} times as {string} with the password {string}", &sign_in_times),
+    BDD.step("I post to {string} with the cookie and the origin {string}", &post_with_origin),
+    BDD.step("two visitors register at once", &register_race),
+    BDD.step("the response has {int} sign-ins and {int} refusals", &assert_race),
+    BDD.step("the store has {int} users", &users_count),
+    BDD.step("the store has {int} sessions", &sessions_count),
+    BDD.step("the store keeps the password of {string} as a scrypt hash without {string}", &assert_hashed),
+    BDD.step("the sessions of the store have ended", &end_sessions),
     BDD.step("I get the page {string}", &get_page),
     BDD.step("I get the page {string} with the session", &get_page_signed),
     BDD.step("I post to {string} with the session", &post_signed),
@@ -24,6 +46,7 @@ def steps() -> List[BDD.Step]
     BDD.step("the page names the built stylesheet and script", &names_assets),
     BDD.step("the page applies the saved theme before the stylesheet", &theme_first),
     BDD.step("the response header {string} contains {string}", &header_contains),
+    BDD.step("the response has the header {string}", &has_header),
     BDD.step("a live client with the session subscribes to the board {string}", &subscribe_signed),
     BDD.step("a live client without a session subscribes to the board {string}", &subscribe_anonymous),
     BDD.step("the live client receives a frame containing {string}", &live_receives),
@@ -33,6 +56,7 @@ end
 private
 
 KEY = "01234567890123456789012345678901"
+TEST_PASSWORD = "Sup3r-secret!"
 
 # Relative to the working directory of the steps, the project folder.
 CLIENT = "specs/fixtures/ws_client/cable_client.agc"
@@ -69,11 +93,140 @@ def header_of(ctx: BDD.Context, name: String) -> String
   ""
 end
 
-def sign_in(ctx: BDD.Context, args: List[String]) -> BDD.Context
-  form = [HTTP.Header(name: "Content-Type", value: "application/x-www-form-urlencoded")]
-  done = fetch(ctx, "POST", "/login", "key=#{args[0]}", form)
+# A made-up user for the specs that only need a session.
+def sign_in(ctx: BDD.Context, _args: List[String]) -> BDD.Context
+  post_form(ctx, "/register", form(["owner", TEST_PASSWORD, TEST_PASSWORD]))
+end
+
+def register(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  post_form(ctx, "/register", form([args[0], args[1], args[1]]))
+end
+
+def register_confirmed(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  post_form(ctx, "/register", form([args[0], args[1], args[2]]))
+end
+
+def sign_in_as(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  post_form(ctx, "/login", URI.encode_www_form(pairs(["username", "password"], [args[0], args[1]])))
+end
+
+# The status and the page are those of the last try.
+def sign_in_times(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  current = ctx
+  for _ in 1..args[0].to_i!
+    current = sign_in_as(current, [args[1], args[2]])
+  end
+
+  current
+end
+
+# A browser form from another site: the cookie of the session, and an `Origin` that is not the server.
+def post_with_origin(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  headers = [
+    HTTP.Header(name: "Cookie", value: text_of(ctx, "cookie")),
+    HTTP.Header(name: "Origin", value: args[1]),
+    HTTP.Header(name: "Content-Type", value: "application/x-www-form-urlencoded"),
+  ]
+
+  fetch(ctx, "POST", args[0], "", headers)
+end
+
+def post_form(ctx: BDD.Context, path: String, body: String) -> BDD.Context
+  headers = [HTTP.Header(name: "Content-Type", value: "application/x-www-form-urlencoded")]
+  done = fetch(ctx, "POST", path, body, headers)
   cookie = header_of(done, "set-cookie").split(";")[0]
+  return done if cookie == ""
+
   BDD.set(done, "cookie", JSON.from(cookie))
+end
+
+def form(values: List[String]) -> String = URI.encode_www_form(pairs(["username", "password", "confirm"], values))
+
+def pairs(names: List[String], values: List[String]) -> List[URI.Pair]
+  (0...names.size).map { |i| URI.Pair(name: names[i], value: values[i]) }
+end
+
+# Two visitors send the register form together, as two different users; one wins, the other finds it closed.
+def register_race(ctx: BDD.Context, _args: List[String]) -> BDD.Context
+  port = port_of(ctx)
+  replies = Task.map(["first", "second"], 2, 60000) do |name| race_register(port, name) end
+  statuses: List[Reply] = []
+  for reply in replies
+    statuses = statuses.push(reply.unwrap!)
+  end
+
+  BDD.set(ctx, "race", JSON.from(statuses))
+end
+
+def race_register(port: Int, name: String) -> Result[Reply]
+  client = try HTTP.client()
+  headers = [HTTP.Header(name: "Content-Type", value: "application/x-www-form-urlencoded")]
+  response = HTTP.request(
+    client,
+    "POST",
+    "http://127.0.0.1:#{port}/register",
+    form([name, TEST_PASSWORD, TEST_PASSWORD]).bytes,
+    headers,
+  )
+
+  HTTP.close_client(client)
+  reply = try response
+  cookies = reply.headers.select { |field| field.name == "set-cookie" }
+  ok(Reply(status: reply.status, cookies: cookies.size))
+end
+
+def assert_race(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  replies = JSON.decode(BDD.get(ctx, "race").unwrap!, List[Reply]).unwrap!
+  signed = replies.select { |reply| reply.status == 303 and reply.cookies == 1 }
+  refused = replies.select { |reply| reply.status == 403 and reply.cookies == 0 }
+  BDD.assert(
+    ctx,
+    signed.size == args[0].to_i! and refused.size == args[1].to_i!,
+    "replies were #{JSON.encode(JSON.from(replies))}",
+  )
+end
+
+def count_rows(ctx: BDD.Context, table: String) -> Int
+  dir = JSON.string(BDD.get(ctx, "data_dir").unwrap!).unwrap!
+  conn = Db.open("sqlite:#{dir}/kanban.sqlite3", [Sqlite.driver()]).unwrap!
+  rows = Db.query(conn, "select count(*) as total from #{table}", []).unwrap!
+  Db.close(conn)
+  case rows[0].get("total", Db.Value.Null)
+    Db.Value.Int(value) -> value
+    _ -> -1
+  end
+end
+
+def users_count(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  total = count_rows(ctx, "users")
+  BDD.assert(ctx, total == args[0].to_i!, "users were #{total}")
+end
+
+def sessions_count(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  total = count_rows(ctx, "sessions")
+  BDD.assert(ctx, total == args[0].to_i!, "sessions were #{total}")
+end
+
+def assert_hashed(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  dir = JSON.string(BDD.get(ctx, "data_dir").unwrap!).unwrap!
+  conn = Db.open("sqlite:#{dir}/kanban.sqlite3", [Sqlite.driver()]).unwrap!
+  rows = Db.query(conn, "select password_hash from users where username = ?", [Db.Value.Text(args[0])]).unwrap!
+  Db.close(conn)
+  stored = ""
+  case rows[0].get("password_hash", Db.Value.Null)
+    Db.Value.Text(value) -> stored = value
+    _ -> stored = ""
+  end
+
+  BDD.assert(ctx, stored.start_with?("scrypt$") and not stored.include?(args[1]), "the stored hash was #{stored}")
+end
+
+def end_sessions(ctx: BDD.Context, _args: List[String]) -> BDD.Context
+  dir = JSON.string(BDD.get(ctx, "data_dir").unwrap!).unwrap!
+  conn = Db.open("sqlite:#{dir}/kanban.sqlite3", [Sqlite.driver()]).unwrap!
+  _ = Db.execute(conn, "update sessions set expires_at = 1", []).unwrap!
+  Db.close(conn)
+  ctx
 end
 
 def get_page(ctx: BDD.Context, args: List[String]) -> BDD.Context = fetch(ctx, "GET", args[0], "", [])
@@ -126,6 +279,10 @@ end
 
 def redirects_to(ctx: BDD.Context, args: List[String]) -> BDD.Context
   BDD.assert(ctx, header_of(ctx, "location") == args[0], "location was #{header_of(ctx, "location")}")
+end
+
+def has_header(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  BDD.assert(ctx, header_of(ctx, args[0]) != "", "no header #{args[0]}")
 end
 
 def header_contains(ctx: BDD.Context, args: List[String]) -> BDD.Context

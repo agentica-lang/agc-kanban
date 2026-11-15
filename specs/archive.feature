@@ -28,7 +28,7 @@ Feature: Card archive
     Then the response contains "card.created"
     And the response contains "card.archived"
     And the response contains "\"actor\":\"agent-1\""
-    When I sign in with the key "01234567890123456789012345678901"
+    When I sign in
     And I get the page "/boards" with the session
     Then the response contains "<b>0</b> <span>Todo</span>"
     And the response contains "<b>1</b> <span>Doing</span>"
@@ -205,7 +205,7 @@ Feature: Card archive
     And I add a card titled "Alpha"
     And I add a card titled "Beta"
     And I make card 2 depend on card 1
-    And I sign in with the key "01234567890123456789012345678901"
+    And I sign in
     And I get the page "/boards" with the session
     Then the response contains "1 blocked"
     When agent "agent-1" archives card 1
@@ -263,7 +263,7 @@ Feature: Card archive
     Given the database server is running
     When I post a board named "Project" with slug "project" as "agent-1"
     And I add a card titled "First"
-    And I sign in with the key "01234567890123456789012345678901"
+    And I sign in
     And a live client with the session subscribes to the board "project"
     Then the live client receives a frame containing "confirm_subscription"
     When I run kanban "card archive 1"
