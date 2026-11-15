@@ -44,6 +44,7 @@ export function useCollapsed(slug) {
   }
 
   return {
+    ids: function () { return ids.value; },
     has: function (id) { return ids.value.includes(id); },
     toggle: function (id) {
       set(ids.value.includes(id) ? ids.value.filter(function (one) { return one !== id; }) : ids.value.concat([id]));

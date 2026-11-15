@@ -10,6 +10,7 @@ import { createSSRApp, ref } from "vue";
 import { renderToString } from "vue/server-renderer";
 import { useFilters } from "../../app/javascript/filter_store.js";
 import { chipStyle } from "../../app/javascript/labels.js";
+import { DEFAULTS, OPTIONS, useDisplay } from "../../app/javascript/display.js";
 
 var ROOT = new URL("../../", import.meta.url).pathname;
 var server = await createServer({
@@ -32,6 +33,7 @@ var Drawer = (await server.ssrLoadModule("/app/javascript/components/Drawer.vue"
 var ArchivePanel = (await server.ssrLoadModule("/app/javascript/components/ArchivePanel.vue")).default;
 var BoardPage = (await server.ssrLoadModule("/app/javascript/components/BoardPage.vue")).default;
 var Column = (await server.ssrLoadModule("/app/javascript/components/Column.vue")).default;
+var DisplayPanel = (await server.ssrLoadModule("/app/javascript/components/DisplayPanel.vue")).default;
 
 // The page code reads the filters from `location`; a plain object stands in for it.
 function filtersAt(search) {
@@ -41,13 +43,14 @@ function filtersAt(search) {
   return useFilters();
 }
 
-function draw(component, props, search) {
+function draw(component, props, search, provides) {
   var filter = filtersAt(search);
   var app = createSSRApp(component, Object.assign({ store: filter }, props));
   app.provide("filter", filter);
   app.provide("openCard", function () {});
   app.provide("openCardId", ref(null));
   app.provide("labelStyle", function (name) { return chipStyle({ api: "#0075ca", ui: "#fbca04" }[name]) || null; });
+  Object.keys(provides || {}).forEach(function (name) { app.provide(name, provides[name]); });
   return renderToString(app);
 }
 
@@ -290,4 +293,84 @@ test("the board page draws the columns that this viewer collapsed on this board 
   } finally {
     delete globalThis.localStorage;
   }
+});
+
+// The relations of a card and what it shows, drawn with the display settings and the relation helpers the page provides.
+function related(cards, hot) {
+  return { cards: ref(cards), hot: ref(hot === undefined ? null : hot), hover: function () {}, reveal: function () {} };
+}
+
+test("a card shows a chip for each card it depends on, with that card's state, and one for each card it blocks, as buttons outside the link", async function () {
+  var cards = [
+    card({ id: 7, depends_on: [3, 4, 99], blocks: [8], column: "Todo" }),
+    card({ id: 3, done: true, column: "Done" }),
+    card({ id: 4, done: false, column: "Doing" }),
+  ];
+  var html = await draw(Card, { card: cards[0], blocked: true, flash: 0 }, "", { display: DEFAULTS, relations: related(cards) });
+  var anchors = html.match(/<a\b[^>]*>[\s\S]*?<\/a>/g);
+  assert.equal(anchors.length, 1);
+  assert.equal(/<button/.test(anchors[0]), false, "a control inside the link");
+  var chips = html.match(/<button\b[^>]*>[\s\S]*?<\/button>/g);
+  assert.equal(chips.length, 4);
+  assert.ok(chips[0].includes("rel-ok") && chips[0].includes('aria-label="Depends on card 3, done. Go to it"'), chips[0]);
+  assert.ok(chips[1].includes("rel-wait") && chips[1].includes('aria-label="Depends on card 4, not done yet, in Doing. Go to it"'), chips[1]);
+  assert.ok(chips[2].includes("rel-ok") && chips[2].includes("no longer on the board"), "a card that is not on the board does not block");
+  assert.ok(chips[3].includes("rel-blocks") && chips[3].includes('aria-label="Blocks card 8. Go to it"'));
+  assert.ok(html.includes("depends on #4<span"), "the visible text names the card");
+  assert.equal(html.includes("blocked by"), false, "the chips say it, so the old mark is not drawn twice");
+});
+
+test("with the relation chips off the card keeps its old blocked mark, and with every extra off it is as before", async function () {
+  var cards = [card({ id: 7, depends_on: [4], blocks: [8] }), card({ id: 4, column: "Doing" })];
+  var off = Object.assign({}, DEFAULTS, { relations: false });
+  var html = await draw(Card, { card: cards[0], blocked: true, flash: 0 }, "", { display: off, relations: related(cards) });
+  assert.ok(html.includes("blocked by #4"));
+  assert.equal(html.includes("depends on"), false);
+  assert.equal((html.match(/<button/g) || []).length, 0);
+});
+
+test("the display settings choose the labels, the agent, the links, the time in the column and the body preview", async function () {
+  var shown = card({ id: 7, claimed_by: "line 1", labels: ["api"], links: ["https://github.com/o/r/pull/12", "not a url"], body: "## Plan\nDo **it** [now](https://x.test)", since: 1000, column: "Doing" });
+  var all = Object.assign({}, DEFAULTS, { links: true, time: true, body: true });
+  var html = await draw(Card, { card: shown, blocked: false, flash: 0 }, "", { display: all, clock: ref(1000 + 3 * 3600000) });
+  assert.ok(html.includes('<p class="preview">Plan</p>'), "the first line, without its Markdown mark");
+  assert.ok(/<a class="link pick" href="https:\/\/github.com\/o\/r\/pull\/12" target="_blank" rel="noopener noreferrer">PR #12<\/a>/.test(html));
+  assert.ok(/<span class="link">not a url<\/span>/.test(html), "a link that is no URL is text");
+  assert.ok(html.includes("3 h in Doing"));
+  var bare = Object.assign({}, DEFAULTS, { labels: false, agent: false });
+  var quiet = await draw(Card, { card: shown, blocked: false, flash: 0 }, "", { display: bare, clock: ref(0) });
+  assert.equal(quiet.includes("line 1") || quiet.includes(">api<"), false, "no agent and no label");
+  assert.equal(quiet.includes('class="meta'), false, "no empty meta line");
+  assert.equal(quiet.includes("preview") || quiet.includes("PR #12") || quiet.includes(" in Doing"), false, "off by default");
+});
+
+test("a hovered card marks its related cards and dims the others", async function () {
+  var cards = [card({ id: 7, depends_on: [4] }), card({ id: 4, blocks: [7] }), card({ id: 9 })];
+  var provides = function (id) { return { display: DEFAULTS, relations: related(cards, id) }; };
+  var self = await draw(Card, { card: cards[0], blocked: false, flash: 0 }, "", provides(7));
+  var kin = await draw(Card, { card: cards[1], blocked: false, flash: 0 }, "", provides(7));
+  var other = await draw(Card, { card: cards[2], blocked: false, flash: 0 }, "", provides(7));
+  assert.ok(self.includes("mark-self") && kin.includes("mark-related") && other.includes("mark-dim"));
+  var none = await draw(Card, { card: cards[2], blocked: false, flash: 0 }, "", provides(null));
+  assert.equal(none.includes("mark-"), false);
+});
+
+test("the display panel has a checkbox for each setting, checked as the settings are, and a reset that is off at the defaults", async function () {
+  var store = useDisplay("p");
+  var html = await draw(DisplayPanel, { store: store }, "");
+  assert.equal(tagsWith(html, "display-option").length, OPTIONS.length);
+  var boxes = Array.from(html.matchAll(/<input type="checkbox"([^>]*)>/g));
+  assert.equal(boxes.length, OPTIONS.length);
+  assert.equal(boxes.filter(function (one) { return one[1].includes("checked"); }).length, OPTIONS.filter(function (option) { return option.on; }).length);
+  assert.equal(only(html, "display-reset").attrs.disabled, "");
+  store.set("links", true);
+  var changed = await draw(DisplayPanel, { store: store }, "");
+  assert.equal(tagsWith(changed, "display-reset")[0].attrs.disabled, undefined);
+});
+
+test("the header has a Display settings button that opens the panel, and the page draws the panel in the drawer", async function () {
+  var { html } = await drawPage("", true);
+  var tag = html.match(/<button\b[^>]*aria-label="Display settings"[^>]*>/);
+  assert.ok(tag, "no display button");
+  assert.ok(tag[0].includes('aria-controls="drawer"') && tag[0].includes('aria-expanded="false"'));
 });

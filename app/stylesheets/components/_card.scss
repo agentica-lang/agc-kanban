@@ -27,6 +27,30 @@
   .label, .claimer, .blocked { padding: 0.0625rem 0.5rem; border-radius: 999px; background: var(--panel); }
   .claimer { @include claimer.claimer; }
   .blocked { color: var(--warn); border: 1px solid var(--warn); background: none; }
+
+  // The first line of the body, when the display settings ask for it.
+  .preview { margin: 0.25rem 0 0; font-size: 0.75rem; color: var(--muted); overflow-wrap: anywhere; }
+
+  // The relations: a chip per card it depends on (the state of that card in it) and per card it blocks, each a button
+  // that goes to that card; the links of the card and its time in the column on a line of their own.
+  .rel, .link { padding: 0.0625rem 0.5rem; border-radius: 999px; }
+  .rel { color: var(--muted); background: none; border: 1px solid var(--line); }
+  .rel-wait { color: var(--warn); border-color: var(--warn); }
+  .rel-blocks { color: var(--text); }
+  .rel-state { margin-left: 0.375rem; font-size: 0.6875rem; }
+  .rel-state::before { content: "\00b7\00a0"; }
+  .link { color: var(--accent); background: var(--panel); text-decoration: none; overflow-wrap: anywhere; }
+  .time { color: var(--muted); }
+
+  // While a card is hovered or focused its related cards are marked and the others step back.
+  transition: opacity 0.12s ease;
+  &.mark-dim { opacity: 0.35; }
+  &.mark-related { outline: 2px dashed var(--accent); outline-offset: -1px; }
+  &.mark-self { box-shadow: 0 0 0 2px var(--accent); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card { transition: none; }
 }
 
 @keyframes flash {

@@ -266,3 +266,27 @@ test("the archive panel opens and closes, and a card opened from it goes back to
   assert.equal(one.drawer.panel.value, "");
   one.stop();
 });
+
+test("the display panel opens and closes, replaces the other panels, and a card opened from it goes back to it when closed", function () {
+  var one = page("/boards/p");
+  one.drawer.toggleDisplay();
+  assert.equal(one.drawer.panel.value, "display");
+  one.drawer.showCard(4);
+  assert.equal(one.drawer.panel.value, "card");
+  one.drawer.close();
+  assert.equal(one.drawer.panel.value, "display");
+  one.drawer.toggleFilters();
+  assert.equal(one.drawer.panel.value, "filters");
+  one.drawer.toggleDisplay();
+  assert.equal(one.drawer.panel.value, "display");
+  one.drawer.toggleArchive();
+  assert.equal(one.drawer.panel.value, "archive");
+  one.drawer.toggleDisplay();
+  one.drawer.toggleActivity();
+  assert.equal(one.drawer.panel.value, "activity");
+  one.drawer.toggleDisplay();
+  assert.equal(one.drawer.panel.value, "display");
+  one.drawer.toggleDisplay();
+  assert.equal(one.drawer.panel.value, "activity", "the gear again closes it, and the activity under it shows again, as for the filters");
+  one.stop();
+});
