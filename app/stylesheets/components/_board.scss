@@ -125,20 +125,31 @@
   border-radius: var(--radius);
   padding-top: var(--gap);
 
+  .name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
+
+// The heading (the name and the count) and the collapse button after it.
+.column-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 var(--gap) var(--gap);
+
   h2 {
-    flex: none;
+    flex: 1;
+    min-width: 0;
     display: flex;
     justify-content: space-between;
     gap: 0.5rem;
-    margin: 0 var(--gap) var(--gap);
+    margin: 0;
     font-size: 0.8rem;
     text-transform: uppercase;
     letter-spacing: 0.04em;
     color: var(--muted);
   }
 
-  .name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  h2 .name { flex: 1; }
+  .name { flex: 1; }
 }
 
 // The column grows and shrinks between its width and the strip (not for people who ask for less motion).
@@ -169,6 +180,15 @@
   max-width: 2.75rem;
   align-self: stretch;
   padding-top: 0;
+}
+
+// The heading of a collapsed column holds the strip, so heading navigation finds the column.
+.strip-heading {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  margin: 0;
+  font: inherit;
 }
 
 .column-strip {

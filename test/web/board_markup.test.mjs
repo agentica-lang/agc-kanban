@@ -252,6 +252,7 @@ test("a column header has a collapse button and the count; a collapsed column is
   var open = await draw(Column, { column: column, cards: cards, total: 2, filtering: false, blocked: {}, flash: {}, collapsed: false }, "");
   var collapse = only(open, "column-collapse");
   assert.equal(collapse.tag, "button");
+  assert.match(open, /<h2><span class="name">Review<\/span><span class="count">2\/4<\/span><\/h2><button/, "the heading has the name and the count only");
   assert.equal(collapse.attrs["aria-expanded"], "true");
   assert.equal(collapse.attrs["aria-label"], "Collapse column Review");
   assert.match(open, /<span class="count"[^>]*>2\/4<\/span>/);
@@ -263,18 +264,25 @@ test("a column header has a collapse button and the count; a collapsed column is
   var strip = only(shut, "column-strip");
   assert.equal(strip.tag, "button");
   assert.equal(strip.attrs["aria-expanded"], "false");
-  assert.equal(strip.attrs["aria-label"], "Expand column Review, 1 card");
+  assert.equal(strip.attrs["aria-label"], "Expand column Review, 1 of 2 cards");
+  assert.match(shut, /<h2 class="strip-heading"><button[^>]*class="column-strip"/, "the strip is inside a heading");
   assert.match(shut, /<span class="count" title="1 of 2 cards">1<\/span><span class="name">Review<\/span>/);
   assert.equal(tagsWith(shut, "card").length, 0, "a collapsed column draws no card");
   assert.equal(tagsWith(shut, "column-collapse").length, 0);
 });
 
 test("the board page draws the columns that this viewer collapsed on this board as strips", async function () {
-  var kept = { "agc-kanban.collapsed.p": "[1]" };
-  Object.defineProperty(globalThis, "localStorage", { configurable: true, writable: true, value: { getItem: function (key) { return kept[key] || null; } } });
+  var kept = { "agc-kanban.collapsed.p": "[1,9]" };
+  var store = {
+    getItem: function (key) { return kept[key] || null; },
+    setItem: function (key, value) { kept[key] = value; },
+    removeItem: function (key) { delete kept[key]; },
+  };
+  Object.defineProperty(globalThis, "localStorage", { configurable: true, writable: true, value: store });
   try {
     var { html } = await drawPage("", true);
     assert.equal(only(html, "column-strip").attrs["aria-label"], "Expand column Todo, 1 card");
+    assert.equal(kept["agc-kanban.collapsed.p"], "[1]", "the id of a column the board does not have is dropped");
     kept = {};
     var { html: other } = await drawPage("", true);
     assert.equal(tagsWith(other, "column-strip").length, 0);

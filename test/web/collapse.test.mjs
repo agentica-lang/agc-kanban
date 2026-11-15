@@ -69,3 +69,20 @@ test("a toggle collapses and expands a column and survives a reload of the page;
   none.toggle(9);
   assert.equal(none.has(9), true);
 });
+
+test("the ids of columns the board no longer has are dropped and written back, so a new column that gets the id is open", function () {
+  var store = memory();
+  useStorage(store);
+  var page = useCollapsed("p");
+  page.toggle(2);
+  page.toggle(5);
+  page.keep([1, 2, 5]);
+  assert.equal(store.getItem("agc-kanban.collapsed.p"), "[2,5]");
+  page.keep([1, 2]);
+  assert.equal(store.getItem("agc-kanban.collapsed.p"), "[2]");
+  page.keep([1, 2, 5]);
+  assert.equal(page.has(5), false, "a column created with the id of a deleted one");
+  assert.equal(useCollapsed("p").has(5), false);
+  page.keep([]);
+  assert.equal(store.getItem("agc-kanban.collapsed.p"), null);
+});

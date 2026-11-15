@@ -48,6 +48,13 @@ onBeforeUnmount(function () {
 var card = useCard();
 var state = useBoard(props.slug, card.changed);
 var collapsed = useCollapsed(props.slug);
+watch(function () {
+  return state.board && state.board.columns.map(function (column) { return column.id; });
+}, function (ids) {
+  if (ids) {
+    collapsed.keep(ids);
+  }
+}, { immediate: true });
 
 followDrawer(drawer, card);
 
@@ -94,7 +101,17 @@ function origin(closed, id) {
   if (closed === "archive") {
     return archiveButton.value;
   }
-  return id === null ? null : document.querySelector('.card a.title[data-card="' + id + '"]');
+  return id === null ? null : cardOrigin(id);
+}
+
+// The card's link on the board, or the strip of its column when that is collapsed.
+function cardOrigin(id) {
+  var link = document.querySelector('.card a.title[data-card="' + id + '"]');
+  var found = state.cards.find(function (one) { return one.id === id; });
+  if (link || !found || !collapsed.has(found.column_id)) {
+    return link;
+  }
+  return document.querySelector('.column-strip[data-column="' + found.column_id + '"]');
 }
 
 watch([panel, drawer.card], function (now, before) {
