@@ -3,8 +3,8 @@ version = 1
 [[package]]
 name = "bond"
 git = "https://github.com/agentica-lang/bond"
-ref = "8bf236459e48f7557c5faf5002a0c41faa838bd2"
-commit = "8bf236459e48f7557c5faf5002a0c41faa838bd2"
+tag = "0.13.0"
+commit = "91b01121dded4423e45d696f7f701b4c85ca4472"
 hash = "sha256:8ad6b33959a187a4171b971b9fb19f4fab493003cd4b024651dcf45c627704f8"
 override = true
 
