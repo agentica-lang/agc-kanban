@@ -3,9 +3,10 @@ version = 1
 [[package]]
 name = "bond"
 git = "https://github.com/agentica-lang/bond"
-tag = "0.12.0"
-commit = "79eb127ac4a8f23e6c3ff025f3256c8592b9304d"
-hash = "sha256:7d18a6562f4a59a975381743ac057baf8bfa36208ecf1454b40af3bc46082088"
+ref = "8bf236459e48f7557c5faf5002a0c41faa838bd2"
+commit = "8bf236459e48f7557c5faf5002a0c41faa838bd2"
+hash = "sha256:8ad6b33959a187a4171b971b9fb19f4fab493003cd4b024651dcf45c627704f8"
+override = true
 
 [[package]]
 name = "channels"
