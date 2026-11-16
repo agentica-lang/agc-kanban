@@ -33,7 +33,7 @@ networks:
 
 Or a port on this machine only: `ports: ["127.0.0.1:4580:4580"]` under `kanban`. Set `KANBAN_URL` (for example `http://10.0.1.51:4580`) if `make url` does not find the address you want.
 
-Without Docker (needs Agentica 0.32.0, Node and corepack):
+Without Docker (needs Agentica 0.33.0, Node and corepack):
 
 ```sh
 export KANBAN_API_KEY="$(openssl rand -hex 32)"
