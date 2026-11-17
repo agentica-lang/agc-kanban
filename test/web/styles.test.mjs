@@ -337,3 +337,19 @@ test("a collapsed column stays a strip on a phone: its rule wins over the phone 
   var column = { tag: "section", classes: ["column"], ancestors: strip.ancestors };
   assert.equal(winner(rules(built), column, "flex").value, "0 0 85vw", "the phone rule of a column is the last one");
 });
+
+// The room above the first field of the side drawer: the top padding of its body, which scrolls and so clips the
+// rest, less the outline and the offset of the search input's focus ring. Below zero, the ring is cut off.
+function roomAboveSearch(css) {
+  var body = { tag: "div", classes: ["drawer-body"], ancestors: ["drawer"] };
+  var top = winner(rules(css), body, "padding").value.split(/\s+/)[0];
+  var px = top === "0" ? 0 : /^([\d.]+)rem$/.test(top) ? parseFloat(top) * 16 : parseFloat(top);
+  var ring = /\.search-input:focus-visible \{\s*outline: (\d+)px [^;]*;\s*outline-offset: (\d+)px;/.exec(css);
+  assert.ok(ring, "the focus ring of the search input");
+  return px - Number(ring[1]) - Number(ring[2]);
+}
+
+test("the drawer body leaves room above the search input for its focus ring", function () {
+  assert.ok(roomAboveSearch(built) >= 0, roomAboveSearch(built) + "px");
+  assert.ok(roomAboveSearch(built + compileString(".drawer-body { padding: 0 1rem 1rem; }").css) < 0, "the old padding");
+});
