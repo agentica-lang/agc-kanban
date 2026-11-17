@@ -286,11 +286,13 @@
 // Shown only where the drawer lies over the board: a tap on it closes the drawer, as Escape does.
 .backdrop { display: none; }
 
+// It scrolls, so it clips what lies outside its padding: the top padding leaves room for the focus ring of a first
+// field (2px with a 1px offset).
 .drawer-body {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 0 1rem 1rem;
+  padding: 0.25rem 1rem 1rem;
   @include tokens.thin-scroll;
 }
 

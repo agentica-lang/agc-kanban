@@ -36,7 +36,7 @@
 
   &:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 }
-.filter-panel > // A label in the drawer: its chip in its color, and the color input that changes it. The selected chip keeps its color
+// A label in the drawer: its chip in its color, and the color input that changes it. The selected chip keeps its color
 // and takes a ring.
 .label-choice { display: inline-flex; align-items: center; gap: 0.25rem; max-width: 100%; }
 .label-choice .chip[aria-pressed="true"] { outline: 2px solid var(--accent); outline-offset: 1px; }
