@@ -1,6 +1,7 @@
 {
   "name": "agc-kanban-assets",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "description": "Build tools of the web view (Vue 3, Vite) and the stylesheet: `pnpm build`, or `make assets`. Nothing here runs in the server or the specs.",
   "packageManager": "pnpm@12.18.0",
