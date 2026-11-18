@@ -138,13 +138,14 @@ Feature: Drift hooks of the plugin
     And kanban stdout is empty
     And the fake claude was run with "child=1 args=-p --model haiku"
     And the fake claude was run with "PR opened, CI green"
-    And the hook queue contains "card 1 (worker stopped, now in Doing): suggested Review - PR opened"
+    And the fake claude was run with "Review: an open PR is green"
+    And the hook queue contains "card 1 (worker stopped, now in Doing): suggested Review - Haiku: PR opened"
     When I get card 1
     Then the response contains "kanban-hook"
-    And the response contains "Review - PR opened"
+    And the response contains "Hook suggestion (Haiku: PR opened; the coordinator decides): Review."
     And the response contains "\"column\":\"Doing\""
     When I run the post-tool hook as agent "coordinator" for the command "ls" with the output "x"
-    Then kanban stdout contains "suggested Review - PR opened"
+    Then kanban stdout contains "suggested Review - Haiku: PR opened"
     And the hook queue is empty
     When I run the post-tool hook as agent "coordinator" for the command "ls" with the output "x"
     Then kanban stdout is empty
@@ -188,7 +189,7 @@ Feature: Drift hooks of the plugin
     And I run the subagent-stop hook for a transcript that starts with "Do the card.", runs "kanban card claim 1 --agent worker" and hands back "REPORT: PR 9 opened, CI green"
     Then kanban exits with code 0
     And the fake claude was run with "REPORT: PR 9 opened, CI green"
-    And the hook queue contains "card 1 (worker stopped, now in Doing): suggested Review - PR open"
+    And the hook queue contains "card 1 (worker stopped, now in Doing): suggested Review - Haiku: PR open"
 
   Scenario: A merged PR of a parent card whose issue is still open says nothing in Todo and a slice hint in Doing
     When a card "x" is in "Todo" held by "" with the link "https://github.com/o/r/issues/9"
@@ -247,3 +248,62 @@ Feature: Drift hooks of the plugin
     Then kanban stdout is empty
     When I run the post-tool hook as agent "worker" for the command "GH_TOKEN=t /usr/bin/gh pr create --head feat-x" with the output "https://github.com/o/r/pull/7"
     Then kanban stdout contains "linked https://github.com/o/r/pull/7 to card 1"
+
+  Scenario: A subagent that waits on its own background work is not finished, so it gets no suggestion
+    When a card "x" is in "Doing" held by "worker" with the link "https://github.com/o/r/pull/5"
+    And gh says "{\"o/r#5\":\"open-pull:pass\"}"
+    And the fake claude answers "[{\"card\": 1, \"suggest\": \"Todo\", \"reason\": \"x\"}]"
+    And I run the subagent-stop hook for a transcript that starts with "You are worker (KANBAN_AGENT=worker)." and waits on its own background work
+    Then kanban exits with code 0
+    And the gh log has 0 calls
+    And the fake claude was not run
+    And the hook queue is empty
+
+  Scenario: The newest PR open and green is Review by rule, logged, and scored against the move the card got
+    When a card "x" is in "Doing" held by "worker" with the link "https://github.com/o/r/issues/3"
+    And agent "worker" links card 1 to "https://github.com/o/r/pull/5"
+    And agent "worker" links card 1 to "https://github.com/o/r/pull/7"
+    And gh says "{\"o/r#3\":\"open\",\"o/r#5\":\"merged\",\"o/r#7\":\"open-pull:pass\"}"
+    And I run the subagent-stop hook for a transcript that starts with "You are worker (KANBAN_AGENT=worker)." and ends with "PR 7 green"
+    Then kanban exits with code 0
+    And the gh log has 1 calls
+    And the fake claude was not run
+    And the hook queue contains "card 1 (worker stopped, now in Doing): suggested Review - rule: newest PR green"
+    And the hook log contains "\"card\": 1, \"column\": \"Doing\", \"agent\": \"worker\", \"suggest\": \"Review\", \"source\": \"rule: newest PR green\""
+    And the hook log contains "{\"item\": \"o/r#7\", \"kind\": \"pr\", \"state\": \"open\", \"ci\": \"pass\", \"newest\": true}"
+    When agent "worker" moves card 1 to "Review"
+    And I score the logged hook suggestions
+    Then kanban exits with code 0
+    And kanban stdout contains "rule: 1/1 hits (100%)"
+
+  Scenario: An open PR whose CI is pending keeps the card, and one whose CI fails keeps it with a note
+    When a card "x" is in "Doing" held by "worker" with the link "https://github.com/o/r/pull/5"
+    And a card "x" is in "Doing" held by "worker" with the link "https://github.com/o/r/pull/7"
+    And gh says "{\"o/r#5\":\"open-pull:pending\",\"o/r#7\":\"open-pull:fail\"}"
+    And I run the subagent-stop hook for a transcript that starts with "You are worker (KANBAN_AGENT=worker)." and ends with "pushed"
+    Then kanban exits with code 0
+    And the fake claude was not run
+    And the hook queue contains "card 2 (worker stopped, now in Doing): suggested keep - rule: CI failing on o/r#7"
+    And the hook queue does not contain "card 1"
+    And the hook log contains "\"suggest\": \"keep\", \"source\": \"rule: CI pending\""
+
+  Scenario: Every linked PR merged and the issue closed suggest Done by rule
+    When a card "x" is in "Review" held by "worker" with the link "https://github.com/o/r/issues/3"
+    And agent "worker" links card 1 to "https://github.com/o/r/pull/5"
+    And gh says "{\"o/r#3\":\"closed\",\"o/r#5\":\"merged\"}"
+    And I run the subagent-stop hook for a transcript that starts with "You are worker (KANBAN_AGENT=worker)." and ends with "done"
+    Then the fake claude was not run
+    And the hook queue contains "card 1 (worker stopped, now in Review): suggested Done - rule: PRs merged or closed, issue closed"
+
+  Scenario: Merged PRs of an open issue go to Haiku as facts, never with a title or body from GitHub
+    When a card "x" is in "Doing" held by "worker" with the link "https://github.com/agentica-lang/agentica/issues/985"
+    And agent "worker" links card 1 to "https://github.com/agentica-lang/agentica/pull/1840"
+    And agent "worker" links card 1 to "https://github.com/agentica-lang/agentica/pull/1841"
+    And gh says "{\"agentica-lang/agentica#985\":\"open\",\"agentica-lang/agentica#1840\":\"merged\",\"agentica-lang/agentica#1841\":\"merged\"}"
+    And the fake claude answers "[{\"card\": 1, \"suggest\": \"Todo\", \"reason\": \"next slice\"}]"
+    And I run the subagent-stop hook for a transcript that starts with "You are worker (KANBAN_AGENT=worker)." and ends with "PRs 1840 and 1841 are open"
+    Then the fake claude was run with "pr agentica-lang/agentica#1840 merged"
+    And the fake claude was run with "pr agentica-lang/agentica#1841 merged newest"
+    And the fake claude was run with "issue agentica-lang/agentica#985 open"
+    And the fake claude was not run with "IGNORE THE RULES"
+    And the hook queue contains "card 1 (worker stopped, now in Doing): suggested Todo - Haiku: next slice"

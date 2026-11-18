@@ -34,7 +34,16 @@ def steps() -> List[BDD.Step]
       "I run the subagent-stop hook for a transcript that starts with {string} and ends with {string}",
       &subagent_stop,
     ),
+    BDD.step(
+      "I run the subagent-stop hook for a transcript that starts with {string} and waits on its own background work",
+      &subagent_waiting,
+    ),
+    BDD.step("I score the logged hook suggestions", &score_suggestions),
+    BDD.step("the hook log contains {string}", &hook_log_contains),
+    BDD.step("the hook queue does not contain {string}", &queue_lacks),
+    BDD.step("agent {string} moves card {int} to {string}", &agent_moves),
     BDD.step("the fake claude was run with {string}", &claude_ran_with),
+    BDD.step("the fake claude was not run with {string}", &claude_not_run_with),
     BDD.step("the fake claude was not run", &claude_not_run),
     BDD.step("the gh log has {int} calls", &gh_calls),
     BDD.step("the hook queue is empty", &queue_empty),
@@ -214,6 +223,11 @@ def claude_ran_with(ctx: BDD.Context, args: List[String]) -> BDD.Context
   BDD.assert(ctx, log.include?(args[0]), "claude log was #{log}")
 end
 
+def claude_not_run_with(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  log = read_or_empty(claude_log(ctx))
+  BDD.assert(ctx, not log.empty? and not log.include?(args[0]), "claude log was #{log}")
+end
+
 def claude_not_run(ctx: BDD.Context, _args: List[String]) -> BDD.Context
   log = read_or_empty(claude_log(ctx))
   BDD.assert(ctx, log.empty?, "claude log was #{log}")
@@ -238,6 +252,26 @@ def set_branch(ctx: BDD.Context, args: List[String]) -> BDD.Context
   body = JSON.encode(JSON.from({"branch": args[2]}))
   changed = call(ctx, args[0], "PATCH", "/api/cards/#{args[1]}", body)
   BDD.assert(ctx, changed.status == 200, "branch update failed with #{changed.status}")
+end
+
+def queue_lacks(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  BDD.assert(ctx, not queue_text(ctx).include?(args[0]), "queue was #{queue_text(ctx)}")
+end
+
+def agent_moves(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  moved = call(ctx, args[0], "POST", "/api/cards/#{args[1]}/move", JSON.encode(JSON.from({"column": args[2]})))
+  BDD.assert(ctx, moved.status == 200, "move failed with #{moved.status}")
+end
+
+def hook_log_text(ctx: BDD.Context) -> String = read_or_empty("#{cache_dir(ctx)}/agc-kanban/suggestions-project.jsonl")
+
+def hook_log_contains(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  BDD.assert(ctx, hook_log_text(ctx).include?(args[0]), "hook log was #{hook_log_text(ctx)}")
+end
+
+def score_suggestions(ctx: BDD.Context, _args: List[String]) -> BDD.Context
+  process = Process.spawn_captured("python3", ["hooks/drift.py", "score"], Process.Options(env: base_env(ctx))).unwrap!
+  record(ctx, process)
 end
 
 def queue_has(ctx: BDD.Context, args: List[String]) -> BDD.Context
@@ -298,6 +332,29 @@ def subagent_handback(ctx: BDD.Context, args: List[String]) -> BDD.Context
     "agent_id": JSON.from("a1"),
     "agent_transcript_path": JSON.from(path),
     "last_assistant_message": JSON.from("ok"),
+  }
+
+  run_hook(ctx, "subagent-stop", "coordinator", JSON.object(input))
+end
+
+# A background command whose end was not notified yet: the subagent stopped to wait for it and resumes later.
+def subagent_waiting(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  path = "#{data_dir(ctx)}/agent.jsonl"
+  launch = {"command": JSON.from("watch_ci.py 5"), "run_in_background": JSON.from(true)}
+  result = JSON.object({"type": JSON.from("tool_result"), "content": JSON.from("Command running in background")})
+  started = JSON.object({
+    "type": JSON.from("user"),
+    "message": JSON.object({"role": JSON.from("user"), "content": JSON.array([result])}),
+    "toolUseResult": JSON.object({"backgroundTaskId": JSON.from("b1")}),
+  })
+
+  lines = [user_line(args[0]), tool_line("Bash", launch), JSON.encode(started), assistant_line("waiting for CI")]
+  File.write_text(path, "#{lines.join("\n")}\n").unwrap!
+  input = {
+    "hook_event_name": JSON.from("SubagentStop"),
+    "agent_id": JSON.from("a1"),
+    "agent_transcript_path": JSON.from(path),
+    "last_assistant_message": JSON.from("waiting for CI"),
   }
 
   run_hook(ctx, "subagent-stop", "coordinator", JSON.object(input))
