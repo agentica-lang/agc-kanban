@@ -5,7 +5,7 @@
 # KANBAN_API_KEY=...   (openssl rand -hex 32)
 # Start with `make up`, stop with `make down`, smoke test with `make smoke-docker`.
 # A local network, a fixed IP or a published port go in
-# docker-compose.override.yml (not in git; see README.md).
+# docker-compose.override.yml (not in git; see docs/server.md).
 services:
   kanban:
     build: .
