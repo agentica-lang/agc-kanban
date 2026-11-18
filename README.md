@@ -161,3 +161,7 @@ Codex has [hooks](https://learn.chatgpt.com/docs/hooks), including `SessionStart
 ```
 
 The `timeout` is in seconds. Codex asks you to review and trust a new hook before it runs (`/hooks` in the CLI). The same needs as for Claude Code hold: `kanban` on `PATH`, and `KANBAN_URL`, `KANBAN_API_KEY` and `KANBAN_BOARD` in the environment or the config file. The specs of the script run it on its own, not inside Codex. Without the hooks, run `kanban prime` at the start of a session.
+
+## License
+
+MIT, see [LICENSE](LICENSE).

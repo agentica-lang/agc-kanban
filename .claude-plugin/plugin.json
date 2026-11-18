@@ -3,5 +3,6 @@
   "description": "Rules and live board context for coding agents that work from an agc-kanban board",
   "author": {"name": "agentica-lang"},
   "repository": "https://github.com/agentica-lang/agc-kanban",
+  "license": "MIT",
   "skills": ["./skill/agc-kanban", "./skill/kanban-sync", "./.agents/skills/kanban-cli"]
 }
