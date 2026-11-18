@@ -249,15 +249,25 @@ Feature: Drift hooks of the plugin
     When I run the post-tool hook as agent "worker" for the command "GH_TOKEN=t /usr/bin/gh pr create --head feat-x" with the output "https://github.com/o/r/pull/7"
     Then kanban stdout contains "linked https://github.com/o/r/pull/7 to card 1"
 
-  Scenario: A subagent that waits on its own background work is not finished, so it gets no suggestion
-    When a card "x" is in "Doing" held by "worker" with the link "https://github.com/o/r/pull/5"
-    And gh says "{\"o/r#5\":\"open-pull:pass\"}"
+  Scenario Outline: A subagent that waits on its own background work is not finished, so it gets no suggestion
+    When a card "x" is in "Doing" held by "worker" with the link ""
     And the fake claude answers "[{\"card\": 1, \"suggest\": \"Todo\", \"reason\": \"x\"}]"
-    And I run the subagent-stop hook for a transcript that starts with "You are worker (KANBAN_AGENT=worker)." and waits on its own background work
+    And I run the subagent-stop hook for worker after "<transcript>"
     Then kanban exits with code 0
-    And the gh log has 0 calls
-    And the fake claude was not run
-    And the hook queue is empty
+    And the hook <verdict>
+
+    Examples:
+      | transcript                                 | verdict          |
+      | bash b1                                    | skipped the stop |
+      | monitor m1                                 | skipped the stop |
+      | agent a9                                   | skipped the stop |
+      | bash b1, notice b1                         | suggested a move |
+      | bash b1, attached notice b1                | suggested a move |
+      | bash b1, stop b1                           | suggested a move |
+      | bash b1, handback                          | suggested a move |
+      | bash b1, handback, attached notice b2      | suggested a move |
+      | bash b1, monitor m1, notice b1             | skipped the stop |
+      | fetch                                      | suggested a move |
 
   Scenario: The newest PR open and green is Review by rule, logged, and scored against the move the card got
     When a card "x" is in "Doing" held by "worker" with the link "https://github.com/o/r/issues/3"
@@ -306,4 +316,51 @@ Feature: Drift hooks of the plugin
     And the fake claude was run with "pr agentica-lang/agentica#1841 merged newest"
     And the fake claude was run with "issue agentica-lang/agentica#985 open"
     And the fake claude was not run with "IGNORE THE RULES"
+    And the gh log does not contain "title"
+    And the gh log does not contain "body"
     And the hook queue contains "card 1 (worker stopped, now in Doing): suggested Todo - Haiku: next slice"
+
+  Scenario: The CI rules look at the newest PR by its creation time, and an issue closed alone is Done
+    When a card "x" is in "Doing" held by "worker" with the link "https://github.com/o/r/pull/9"
+    And agent "worker" links card 1 to "https://github.com/o/r/pull/5/files#diff"
+    And a card "x" is in "Doing" held by "worker" with the link "https://github.com/o/r/issues/4"
+    And gh says "{\"o/r#9\":\"open-pull:fail@2026-01-01T00:00:00Z\",\"o/r#5\":\"open-pull:pass@2026-02-01T00:00:00Z\",\"o/r#4\":\"closed\"}"
+    And I run the subagent-stop hook for a transcript that starts with "You are worker (KANBAN_AGENT=worker)." and ends with "done"
+    Then the fake claude was not run
+    And the hook queue contains "card 1 (worker stopped, now in Doing): suggested Review - rule: newest PR green"
+    And the hook queue contains "card 2 (worker stopped, now in Doing): suggested Done - rule: issue closed"
+
+  Scenario Outline: A card whose GitHub links are not all read goes to Haiku, not to a rule
+    When a card "x" is in "Doing" held by "worker" with the link "https://github.com/o/r/issues/30"
+    And agent "worker" links card 1 to <links>
+    And gh says "{\"*\":\"merged\",\"o/r#30\":\"closed\",\"o/r#21\":\"open-pull:pass\"}"
+    And the fake claude answers "[{\"card\": 1, \"suggest\": \"Todo\", \"reason\": \"unsure\"}]"
+    And I run the subagent-stop hook for a transcript that starts with "You are worker (KANBAN_AGENT=worker)." and ends with "done"
+    Then the hook queue contains "suggested Todo - Haiku: unsure"
+    And the hook queue does not contain "rule:"
+
+    Examples:
+      | links                                    |
+      | 21 URLs                                  |
+      | "https://github.com/o/r/actions/runs/1"  |
+
+  Scenario: Repeated stops tell a suggestion once, and score counts hits, misses, keeps and a suggestion of the own column
+    When a card "x" is in "Doing" held by "worker" with the link "https://github.com/o/r/pull/1"
+    And a card "x" is in "Doing" held by "worker" with the link "https://github.com/o/r/issues/2"
+    And a card "x" is in "Doing" held by "worker" with the link "https://github.com/o/r/pull/3"
+    And a card "x" is in "Review" held by "worker" with the link "https://github.com/o/r/pull/4"
+    And gh says "{\"o/r#1\":\"open-pull:pass\",\"o/r#2\":\"open\",\"o/r#3\":\"open-pull:pending\",\"o/r#4\":\"open-pull:pass\"}"
+    And the fake claude answers "[{\"card\": 2, \"suggest\": \"Todo\", \"reason\": \"left\"}]"
+    And I run the subagent-stop hook for a transcript that starts with "You are worker (KANBAN_AGENT=worker)." and ends with "done"
+    And I run the subagent-stop hook for a transcript that starts with "You are worker (KANBAN_AGENT=worker)." and ends with "done"
+    Then the hook queue contains "card 1 (worker stopped, now in Doing): suggested Review - rule: newest PR green" once
+    And the hook queue contains "card 2 (worker stopped, now in Doing): suggested Todo - Haiku: left" once
+    And the hook queue does not contain "card 3"
+    And the hook queue does not contain "card 4"
+    When agent "worker" moves card 1 to "Review"
+    And agent "worker" moves card 2 to "Review"
+    And I score the logged hook suggestions
+    Then kanban exits with code 0
+    And kanban stdout contains "rule: 3/3 hits (100%)"
+    And kanban stdout contains "haiku: 0/1 hits (0%)"
+    And kanban stdout contains "all: 3/4 hits (75%)"

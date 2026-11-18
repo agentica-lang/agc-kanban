@@ -34,10 +34,11 @@ def steps() -> List[BDD.Step]
       "I run the subagent-stop hook for a transcript that starts with {string} and ends with {string}",
       &subagent_stop,
     ),
-    BDD.step(
-      "I run the subagent-stop hook for a transcript that starts with {string} and waits on its own background work",
-      &subagent_waiting,
-    ),
+    BDD.step("I run the subagent-stop hook for worker after {string}", &subagent_events),
+    BDD.step("the hook skipped the stop", &hook_skipped),
+    BDD.step("the hook suggested a move", &hook_suggested),
+    BDD.step("the gh log does not contain {string}", &gh_log_lacks),
+    BDD.step("the hook queue contains {string} once", &queue_once),
     BDD.step("I score the logged hook suggestions", &score_suggestions),
     BDD.step("the hook log contains {string}", &hook_log_contains),
     BDD.step("the hook queue does not contain {string}", &queue_lacks),
@@ -337,25 +338,86 @@ def subagent_handback(ctx: BDD.Context, args: List[String]) -> BDD.Context
   run_hook(ctx, "subagent-stop", "coordinator", JSON.object(input))
 end
 
-# A background command whose end was not notified yet: the subagent stopped to wait for it and resumes later.
-def subagent_waiting(ctx: BDD.Context, args: List[String]) -> BDD.Context
-  path = "#{data_dir(ctx)}/agent.jsonl"
-  launch = {"command": JSON.from("watch_ci.py 5"), "run_in_background": JSON.from(true)}
-  result = JSON.object({"type": JSON.from("tool_result"), "content": JSON.from("Command running in background")})
-  started = JSON.object({
-    "type": JSON.from("user"),
-    "message": JSON.object({"role": JSON.from("user"), "content": JSON.array([result])}),
-    "toolUseResult": JSON.object({"backgroundTaskId": JSON.from("b1")}),
-  })
+def notice(task: String) -> String
+  "<task-notification>\n<task-id>#{task}</task-id>\n<status>completed</status>\n</task-notification>"
+end
 
-  lines = [user_line(args[0]), tool_line("Bash", launch), JSON.encode(started), assistant_line("waiting for CI")]
-  File.write_text(path, "#{lines.join("\n")}\n").unwrap!
+def result_line(result: Map[String, JSON.Value], text: String) -> String
+  part = JSON.object({"type": JSON.from("tool_result"), "content": JSON.from(text)})
+  message = JSON.object({"role": JSON.from("user"), "content": JSON.array([part])})
+  JSON.encode(JSON.object({"type": JSON.from("user"), "message": message, "toolUseResult": JSON.object(result)}))
+end
+
+# One event of a subagent's transcript, in the shapes Claude Code writes: "bash ID", "monitor ID" and "agent ID" start
+# background work; "notice ID" (a user message), "attached notice ID" and "stop ID" (TaskStop) end it; "handback" is a
+# SubagentHandback call; "fetch" is a tool result whose text only looks like a background start.
+def event_line(event: String) -> String
+  words = event.split(" ")
+  task = words[words.size - 1]
+  if words[0] == "bash"
+    launch = tool_line("Bash", {"command": JSON.from("watch_ci.py 5"), "run_in_background": JSON.from(true)})
+    (
+      "#{launch}\n#{result_line({"backgroundTaskId": JSON.from(task)}, "Command running in background with ID: #{task}")}"
+    )
+  elsif words[0] == "monitor"
+    result_line({"taskId": JSON.from(task), "persistent": JSON.from(false)}, "Monitor started (task #{task})")
+  elsif words[0] == "agent"
+    result_line({"agentId": JSON.from(task), "status": JSON.from("async_launched")}, "Async agent launched")
+  elsif words[0] == "notice"
+    message = JSON.object({"role": JSON.from("user"), "content": JSON.from(notice(task))})
+    origin = JSON.object({"kind": JSON.from("task-notification")})
+    JSON.encode(
+      JSON.object({"type": JSON.from("user"), "isMeta": JSON.from(true), "origin": origin, "message": message}),
+    )
+  elsif words[0] == "attached"
+    attachment = {
+      "type": JSON.from("queued_command"),
+      "commandMode": JSON.from("task-notification"),
+      "prompt": JSON.from(notice(task)),
+    }
+
+    JSON.encode(JSON.object({"type": JSON.from("attachment"), "attachment": JSON.object(attachment)}))
+  elsif words[0] == "stop"
+    result_line({"task_id": JSON.from(task), "task_type": JSON.from("local_bash")}, "Successfully stopped task")
+  elsif words[0] == "handback"
+    tool_line("SubagentHandback", {"message": JSON.from("REPORT")})
+  else
+    result_line({"bytes": JSON.from(10)}, "Command running in background with ID: x9")
+  end
+end
+
+def subagent_events(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  path = "#{data_dir(ctx)}/agent.jsonl"
+  lines = (
+    [user_line("You are worker (KANBAN_AGENT=worker).")] +
+    args[0].split(", ").map do |event| event_line(event) end
+  )
+
+  File.write_text(path, "#{(lines + [assistant_line("stopped")]).join("\n")}\n").unwrap!
   input = {
     "hook_event_name": JSON.from("SubagentStop"),
     "agent_id": JSON.from("a1"),
     "agent_transcript_path": JSON.from(path),
-    "last_assistant_message": JSON.from("waiting for CI"),
+    "last_assistant_message": JSON.from("stopped"),
   }
 
   run_hook(ctx, "subagent-stop", "coordinator", JSON.object(input))
+end
+
+def hook_skipped(ctx: BDD.Context, _args: List[String]) -> BDD.Context
+  log = read_or_empty(claude_log(ctx))
+  BDD.assert(ctx, log.empty? and queue_text(ctx).empty?, "claude log was #{log}, queue was #{queue_text(ctx)}")
+end
+
+def hook_suggested(ctx: BDD.Context, _args: List[String]) -> BDD.Context
+  BDD.assert(ctx, queue_text(ctx).include?("suggested Todo"), "queue was #{queue_text(ctx)}")
+end
+
+def gh_log_lacks(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  log = read_or_empty(gh_log(ctx))
+  BDD.assert(ctx, not log.empty? and not log.include?(args[0]), "gh log was #{log}")
+end
+
+def queue_once(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  BDD.assert(ctx, queue_text(ctx).split(args[0]).size == 2, "queue was #{queue_text(ctx)}")
 end
