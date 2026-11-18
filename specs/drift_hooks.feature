@@ -267,6 +267,7 @@ Feature: Drift hooks of the plugin
       | bash b1, handback                          | suggested a move |
       | bash b1, handback, attached notice b2      | suggested a move |
       | bash b1, monitor m1, notice b1             | skipped the stop |
+      | handback, coordinator message, bash b1     | skipped the stop |
       | fetch                                      | suggested a move |
 
   Scenario: The newest PR open and green is Review by rule, logged, and scored against the move the card got
@@ -329,6 +330,15 @@ Feature: Drift hooks of the plugin
     Then the fake claude was not run
     And the hook queue contains "card 1 (worker stopped, now in Doing): suggested Review - rule: newest PR green"
     And the hook queue contains "card 2 (worker stopped, now in Doing): suggested Done - rule: issue closed"
+
+  Scenario: The same suggestion is told again once the card moved between the stops
+    When a card "x" is in "Doing" held by "worker" with the link "https://github.com/o/r/pull/1"
+    And gh says "{\"o/r#1\":\"open-pull:pass\"}"
+    And I run the subagent-stop hook for a transcript that starts with "You are worker (KANBAN_AGENT=worker)." and ends with "green"
+    And agent "worker" moves card 1 to "Review"
+    And agent "worker" moves card 1 to "Doing"
+    And I run the subagent-stop hook for a transcript that starts with "You are worker (KANBAN_AGENT=worker)." and ends with "green again"
+    Then the hook queue contains "card 1 (worker stopped, now in Doing): suggested Review - rule: newest PR green" twice
 
   Scenario Outline: A card whose GitHub links are not all read goes to Haiku, not to a rule
     When a card "x" is in "Doing" held by "worker" with the link "https://github.com/o/r/issues/30"

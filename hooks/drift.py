@@ -470,7 +470,7 @@ def final_report(path, fallback):
     return report if isinstance(report, str) and report else fallback
 
 
-TASK_END = re.compile(r"<task-id>(\w+)</task-id>(?:(?!</task-notification>).)*?<status>(\w+)</status>", re.S)
+TASK_END = re.compile(r"<task-id>(\w+)</task-id>.*?<status>(\w+)</status>", re.S)
 END_STATUSES = {"completed", "failed", "killed", "stopped"}
 
 
@@ -499,9 +499,21 @@ def notice_text(entry):
     return None
 
 
+def ended_tasks(notice):
+    """The tasks a notice ends. Only the head of each notification counts: its <event> is output of the task."""
+    heads = [block.split("<event>", 1)[0] for block in notice.split("<task-notification>")[1:]]
+    return {task for head in heads for task, status in TASK_END.findall(head) if status in END_STATUSES}
+
+
 def real_input(entry):
-    """A message the subagent was given (its brief, a SendMessage), not a tool result or a notice."""
-    if entry.get("type") != "user" or entry.get("isMeta"):
+    """A message the subagent was given (its brief, a message of the coordinator, a peer or a person), not a tool
+    result or a notice."""
+    if entry.get("type") != "user":
+        return False
+    origin = entry.get("origin")
+    if isinstance(origin, dict) and origin.get("kind") in ("coordinator", "peer", "human"):
+        return True
+    if entry.get("isMeta"):
         return False
     content = (entry.get("message") or {}).get("content")
     if isinstance(content, list):
@@ -523,7 +535,7 @@ def still_working(path):
             ended.add(result["task_id"])
         notice = notice_text(entry)
         if notice is not None:
-            ended |= {task for task, status in TASK_END.findall(notice) if status in END_STATUSES}
+            ended |= ended_tasks(notice)
         elif real_input(entry):
             handed_back = False
         content = (entry.get("message") or {}).get("content")
@@ -720,22 +732,28 @@ def log_suggestion(stopped_at, card, name, suggest, source, facts):
     private_append(log_path(), json.dumps(record) + "\n")
 
 
-def repeated(card_id, suggest, source):
-    """True when the last suggestion told for this card was the same one: a subagent that stops again and again gets
-    one comment and one queue line, not one per stop."""
-    path = os.path.join(os.environ["CACHE"], f"last-suggestions-{os.environ['KEY']}.json")
+def said_path():
+    return os.path.join(os.environ["CACHE"], f"last-suggestions-{os.environ['KEY']}.json")
+
+
+def last_said():
+    """{card id: [suggestion, source, card version]} of what was told last. The card's version changes with each move,
+    update or comment of its holder, so the same suggestion is told again once anything happened on the card."""
     try:
-        with open(path) as handle:
-            last = json.load(handle)
+        with open(said_path()) as handle:
+            return json.load(handle)
     except (OSError, ValueError):
-        last = {}
-    said = [suggest, source]
-    if last.get(str(card_id)) == said:
-        return True
-    last[str(card_id)] = said
-    with open(path, "w") as handle:
-        json.dump(last, handle)
-    return False
+        return {}
+
+
+def remember_said(said):
+    temporary = f"{said_path()}.{os.getpid()}"
+    handle = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        os.write(handle, json.dumps(said).encode())
+    finally:
+        os.close(handle)
+    os.replace(temporary, said_path())
 
 
 def subagent_stop(data):
@@ -759,12 +777,14 @@ def subagent_stop(data):
         if fired:
             decided[card["id"]] = (fired[0], f"rule: {fired[1]}")
     rest = [card for card in held if card["id"] not in decided]
-    timeout = min(HAIKU_TIMEOUT, DEADLINE[0] - time.monotonic())
+    # Five seconds stay for the comments and the queue.
+    timeout = min(HAIKU_TIMEOUT, DEADLINE[0] - time.monotonic() - 5)
     if rest and timeout > 5:
         report = final_report(path, data.get("last_assistant_message") or "")
         asked = {card["id"] for card in rest}
         decided.update(safely(lambda: parse_suggestions(ask_haiku(name, rest, facts, report, timeout), asked)) or {})
     os.makedirs(os.environ["CACHE"], mode=0o700, exist_ok=True)
+    said = last_said()
     lines = []
     for card_id, (suggest, source) in decided.items():
         card = wanted[card_id]
@@ -772,11 +792,13 @@ def subagent_stop(data):
         # A keep says nothing, unless a rule has a note for it (a failing CI); a move to where the card is says nothing.
         if suggest == card["column"] or (suggest == "keep" and not source.startswith("rule: CI failing")):
             continue
-        if safely(repeated, card_id, suggest, source):
+        told = [suggest, source, card.get("version")]
+        if said.get(str(card_id)) == told:
             continue
         comment = f"Hook suggestion ({source}; the coordinator decides): {suggest}. {name} stopped while holding this card in {card['column']}."
         safely(kanban, "card", "comment", str(card_id), "--agent", "kanban-hook", comment)
         lines.append(f"card {card_id} ({name} stopped, now in {card['column']}): suggested {suggest} - {source}")
+        said[str(card_id)] = told
     if lines:
         with open(os.environ["QUEUE"], "a") as handle:
             handle.write(
@@ -784,6 +806,7 @@ def subagent_stop(data):
                 + "\n".join(lines)
                 + "\n"
             )
+        safely(remember_said, said)
 
 
 # ---- score -------------------------------------------------------------------------------------------------------
@@ -830,8 +853,12 @@ def score(path):
         board, card = record.get("board") or "", record["card"]
         if (board, card) not in events:
             args = ["events", "--card", str(card), "--json", "--limit", "1000"] + (["--board", board] if board else [])
-            code, out = kanban(*args)
-            events[(board, card)] = json.loads(out)["events"] if code == 0 else None
+            try:
+                code, out = kanban(*args)
+                events[(board, card)] = json.loads(out)["events"] if code == 0 else None
+            except (OSError, ValueError, KeyError, subprocess.TimeoutExpired) as problem:
+                print(f"kanban events --card {card} failed: {type(problem).__name__}")
+                return 1
         if events[(board, card)] is None:
             continue
         expected = "keep" if record["suggest"] == record["column"] else record["suggest"]

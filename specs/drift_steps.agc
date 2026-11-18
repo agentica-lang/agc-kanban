@@ -39,6 +39,7 @@ def steps() -> List[BDD.Step]
     BDD.step("the hook suggested a move", &hook_suggested),
     BDD.step("the gh log does not contain {string}", &gh_log_lacks),
     BDD.step("the hook queue contains {string} once", &queue_once),
+    BDD.step("the hook queue contains {string} twice", &queue_twice),
     BDD.step("I score the logged hook suggestions", &score_suggestions),
     BDD.step("the hook log contains {string}", &hook_log_contains),
     BDD.step("the hook queue does not contain {string}", &queue_lacks),
@@ -350,7 +351,8 @@ end
 
 # One event of a subagent's transcript, in the shapes Claude Code writes: "bash ID", "monitor ID" and "agent ID" start
 # background work; "notice ID" (a user message), "attached notice ID" and "stop ID" (TaskStop) end it; "handback" is a
-# SubagentHandback call; "fetch" is a tool result whose text only looks like a background start.
+# SubagentHandback call; "coordinator message" resumes the subagent; "fetch" is a tool result whose text only looks
+# like a background start.
 def event_line(event: String) -> String
   words = event.split(" ")
   task = words[words.size - 1]
@@ -379,6 +381,12 @@ def event_line(event: String) -> String
     JSON.encode(JSON.object({"type": JSON.from("attachment"), "attachment": JSON.object(attachment)}))
   elsif words[0] == "stop"
     result_line({"task_id": JSON.from(task), "task_type": JSON.from("local_bash")}, "Successfully stopped task")
+  elsif words[0] == "coordinator"
+    message = JSON.object({"role": JSON.from("user"), "content": JSON.from("The coordinator sent a message: fix it")})
+    origin = JSON.object({"kind": JSON.from("coordinator")})
+    JSON.encode(
+      JSON.object({"type": JSON.from("user"), "isMeta": JSON.from(true), "origin": origin, "message": message}),
+    )
   elsif words[0] == "handback"
     tool_line("SubagentHandback", {"message": JSON.from("REPORT")})
   else
@@ -416,6 +424,10 @@ end
 def gh_log_lacks(ctx: BDD.Context, args: List[String]) -> BDD.Context
   log = read_or_empty(gh_log(ctx))
   BDD.assert(ctx, not log.empty? and not log.include?(args[0]), "gh log was #{log}")
+end
+
+def queue_twice(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  BDD.assert(ctx, queue_text(ctx).split(args[0]).size == 3, "queue was #{queue_text(ctx)}")
 end
 
 def queue_once(ctx: BDD.Context, args: List[String]) -> BDD.Context
