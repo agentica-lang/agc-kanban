@@ -4,8 +4,9 @@
 #                           watch_ci run that merged, link the PR or say which card still needs a move; for the
 #                           coordinator, also the queued suggestions of drift.sh subagent-stop
 #   drift.sh prompt-submit  UserPromptSubmit: the coordinator gets `kanban doctor` at most every 10 minutes
-#   drift.sh subagent-stop  SubagentStop: asks Haiku what to do with the cards the finished subagent still holds, and
-#                           leaves the answer as a card comment and in a queue for the coordinator
+#   drift.sh subagent-stop  SubagentStop: suggests what to do with the cards the finished subagent still holds (rules
+#                           on the GitHub state of their links, else Haiku), leaves the answer as a card comment and in
+#                           a queue for the coordinator, and logs it (`python3 drift.py score` prints the hit rate)
 # Only the PR link is ever written to a card by itself. The exit code is always 0 and a hook that has nothing to say
 # prints nothing, so it can never block a session. An unrelated Bash command leaves here after one `case`.
 set -u

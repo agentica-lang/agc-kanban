@@ -47,4 +47,4 @@ claude plugin install agc-kanban@agc-kanban
 
 ## License
 
-MIT.
+MIT, see [LICENSE](LICENSE).
