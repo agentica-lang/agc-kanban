@@ -12,4 +12,4 @@ Before a PR:
 - A stamp-file rule in the Makefile depends on its inputs and its outputs.
 - A web change checks older CSS rules of equal specificity on the elements it touches (the later file wins).
 
-The design notes are in [../plan.md](../plan.md); the API is in [api.md](api.md).
+The API is in [api.md](api.md).

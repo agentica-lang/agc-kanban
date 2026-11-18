@@ -43,7 +43,6 @@ claude plugin install agc-kanban@agc-kanban
 - [Claude Code plugin](docs/claude-plugin.md): the hooks and the drift classifier.
 - [Other agents](docs/agents.md): skills, OpenCode and Codex.
 - [Development](docs/development.md): tests.
-- [plan.md](plan.md): the original design.
 
 ## License
 
