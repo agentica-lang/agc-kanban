@@ -17,7 +17,7 @@ the body decodes.
 ```json
 {"board": {"id": 1, "slug": "auth", "name": "Auth rewrite",
            "columns": [{"id": 1, "name": "Todo", "position": 0, "done": false, "wip_limit": null}],
-           "created_at": 1762950000000, "updated_at": 1762950000000}}
+           "auto_archive_days": null, "created_at": 1762950000000, "updated_at": 1762950000000}}
 
 {"card": {"id": 12, "board": "auth", "column": "Doing", "column_id": 2, "position": 0,
           "title": "Add login route", "body": "...", "labels": ["api"],
@@ -26,9 +26,9 @@ the body decodes.
           "branch": "feat/login", "worktree": "/work/wt-login",
           "depends_on": [10, 11], "blocks": [14], "ready": false, "done": false,
           "created_by": "orchestrator", "created_at": 1762950000000,
-          "updated_at": 1762950000000, "done_at": null, "version": 4}}
+          "updated_at": 1762950000000, "done_at": null, "archived_at": null, "version": 4}}
 
-{"error": {"code": "CLAIMED", "message": "card 12 is claimed by claude-1",
+{"error": {"code": "CLAIMED", "message": "card is claimed",
            "card_id": 12, "claimed_by": "claude-1"}}
 ```
 
@@ -46,6 +46,7 @@ the body decodes.
 | 409 | `DONE` | Claim or `done` of a card that is already done. |
 | 409 | `CYCLE` | The dependency would make a cycle. |
 | 409 | `CONFLICT` | A name or slug that exists, a column that still has cards. |
+| 500 | `INTERNAL` | An unexpected server error. |
 | 503 | `BUSY` | The database is busy (pool or lock timeout). Safe to retry. |
 
 Tests assert the `code` and the status, never the message.
@@ -58,7 +59,8 @@ Tests assert the `code` and the status, never the message.
 | `GET /api/auth-check` | | `{"ok": true}`; 401 without a good key, the CLI's probe |
 | `GET /api/boards` | | `{"boards": [board]}` (without columns) |
 | `POST /api/boards` | `{"name", "slug"?, "columns"?: ["Todo", ...]}` | 201 `{"board"}` |
-| `GET /api/boards/:board` | | `{"board", "cards": [card], "last_event_id"}`: the snapshot the web draws |
+| `GET /api/boards/:board` | | `{"board", "cards": [card], "last_event_id"}`: the snapshot the web draws; it also has `column_since` (since when each card is in its column) |
+| `GET /api/boards/:board/search` | query: `q`, `all=1` (include done cards), `limit` (20, at most 100) | `{"results": [{"card", "snippet"}]}`, best match first (SQLite FTS5 `bm25` over title, body, labels and comments) |
 | `GET /api/boards/:board/labels` | | `{"labels": [{"id", "name", "color"}]}`, by name; the snapshot has the same `labels` |
 | `PATCH /api/labels/:id` | `{"name"?, "color"?: "#rrggbb"}` (one of them) | `{"label"}`; `label.updated` event; `INVALID`, `NOT_FOUND`, `CONFLICT` (name taken). The web session may send this one write for the `color` only (with `X-Kanban-Agent`; a `name` from the session is 401, a rename needs the key). A rename also writes a `card.updated` event per changed card |
 | `POST /api/boards/:board/columns` | `{"name", "position"?, "done"?, "wip_limit"?}` | 201 `{"column"}` |
@@ -66,7 +68,7 @@ Tests assert the `code` and the status, never the message.
 | `DELETE /api/columns/:id` | | 204, or `CONFLICT` if it has cards |
 | `GET /api/boards/:board/cards` | query: `column`, `ready=1`, `claimed_by`, `label`, `done=0/1`, `archived=1`, `limit` | `{"cards": [card]}`, ordered by column, then position. With `archived=1` it lists the archived cards instead, the newest archive first (`ready` with it is `INVALID`); `limit` (1 to 1000) caps any list |
 | `POST /api/boards/:board/cards` | `{"title", "body"?, "column"?, "labels"?, "priority"?, "depends_on"?: [id], "links"?: [url]}` (at most 50 links, repeats included) | 201 `{"card"}`; the first column by default |
-| `GET /api/cards/:id` | | `{"card", "comments": [comment]}` |
+| `GET /api/cards/:id` | | `{"card", "comments": [comment], "times"}`: `times` is the time the card spent in each column |
 | `PATCH /api/cards/:id` | `{"title"?, "body"?, "labels"?, "priority"?, "branch"?, "worktree"?, "link"?: [url], "unlink"?: [url]}` | `{"card"}`; `CLAIMED` if another agent holds it. `unlink` removes, then `link` adds (each list at most 50, repeats included) the URLs the card lacks; when only links were asked and none changed, nothing is written (no version, no event), unless the actor holds a running lease and leases are on; then it renews the lease. |
 | `POST /api/cards/:id/claim` | `{}` | `{"card"}`; `CLAIMED`, `BLOCKED`, `DONE`. Claiming a card you hold renews the lease. |
 | `POST /api/boards/:board/claim-next` | `{"column"?, "label"?}` | `{"card"}` or `NO_READY_CARD` |

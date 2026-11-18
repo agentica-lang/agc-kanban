@@ -34,7 +34,7 @@ ln -sfn "$PWD/.agents/skills/kanban-cli" ~/.agents/skills/kanban-cli
 
 If an agent reads only an `AGENTS.md`, add one line there: `On the kanban board, follow skill/agc-kanban/SKILL.md and run kanban prime.` OpenCode reads the project `AGENTS.md` (searching up from the current directory) and `~/.config/opencode/AGENTS.md`; Codex reads `~/.codex/AGENTS.md` and then every `AGENTS.md` from the project root down to the current directory.
 
-Set `KANBAN_AGENT` to a different name for each agent, and `KANBAN_BOARD` to the board slug. There is no default name: without one, a write fails with `USAGE: no agent name; ask your coordinator, then set KANBAN_AGENT or --agent` (exit 2), and the `agent` key of `config.toml` is ignored with a warning on stderr. Reads need no name.
+Set `KANBAN_AGENT` (a different name for each agent) and `KANBAN_BOARD`; see [cli.md](cli.md).
 
 ## OpenCode
 
@@ -61,4 +61,4 @@ Codex has [hooks](https://learn.chatgpt.com/docs/hooks), including `SessionStart
 }
 ```
 
-The `timeout` is in seconds. Codex asks you to review and trust a new hook before it runs (`/hooks` in the CLI). The same needs as for Claude Code hold: `kanban` on `PATH`, and `KANBAN_URL`, `KANBAN_API_KEY` and `KANBAN_BOARD` in the environment or the config file. The specs of the script run it on its own, not inside Codex. Without the hooks, run `kanban prime` at the start of a session.
+The `timeout` is in seconds. Codex asks you to review and trust a new hook before it runs (`/hooks` in the CLI). The needs are the plugin's: see [claude-plugin.md](claude-plugin.md). The specs of the script run it on its own, not inside Codex. Without the hooks, run `kanban prime` at the start of a session.

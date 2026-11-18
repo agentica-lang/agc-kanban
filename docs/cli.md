@@ -10,6 +10,8 @@ Commands, flags and exit codes are in
 
 ## Configuration
 
+First value wins: flags, then environment, then `~/.config/agc-kanban/config.toml`, then the default. The file has the keys `url`, `api_key` and `board`.
+
 | Variable | Meaning |
 | --- | --- |
 | `KANBAN_URL` | server URL (default `http://127.0.0.1:4580`) |

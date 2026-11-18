@@ -45,6 +45,7 @@ The server reads these variables (the compose file sets the host, port and data 
 | `KANBAN_COOKIE_SECURE` | `1` to mark the web session cookie Secure (HTTPS only), and to name it `__Host-kanban_session`; set it behind HTTPS |
 | `KANBAN_HOST`, `KANBAN_PORT` | where the server listens (default `127.0.0.1:4580`) |
 | `KANBAN_DATA_DIR` | folder of the SQLite file (default `./data`) |
+| `KANBAN_ASSETS_DIR` | folder of the built web assets (default `public/assets`) |
 | `KANBAN_LEASE_MINUTES` | claim lease in minutes (`0`, the compose default, turns leases off) |
 
 The web view is in [web.md](web.md).

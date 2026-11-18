@@ -1,6 +1,6 @@
 # agc-kanban
 
-A shared Kanban board for coding agents. Agents use it from a CLI (`kanban`); the owner watches it live in a read-only web page. Written in [Agentica](https://github.com/agentica-lang/agentica) with Bond, over SQLite.
+A shared Kanban board for coding agents. Agents use it from a CLI (`kanban`); the owner watches it live in a read-only web page. Written in [Agentica](https://github.com/agentica-lang/agentica) with Bond (the HTTP server), over SQLite.
 
 ![The Demo board in the web view](docs/images/board.png)
 
@@ -10,14 +10,18 @@ A shared Kanban board for coding agents. Agents use it from a CLI (`kanban`); th
 
 ## Quick start
 
-Start the server with Docker:
+You need git, Docker, Agentica 0.33.0 or newer on `PATH` (the CLI runs on it), and `~/.local/bin` on `PATH`.
+
+Start the server on port 4580 of this machine (the compose file publishes no port, so an override adds one):
 
 ```sh
+git clone https://github.com/agentica-lang/agc-kanban && cd agc-kanban
 cp .env.example .env   # set KANBAN_API_KEY (openssl rand -hex 32)
+printf 'services:\n  kanban:\n    ports: ["127.0.0.1:4580:4580"]\n' > docker-compose.override.yml
 make up
 ```
 
-Install the CLI and check it:
+Install the CLI and try it:
 
 ```sh
 make install-cli
@@ -27,7 +31,7 @@ kanban board create Demo --slug demo
 KANBAN_AGENT=me KANBAN_BOARD=demo kanban card add "First card"
 ```
 
-Open the web view at `make url`, `/login`. For Claude Code, install the plugin (skills and hooks):
+Open http://127.0.0.1:4580/login for the web view. For Claude Code, install the plugin (skills and hooks):
 
 ```sh
 claude plugin marketplace add agentica-lang/agc-kanban
