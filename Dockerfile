@@ -17,8 +17,8 @@ FROM debian:13-slim AS build
 
 # Change the version and the sha256 together, taken from the release's
 # SHA256SUMS. The image is x86_64 only (the release archive of linux-x86_64).
-ARG AGENTICA_VERSION=0.33.0
-ARG AGENTICA_SHA256=9d02759b0903ddae9db624e3cb431ede7fe5d836acea0d4ff005f60e7116b350
+ARG AGENTICA_VERSION=0.35.0
+ARG AGENTICA_SHA256=379b0494b84c89b121d089fab9b21879e939a4dd7e89661f6be34e70f13f6322
 
 RUN apt-get update \
  && apt-get install -y --no-install-recommends ca-certificates curl git gcc libc6-dev \

@@ -28,7 +28,7 @@ Or a port on this machine only: `ports: ["127.0.0.1:4580:4580"]` under `kanban`.
 
 ## Without Docker
 
-Needs Agentica 0.33.0, Node and corepack.
+Needs Agentica 0.35.0 or newer, Node and corepack.
 
 ```sh
 export KANBAN_API_KEY="$(openssl rand -hex 32)"

@@ -14,42 +14,4 @@ root=$(CDPATH= cd -- "$(dirname -- "$self")/.." && pwd)
 # temporary file.
 program=${KANBAN_TEST_PROGRAM:-$root/dist/kanban.agcb}
 
-# Agentica cannot see a closed standard output: the write ends the program
-# with RUNTIME-INTERNAL "cannot write to standard output" (exit 1), whatever
-# the cause. When standard output is a pipe and that is the VM's own line,
-# the reader left early (`kanban board show | head -1`): exit 141, silently,
-# as a Unix tool killed by SIGPIPE. Any other failure (a full disk, a
-# closed descriptor) keeps its message.
-# See https://github.com/agentica-lang/agentica/issues/1455.
-# The price: stderr is shown at the end, not live, and is never a terminal.
-errors=$(mktemp 2>/dev/null) || exec agentica run -- "$program" "$@"
-
-# The child runs in the background so a signal reaches this shell at once.
-# Without these traps (dash runs no EXIT trap on a signal) a TERM would leave
-# `agentica` running and the temp file behind.
-pid=
-cleanup() { rm -f "$errors"; }
-trap cleanup EXIT
-trap '[ -z "$pid" ] || kill "$pid" 2>/dev/null; exit 143' TERM HUP
-# A background job of a non-interactive shell starts with SIGINT and SIGQUIT
-# ignored, so Ctrl-C and Ctrl-\ cannot reach it: stop it with TERM here.
-trap '[ -z "$pid" ] || kill "$pid" 2>/dev/null; exit 130' INT
-trap '[ -z "$pid" ] || kill "$pid" 2>/dev/null; exit 131' QUIT
-
-# A background job of a non-interactive shell reads /dev/null instead of
-# standard input (dash even with `<&0`), and `card comment ID -` reads it. So
-# standard input is saved on fd 3 first (an empty one when it is closed) and
-# given to the job from there.
-{ command exec 3<&0; } 2>/dev/null || exec 3</dev/null
-agentica run -- "$program" "$@" <&3 3<&- 2>"$errors" &
-# A signal between `&` and the next line leaves the child running: accepted.
-pid=$!
-status=0
-wait "$pid" || status=$?
-pid=
-
-if [ "$status" -ne 0 ] && [ -p /dev/stdout ] && grep -qx 'cannot write to standard output' "$errors"; then
-  exit 141
-fi
-cat "$errors" >&2 || :
-exit "$status"
+exec agentica run -- "$program" "$@"
