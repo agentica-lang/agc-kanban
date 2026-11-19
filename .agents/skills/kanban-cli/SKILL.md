@@ -11,8 +11,8 @@ id, `whoami` checks health and auth, and `prime` calls nothing.
 
 ## Install
 
-Requires Agentica 0.31.0-alpha.1 (the version the server and the Docker image pin) and
-a running server.
+Requires Agentica 0.35.0 or newer (the wrapper needs 0.35: a closed standard output ends
+the program with status 141) and a running server.
 
 ```sh
 make cli            # compiles dist/kanban.agcb

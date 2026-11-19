@@ -2,7 +2,6 @@
 
 import EAG from "std/eag"
 import Bond from "pkg/bond/bond"
-import UTC from "std/utc"
 import AssetNames from "asset_names"
 import Overview from "../kanban/overview"
 import Claimer from "claimer"
@@ -91,7 +90,7 @@ def home(items: List[Overview.Overview], now: Int) -> String
     <% for agent in board.agents %>
             <span class="<%= chip_class(agent) %>" style="--hue:<%= Claimer.hue(agent) %>"><%= agent %></span>
     <% end %>
-            <time datetime="<%= UTC.iso8601(board.last_activity) %>">active <%= ago(now, board.last_activity) %></time>
+            <time datetime="<%= iso_utc(board.last_activity) %>">active <%= ago(now, board.last_activity) %></time>
           </p>
         </li>
     <% end %>
@@ -139,6 +138,9 @@ def plural(count: Int, word: String) -> String
 
   "#{count} #{word}s"
 end
+
+## The instant of `ms` milliseconds since the Unix epoch as UTC text, to the second: `2026-10-14T19:05:42Z`.
+def iso_utc(ms: Int) -> String = Time.at_us(ms * 1000).unwrap!.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 ## How long ago, as the board page counts time: "just now", "5 min ago", "3 h ago", "2 d ago".
 def ago(now: Int, at: Int) -> String

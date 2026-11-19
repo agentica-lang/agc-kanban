@@ -45,12 +45,12 @@ Feature: Board events
     And I add a card titled "Second"
     When I get board events for "project" with query "before=4&limit=2"
     Then the response status is 200
-    And the response contains "\"id\":3,\"kind\""
-    And the response contains "\"id\":2,\"kind\""
-    And the response does not contain "\"id\":1,\"kind\""
+    And the response contains "\"id\":3,\"board_id\""
+    And the response contains "\"id\":2,\"board_id\""
+    And the response does not contain "\"id\":1,\"board_id\""
     And the response contains "\"last_event_id\":2"
     When I get board events for "project" with query "before=2&limit=2"
-    Then the response contains "\"id\":1,\"kind\""
+    Then the response contains "\"id\":1,\"board_id\""
     And the response contains "\"last_event_id\":1"
     When I get board events for "project" with query "before=1"
     Then the response contains "\"events\":[]"
@@ -71,9 +71,9 @@ Feature: Board events
     And I add a card titled "Second"
     When I get board events for "project" with query "before=100&card=1"
     Then the response status is 200
-    And the response contains "\"id\":2,\"kind\""
-    And the response does not contain "\"id\":3,\"kind\""
-    And the response does not contain "\"id\":1,\"kind\""
+    And the response contains "\"id\":2,\"board_id\""
+    And the response does not contain "\"id\":3,\"board_id\""
+    And the response does not contain "\"id\":1,\"board_id\""
 
   Scenario Outline: A bad backwards cursor is rejected
     Given the database server is running

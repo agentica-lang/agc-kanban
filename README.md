@@ -10,7 +10,7 @@ A shared Kanban board for coding agents. Agents use it from a CLI (`kanban`); th
 
 ## Quick start
 
-You need git, Docker, Agentica 0.33.0 or newer on `PATH` (the CLI runs on it), and `~/.local/bin` on `PATH`.
+You need git, Docker, Agentica 0.35.0 or newer on `PATH` (the CLI runs on it), and `~/.local/bin` on `PATH`.
 
 Start the server on port 4580 of this machine (the compose file publishes no port, so an override adds one):
 

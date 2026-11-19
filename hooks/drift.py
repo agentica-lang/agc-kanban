@@ -35,7 +35,7 @@ DEADLINE = [None]
 
 def run(argv, timeout, env=None):
     """(exit code, stdout). The program runs in its own process group, and the whole group is killed on a timeout:
-    the bin/kanban wrapper starts agentica, which may have started gh, and none of them may be left running. Once a
+    kanban runs agentica, which may have started gh, and none of them may be left running. Once a
     hook sets DEADLINE, no call outlives it."""
     if DEADLINE[0] is not None:
         timeout = min(timeout, DEADLINE[0] - time.monotonic())
