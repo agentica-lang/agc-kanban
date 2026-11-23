@@ -87,8 +87,12 @@ def milestones_list(slug: String, name: String, items: List[Milestones.Milestone
       <section class="home-empty">
         <% if state == "closed" %>
         <h2>No closed milestones</h2>
-        <% else %>
+        <% elsif items.empty? %>
         <h2>No milestones yet</h2>
+        <% else %>
+        <h2>No open milestones</h2>
+        <% end %>
+        <% if items.empty? %>
         <p>Flag a label as a milestone from a shell with the <code>kanban</code> client:</p>
         <pre><code>kanban milestone create 1.0.0 --due 2026-12-01 --board <%= slug %></code></pre>
         <% end %>
@@ -115,7 +119,7 @@ def milestones_list(slug: String, name: String, items: List[Milestones.Milestone
           </div>
           <p class="state"><%= item.percent %>% complete · <%= item.open %> open · <%= item.closed %> closed</p>
     <% if item.due_on.some? %>
-          <p class="due<%== overdue_class(item) %>">Due by <%= item.due_on.unwrap! %></p>
+          <p class="due<%== overdue_class(item) %>">Due by <%= item.due_on.unwrap! %><%== past_due(item) %></p>
     <% end %>
         </li>
     <% end %>
@@ -128,6 +132,12 @@ end
 # The attribute of the tab that shows; markup of this file.
 def current(on: Bool) -> String
   return " aria-current=\"page\"" if on
+
+  ""
+end
+
+def past_due(item: Milestones.Milestone) -> String
+  return " · Past due" if item.overdue
 
   ""
 end
