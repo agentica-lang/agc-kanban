@@ -79,8 +79,9 @@
 // A phone: the header buttons are icons (each keeps its name for screen readers and as a tooltip), and the right
 // padding leaves room only for the Sign out icon.
 @media (max-width: tokens.$narrow) {
-  .top { gap: 0.5rem; padding-right: 3.25rem; }
-  .top h1 { margin-left: 0.25rem; }
+  // The name keeps its own width and drops to a second line when the links and buttons leave no room for it.
+  .top { flex-wrap: wrap; gap: 0.5rem; padding-right: 3.25rem; }
+  .top h1 { flex: 1 0 auto; max-width: 100%; margin-left: 0.25rem; }
   .toggle-filters {
     width: 1.75rem;
     padding: 0;
