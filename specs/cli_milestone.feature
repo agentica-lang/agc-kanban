@@ -18,6 +18,10 @@ Feature: CLI milestones
     And kanban output contains "2099-12-01"
     When I run kanban "milestone list --board project --json"
     Then kanban output contains "\"percent\":50"
+    When I run kanban "milestone update 0.37.0 --description Json --board project --json"
+    Then kanban exits with code 0
+    And kanban output contains "\"milestone\""
+    And kanban output contains "\"description\":\"Json\""
     When I run kanban "milestone update 0.37.0 --no-due --board project"
     Then kanban exits with code 0
     And kanban output contains "50%"
@@ -48,9 +52,20 @@ Feature: CLI milestones
     Then kanban exits with code 1
     And kanban output contains "INVALID"
     When I run kanban "milestone create x --board project"
-    And I run kanban "milestone create x --board project"
+    Then kanban exits with code 0
+    When I run kanban "milestone create x --board project"
     Then kanban exits with code 1
     And kanban output contains "CONFLICT"
+    When I run kanban "milestone update x --due 2026-02-30 --board project"
+    Then kanban exits with code 1
+    And kanban output contains "INVALID"
+    When I run kanban "milestone"
+    Then kanban exits with code 2
+    When I run kanban "milestone nope"
+    Then kanban exits with code 2
+    When I run kanban "milestone list"
+    Then kanban exits with code 2
+    And kanban output contains "USAGE"
     When I run kanban "milestone close nope --board project"
     Then kanban exits with code 1
     And kanban output contains "NOT_FOUND"

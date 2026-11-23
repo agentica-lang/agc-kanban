@@ -14,8 +14,8 @@ def run(words: List[String]) -> Result[Void]
     "list" -> list(rest)
     "create" -> create(rest)
     "update" -> update(rest)
-    "close" -> change_state(rest, "close", "Close a milestone (it leaves the default list)", "closed")
-    "reopen" -> change_state(rest, "reopen", "Reopen a closed milestone", "open")
+    "close" -> change_state(rest, "close", "closed", "closed")
+    "reopen" -> change_state(rest, "reopen", "open", "reopened")
     "remove" -> remove(rest)
     _ -> error("unknown milestone command #{words[0]}")
   end
@@ -117,6 +117,10 @@ def update(words: List[String]) -> Result[Void]
     return error("milestone update needs --description, --due or --no-due")
   end
 
+  if due.some? and due.unwrap!.empty?
+    return error("milestone update --due needs a date: YYYY-MM-DD (--no-due clears it)")
+  end
+
   return error("milestone update takes --due or --no-due, not both") if due.some? and no_due
 
   if no_due
@@ -127,17 +131,17 @@ def update(words: List[String]) -> Result[Void]
   patch(config, OP.string(parsed, "milestone"), fields, "updated")
 end
 
-def change_state(words: List[String], command: String, help: String, state: String) -> Result[Void]
-  parser = OP.new("kanban milestone #{command}", help, [Arg(name: "milestone")], Settings.common_opts())
+def change_state(words: List[String], command: String, state: String, verb: String) -> Result[Void]
+  parser = OP.new(
+    "kanban milestone #{command}",
+    "Set a milestone to #{state} (a closed one leaves the default list)",
+    [Arg(name: "milestone")],
+    Settings.common_opts(),
+  )
 
   parsed = try OP.parse(parser, words)
   config = try Settings.load(Settings.read_flags(parsed))
   Support.require_agent(config)
-  verb = "reopened"
-  if state == "closed"
-    verb = "closed"
-  end
-
   patch(config, OP.string(parsed, "milestone"), {"state": JSON.from(state)}, verb)
 end
 

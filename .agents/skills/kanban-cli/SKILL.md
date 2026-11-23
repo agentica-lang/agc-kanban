@@ -104,12 +104,14 @@ kanban label list                      # one line per label of the board: name, 
 kanban label update api --color '#0075ca' [--name backend]   # a color or a rename; a rename changes the cards that carry it
 #   a new label (first card that carries it) gets a palette color by itself; `card list` output does not show colors
 
-kanban milestone list [--state open|closed|all]   # name, percent, open, closed, due date (- if none), state; --json has everything
+kanban milestone list [--state open|closed|all]   # one line each: name, 40%, 3 open, 2 closed, due date (- if none), state (--json has everything)
 kanban milestone create 0.37.0 [--description T] [--due 2026-12-01]   # flags the label of that name (made if no card has it)
-kanban milestone update 0.37.0 [--description T] [--due DATE | --no-due]
-kanban milestone close 0.37.0          # a closed milestone leaves the default list; `reopen` brings it back
+kanban milestone update 0.37.0 [--description T] [--due DATE | --no-due]   # --description at most 2000 characters
+kanban milestone close 0.37.0          # a closed milestone leaves the default list
+kanban milestone reopen 0.37.0         # brings it back
 kanban milestone remove 0.37.0         # unflags it; the label stays on the cards
-#   a card is in a milestone by carrying the label (`card add --label 0.37.0`); percent = done cards over open + done
+#   a milestone is addressed by its name only (not its id); a write prints `created`, `updated`, `closed`, `reopened`
+#   or `removed`, a tab, then the same line as `list`; a card is in a milestone by carrying the label (`card add --label 0.37.0`)
 
 kanban events [--after 42 | --before 42] [--card 12] [--limit 50]   # --before: newest first
 
@@ -173,7 +175,7 @@ Labels and `--depends-on` take a
 comma-separated list.
 
 Card ids are global, so `card show`, `claim`, `comment`, `done` and `dep` need
-no board. `--board` is required by `column *`, `label *`, `card add`, `card list`, `card search`,
+no board. `--board` is required by `column *`, `label *`, `milestone *`, `card add`, `card list`, `card search`,
 `card next` and `events`; `board show` takes the board as a positional
 argument or from `KANBAN_BOARD`.
 
