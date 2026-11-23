@@ -81,7 +81,8 @@ Five lists, each with a count:
   or run `card done` only when you are the coordinator and the person asked.
 - **Report only**: a title that differs (people shorten titles here on
   purpose; rewrite only when asked), a card whose item left the scope, an item
-  reopened after its card was done, a card with no remote item or a dead link.
+  reopened after its card was done, a card with no remote item or a dead link,
+  a milestone whose due date or description differs from the board's (below).
   Never delete or archive for these.
 - **Detail that lives only locally**: cards with no link, a long body or a
   long comment thread. Propose a remote item (or an update of it) with that
@@ -132,3 +133,26 @@ Report only (8): 6 titles shortened locally; #53 left the milestone; #61 done
 Detail only local (14): cards without a link: #33 #34 #35 ...
 Apply the 32 local changes? No remote item is written.
 ```
+
+## GitHub milestones
+
+A card carries the milestone as a label (`0.32.0`). The board keeps the
+milestone itself (description, due date, open or closed) apart, and shows its
+percent complete. After the cards are in, read the milestones once:
+
+```sh
+gh api "repos/OWNER/REPO/milestones?state=all" --paginate \
+  --jq '.[] | [.title, .due_on, .state, .description] | @tsv'
+kanban milestone list --state all --json --board SLUG
+```
+
+- A GitHub milestone the board lacks: `kanban milestone create TITLE
+  --description TEXT --due YYYY-MM-DD` (the date is the `due_on` day; none
+  when the milestone has no due date). The label is made when no card has it.
+- The due date or description differs: `kanban milestone update TITLE
+  --due ... | --no-due --description ...`.
+- A closed GitHub milestone the board keeps open: `kanban milestone close
+  TITLE`. One that is open there and closed here is a report-only line.
+- Never remove a milestone because of the remote.
+- A second run changes nothing. These writes touch only the local board, so
+  they need no extra yes.

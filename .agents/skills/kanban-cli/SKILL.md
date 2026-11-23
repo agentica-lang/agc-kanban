@@ -104,6 +104,13 @@ kanban label list                      # one line per label of the board: name, 
 kanban label update api --color '#0075ca' [--name backend]   # a color or a rename; a rename changes the cards that carry it
 #   a new label (first card that carries it) gets a palette color by itself; `card list` output does not show colors
 
+kanban milestone list [--state open|closed|all]   # name, percent, open, closed, due date (- if none), state; --json has everything
+kanban milestone create 0.37.0 [--description T] [--due 2026-12-01]   # flags the label of that name (made if no card has it)
+kanban milestone update 0.37.0 [--description T] [--due DATE | --no-due]
+kanban milestone close 0.37.0          # a closed milestone leaves the default list; `reopen` brings it back
+kanban milestone remove 0.37.0         # unflags it; the label stays on the cards
+#   a card is in a milestone by carrying the label (`card add --label 0.37.0`); percent = done cards over open + done
+
 kanban events [--after 42 | --before 42] [--card 12] [--limit 50]   # --before: newest first
 
 kanban doctor [--stale-minutes 180] [--no-github] [--cards 12,15] [--json]   # where the board no longer matches reality (below)
