@@ -53,6 +53,10 @@ def main() -> Void
       BDD.step("I get card {int}", &get_card),
       BDD.step("I send {string} to {string} with the body {string}", &send_body),
       BDD.step("I get the labels of the project", &project_labels),
+      BDD.step("I get the milestones of the project", &project_milestones),
+      BDD.step("I create the milestone {string} with a description of {int} characters", &create_milestone_described),
+      BDD.step("I give milestone {int} a description of {int} characters", &describe_milestone),
+      BDD.step("I get the milestones of the project with state {string}", &project_milestones_state),
       BDD.step("I make card {int} depend on card {int}", &add_dependency),
       BDD.step("agent {string} makes card {int} depend on card {int}", &add_dependency_as),
       BDD.step("agent {string} forcibly makes card {int} depend on card {int}", &force_dependency_as),
@@ -475,6 +479,26 @@ def send_body(ctx: BDD.Context, args: List[String]) -> BDD.Context = api_request
 
 def project_labels(ctx: BDD.Context, _args: List[String]) -> BDD.Context
   api_request(ctx, "GET", "/api/boards/project/labels", "")
+end
+
+def create_milestone_described(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  body = JSON.encode(JSON.from({"name": args[0], "description": filler(args[1].to_i!)}))
+  api_request(ctx, "POST", "/api/boards/project/milestones", body)
+end
+
+def filler(count: Int) -> String = (1..count).map { |_| "a" }.join("")
+
+def describe_milestone(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  body = JSON.encode(JSON.from({"description": filler(args[1].to_i!)}))
+  api_request(ctx, "PATCH", "/api/milestones/#{args[0]}", body)
+end
+
+def project_milestones(ctx: BDD.Context, _args: List[String]) -> BDD.Context
+  api_request(ctx, "GET", "/api/boards/project/milestones", "")
+end
+
+def project_milestones_state(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  api_request(ctx, "GET", "/api/boards/project/milestones?state=#{args[0]}", "")
 end
 
 def api_request(ctx: BDD.Context, method: String, path: String, body: String) -> BDD.Context

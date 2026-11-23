@@ -40,6 +40,7 @@ def steps() -> List[BDD.Step]
     BDD.step("I post to {string} with the session", &post_signed),
     BDD.step("I patch {string} with the session as agent {string} and the body {string}", &patch_signed),
     BDD.step("I post {string} with the session as agent {string} and the body {string}", &post_signed_as),
+    BDD.step("I delete {string} with the session as agent {string}", &delete_signed),
     BDD.step("I get the built stylesheet", &get_stylesheet),
     BDD.step("I get the page {string} with the key {string} as the apikey header", &get_page_with_key),
     BDD.step("the response sets the session cookie", &sets_cookie),
@@ -272,6 +273,10 @@ end
 def patch_signed(ctx: BDD.Context, args: List[String]) -> BDD.Context = send_signed(ctx, "PATCH", args)
 
 def post_signed_as(ctx: BDD.Context, args: List[String]) -> BDD.Context = send_signed(ctx, "POST", args)
+
+def delete_signed(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  send_signed(ctx, "DELETE", [args[0], args[1], ""])
+end
 
 def send_signed(ctx: BDD.Context, method: String, args: List[String]) -> BDD.Context
   headers = [HTTP.Header(name: "Cookie", value: text_of(ctx, "cookie"))]

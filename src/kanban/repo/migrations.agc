@@ -10,6 +10,7 @@ import M0008 from "migrations/m0008_card_search"
 import M0009 from "migrations/m0009_labels"
 import M0010 from "migrations/m0010_auto_archive"
 import M0011 from "migrations/m0011_users"
+import M0012 from "migrations/m0012_milestones"
 
 def all() -> List[Migrate.Migration]
   [
@@ -24,5 +25,6 @@ def all() -> List[Migrate.Migration]
     M0009.migration(),
     M0010.migration(),
     M0011.migration(),
+    M0012.migration(),
   ]
 end
