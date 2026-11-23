@@ -5,6 +5,7 @@ import CardActions from "src/kanban_cli/card_actions"
 import Doctor from "src/kanban_cli/doctor"
 import Events from "src/kanban_cli/events"
 import Labels from "src/kanban_cli/labels"
+import Milestones from "src/kanban_cli/milestones"
 import Cards from "src/kanban_cli/cards"
 import Columns from "src/kanban_cli/columns"
 import Output from "src/kanban_cli/output"
@@ -46,6 +47,7 @@ def dispatch(words: List[String]) -> Result[Void]
     "column" -> Columns.run(rest)
     "card" -> card(rest)
     "label" -> Labels.run(rest)
+    "milestone" -> Milestones.run(rest)
     "events" -> Events.run(rest)
     "doctor" -> Doctor.run(rest)
     "prime" -> Prime.run()
@@ -56,6 +58,6 @@ end
 
 def usage() -> String
   (
-    "kanban: the board client\n\n  kanban board list\n  kanban board create NAME [--slug S] [--columns C1,C2]\n  kanban board show [BOARD]\n  kanban board archive-done [--days N]\n  kanban board auto-archive --days N | --off\n  kanban column add NAME [--position N] [--done] [--wip N]\n  kanban column rename COLUMN NAME\n  kanban column move COLUMN POSITION\n  kanban column remove COLUMN\n  kanban card add TITLE [--body T | --body-file F] [--column C] [--label L] [--priority N] [--depends-on IDS]\n  kanban card list [--column C] [--ready] [--mine] [--claimed-by A] [--label L] [--all | --archived] [--format text|tsv]\n  kanban card show ID\n  kanban card update ID [--title T] [--body T | --body-file F] [--label L] [--priority N] [--branch B] [--worktree W] [--force]\n  kanban card claim ID\n  kanban card next [--column C] [--label L]\n  kanban card release ID [--to COLUMN] [--force]\n  kanban card move ID COLUMN [--position N] [--force]\n  kanban card done ID [--force]\n  kanban card archive ID [--force]\n  kanban card unarchive ID\n  kanban card comment ID TEXT | --file F\n  kanban card dep add ID DEPENDS_ON [--force]\n  kanban card dep remove ID DEPENDS_ON [--force]\n  kanban label list\n  kanban label update LABEL [--color #RRGGBB] [--name NEW]\n  kanban events [--after N | --before N] [--card ID] [--limit N]\n  kanban doctor [--stale-minutes N] [--no-github] [--cards IDS]\n  kanban whoami\n\nFlags: --url URL, --agent NAME, --board SLUG, --json"
+    "kanban: the board client\n\n  kanban board list\n  kanban board create NAME [--slug S] [--columns C1,C2]\n  kanban board show [BOARD]\n  kanban board archive-done [--days N]\n  kanban board auto-archive --days N | --off\n  kanban column add NAME [--position N] [--done] [--wip N]\n  kanban column rename COLUMN NAME\n  kanban column move COLUMN POSITION\n  kanban column remove COLUMN\n  kanban card add TITLE [--body T | --body-file F] [--column C] [--label L] [--priority N] [--depends-on IDS]\n  kanban card list [--column C] [--ready] [--mine] [--claimed-by A] [--label L] [--all | --archived] [--format text|tsv]\n  kanban card show ID\n  kanban card update ID [--title T] [--body T | --body-file F] [--label L] [--priority N] [--branch B] [--worktree W] [--force]\n  kanban card claim ID\n  kanban card next [--column C] [--label L]\n  kanban card release ID [--to COLUMN] [--force]\n  kanban card move ID COLUMN [--position N] [--force]\n  kanban card done ID [--force]\n  kanban card archive ID [--force]\n  kanban card unarchive ID\n  kanban card comment ID TEXT | --file F\n  kanban card dep add ID DEPENDS_ON [--force]\n  kanban card dep remove ID DEPENDS_ON [--force]\n  kanban label list\n  kanban label update LABEL [--color #RRGGBB] [--name NEW]\n  kanban milestone list [--state open|closed|all]\n  kanban milestone create NAME [--description T] [--due YYYY-MM-DD]\n  kanban milestone update NAME [--description T] [--due YYYY-MM-DD | --no-due]\n  kanban milestone close NAME\n  kanban milestone reopen NAME\n  kanban milestone remove NAME\n  kanban events [--after N | --before N] [--card ID] [--limit N]\n  kanban doctor [--stale-minutes N] [--no-github] [--cards IDS]\n  kanban whoami\n\nFlags: --url URL, --agent NAME, --board SLUG, --json"
   )
 end

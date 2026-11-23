@@ -69,10 +69,13 @@ that direction, and list it in the plan first.
 Five lists, each with a count:
 
 - **Create**: items with no card. Closed items with no card are skipped and
-  counted, unless the person asked for them.
+  counted, unless the person asked for them. A milestone the board lacks
+  (created, and closed in the same step when GitHub has it closed).
 - **Update**: add a missing link; add a label a new card would get and the
   card lacks. `card update --label` replaces the whole list, so send the old
-  labels and the new ones. Never remove a label.
+  labels and the new ones. Never remove a label. Milestones (see "GitHub
+  milestones"): a milestone update (a due date or description that differs,
+  a GitHub milestone closed that the board keeps open).
 - **Propose done**: cards whose item closed or merged, and cards whose own
   PR merged while a linked issue stays open (a part card, `#N part K`). A PR
   the card only points to does not count. List first the stale cards: in
@@ -81,8 +84,9 @@ Five lists, each with a count:
   or run `card done` only when you are the coordinator and the person asked.
 - **Report only**: a title that differs (people shorten titles here on
   purpose; rewrite only when asked), a card whose item left the scope, an item
-  reopened after its card was done, a card with no remote item or a dead link.
-  Never delete or archive for these.
+  reopened after its card was done, a card with no remote item or a dead link,
+  a milestone that is open on GitHub and closed on the board. Never delete or
+  archive for these.
 - **Detail that lives only locally**: cards with no link, a long body or a
   long comment thread. Propose a remote item (or an update of it) with that
   text, then a link and a short pointer on the card. This writes to the
@@ -127,8 +131,40 @@ Source: OWNER/REPO open issues, milestone 0.32.0 (37 items) -> board SLUG
 Create (28): #1510 "Error details from C ...", #1490 ... [labels: repo, 0.32.0]
 Update (4): cards #28 #29 #57 #60 get the link (their body is only the URL)
 Propose done (0)
+Create milestones (1): 0.32.0 --due 2026-12-01, then closed (closed on GitHub)
+Update milestones (1): 0.31.0 due 2026-11-15 -> 2026-11-30
 Report only (8): 6 titles shortened locally; #53 left the milestone; #61 done
   but #1458 is open again
 Detail only local (14): cards without a link: #33 #34 #35 ...
-Apply the 32 local changes? No remote item is written.
+Apply the 34 local changes? No remote item is written.
 ```
+
+## GitHub milestones
+
+A card carries the milestone as a label (`0.32.0`). The board keeps the
+milestone itself (description, due date, open or closed) apart, and shows its
+percent complete. After the cards are planned, read the milestones once and
+add the changes to the plan, so they pass the same gate as the cards:
+
+```sh
+gh api "repos/OWNER/REPO/milestones?state=all" --paginate \
+  --jq '.[] | {title, due_on: (.due_on // "")[0:10], state, description: (.description // "")}'
+kanban milestone list --state all --json --board SLUG
+```
+
+- **Scope**: only the milestones whose title is a label on a synced card, or
+  the ones the person named. `state=all` returns every old milestone; do not
+  import them all.
+- A GitHub milestone the board lacks: `kanban milestone create TITLE
+  --description TEXT --due YYYY-MM-DD`; if GitHub has it closed, `kanban
+  milestone close TITLE` in the same step. The label is made when no card has
+  it. `due_on` is cut to its day; an empty one means no `--due`.
+- The due date or description differs: `kanban milestone update TITLE
+  --due DATE | --no-due --description TEXT`.
+- GitHub closed, the board open: `kanban milestone close TITLE`. Open on
+  GitHub and closed on the board is a report-only line.
+- A description over 2000 characters is refused by the board: cut it to 2000
+  or report it, as the person prefers.
+- Never remove a milestone because of the remote.
+- A second run changes nothing. In the report-only mode, or when the
+  direction is local to remote, every milestone write becomes a report line.
