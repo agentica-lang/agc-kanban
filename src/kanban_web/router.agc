@@ -25,6 +25,7 @@ def install(app: Bond.App, pool: Optional[Database.Pool], lease_minutes: Int, ca
     |> Bond.post(Routes.LOGOUT, ->(conn) { Pages.logout(conn, pool, cable) })
     |> Bond.get(Routes.BOARDS_PAGE, ->(conn) { Pages.boards(conn, pool) })
     |> Bond.get(Routes.BOARD_PAGE, ->(conn) { Pages.board(conn, pool) })
+    |> Bond.get(Routes.BOARD_MILESTONES_PAGE, ->(conn) { Pages.milestones(conn, pool) })
     |> Bond.get(Routes.HEALTH, ->(conn) { Health.health(conn) })
     |> Bond.get(Routes.AUTH_CHECK, ->(conn) { Health.auth_check(conn) })
     |> Bond.get(Routes.BOARDS, ->(conn) { Boards.index(conn, pool) })

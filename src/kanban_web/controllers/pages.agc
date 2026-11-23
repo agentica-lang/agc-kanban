@@ -7,7 +7,9 @@ import Passwords from "../../kanban/passwords"
 import Users from "../../kanban/users"
 import Boards from "../../kanban/boards"
 import Database from "../../kanban/repo/database"
+import Milestones from "../../kanban/milestones"
 import Overview from "../../kanban/overview"
+import Params from "../params"
 import Views from "../views"
 
 def root(conn: Bond.Conn) -> Result[Bond.Conn] = ok(Bond.redirect(conn, "/boards"))
@@ -120,10 +122,45 @@ def board(conn: Bond.Conn, pool: Optional[Database.Pool]) -> Result[Bond.Conn]
   ok(Bond.html(conn, 200, Views.board(reference)))
 end
 
+## The milestones of a board, open (the default) or closed (`?state=closed`). The session is checked before, as for the
+## other pages; an unknown board is a 404 page and a store that is down a 503 one.
+def milestones(conn: Bond.Conn, pool: Optional[Database.Pool]) -> Result[Bond.Conn]
+  return ok(Bond.html(conn, 503, Views.boards_unavailable())) if not pool.some?
+
+  reference = Bond.param(conn, "slug").unwrap_or("")
+  found = Database.with_connection(pool.unwrap!) do |db|
+    board = try Boards.get_open(db, reference)
+    items = try Milestones.list_by_board_id(db, board.id, "all", Milestones.today())
+    ok(MilestonesPage(board: board, items: items))
+  end
+
+  if not found.ok?
+    return ok(Bond.html(conn, 404, Views.board_missing())) if found.message.start_with?("NOT_FOUND:")
+
+    IO.warn("kanban: milestones page read failed: #{found.message}")
+    return ok(Bond.html(conn, 503, Views.boards_unavailable()))
+  end
+
+  state = "open"
+  query = Bond.query_params(conn)
+  if query.ok? and Params.text(query.unwrap!, "state") == some("closed")
+    state = "closed"
+  end
+
+  page = found.unwrap!
+  html = Views.milestones(page.board.slug, page.board.name, page.items, state)
+  ok(Bond.header(Bond.html(conn, 200, html), "Cache-Control", "no-store"))
+end
+
 private
 
 LONGEST_PASSWORD = 1024
 BUSY_RETRY_SECONDS = 2
+
+struct MilestonesPage
+  board: Boards.Board
+  items: List[Milestones.Milestone]
+end
 
 def authenticate(pool: Database.Pool, name: String, password: String) -> Result[Optional[Users.Account]]
   found = try Users.find(pool, name)

@@ -13,10 +13,11 @@ Feature: The web pages
     And the response redirects to "/login"
 
     Examples:
-      | path            |
-      | /               |
-      | /boards         |
-      | /boards/project |
+      | path                       |
+      | /                          |
+      | /boards                    |
+      | /boards/project            |
+      | /boards/project/milestones |
 
   Scenario: The session reads the pages and the key does not replace it
     Given the database server is running
@@ -99,6 +100,78 @@ Feature: The web pages
     And the response contains "1 agent working"
     And the response contains "just now"
     And the response contains "1 board"
+
+  Scenario: The milestones page shows the percent, the link to the cards and the due date, and the tabs split open from closed
+    Given the database server is running
+    When I post a board named "Project" with slug "project" as "agent-1"
+    And I add a card titled "A" with labels "0.37.0" and priority 2
+    And I add a card titled "B" with labels "0.37.0" and priority 2
+    And I add a card titled "C" with labels "0.37.0" and priority 2
+    And I add a card titled "D" with labels "0.37.0" and priority 2
+    And I add a card titled "E" with labels "0.37.0" and priority 2
+    And I move card 1 to "Done"
+    And I move card 2 to "Done"
+    And I send "POST" to "/api/boards/project/milestones" with the body "{\"name\":\"0.37.0\",\"description\":\"The big one\",\"due_on\":\"2020-12-01\"}"
+    And I send "POST" to "/api/boards/project/milestones" with the body "{\"name\":\"retired\"}"
+    And I send "PATCH" to "/api/milestones/2" with the body "{\"state\":\"closed\"}"
+    And I sign in
+    And I get the page "/boards/project/milestones" with the session
+    Then the response status is 200
+    And the response contains "Milestones"
+    And the response contains "40% complete · 3 open · 2 closed"
+    And the response contains "href=\"/boards/project?label=0.37.0\""
+    And the response contains "The big one"
+    And the response contains "Due by 2020-12-01"
+    And the response contains "due overdue"
+    And the response contains "Due by 2020-12-01 · Past due"
+    And the response contains "aria-current=\"page\">Open"
+    And the response contains "Open (1)"
+    And the response contains "Closed (1)"
+    And the response does not contain "retired"
+    And the response does not contain "Loading..."
+    When I get the page "/boards/project/milestones?state=bogus" with the session
+    Then the response contains "aria-current=\"page\">Open"
+    And the response does not contain "retired"
+    When I get the page "/boards/project/milestones?state=closed" with the session
+    Then the response contains "retired"
+    And the response contains "closed</span>"
+    And the response does not contain "0.37.0\""
+    When I get the page "/boards" with the session
+    Then the response contains "href=\"/boards/project/milestones\""
+
+  Scenario: The milestones page escapes a name, and says what to run when there is none
+    Given the database server is running
+    When I post a board named "Project" with slug "project" as "agent-1"
+    And I sign in
+    And I get the page "/boards/project/milestones" with the session
+    Then the response contains "No milestones yet"
+    And the response contains "kanban milestone create"
+    When I get the page "/boards/project/milestones?state=closed" with the session
+    Then the response contains "No closed milestones"
+    When I send "POST" to "/api/boards/project/milestones" with the body "{\"name\":\"<b>x\",\"description\":\"<i>y\"}"
+    And I get the page "/boards/project/milestones" with the session
+    Then the response contains "&lt;b&gt;x"
+    And the response contains "&lt;i&gt;y"
+    And the response contains "label=%3Cb%3Ex"
+    When I send "POST" to "/api/boards/project/milestones" with the body "{\"name\":\"a&b\"}"
+    And I get the page "/boards/project/milestones" with the session
+    Then the response contains "label=a%26b"
+    And the response contains "a&amp;b"
+    And the response does not contain "<b>x"
+    And the response does not contain "<i>y"
+    When I get the page "/boards/nowhere/milestones" with the session
+    Then the response status is 404
+
+  Scenario: The Open tab with only closed milestones does not say there are none at all
+    Given the database server is running
+    When I post a board named "Project" with slug "project" as "agent-1"
+    And I send "POST" to "/api/boards/project/milestones" with the body "{\"name\":\"done\"}"
+    And I send "PATCH" to "/api/milestones/1" with the body "{\"state\":\"closed\"}"
+    And I sign in
+    And I get the page "/boards/project/milestones" with the session
+    Then the response contains "No open milestones"
+    And the response does not contain "kanban milestone create"
+    And the response does not contain "No milestones yet"
 
   Scenario: A claim whose lease ran out shows no agent
     Given the database server is running
