@@ -11,6 +11,7 @@ import Deps from "controllers/deps"
 import Events from "controllers/events"
 import Health from "health"
 import Labels from "controllers/labels"
+import Milestones from "controllers/milestones"
 import Pages from "controllers/pages"
 import Routes from "routes"
 
@@ -51,6 +52,10 @@ def install(app: Bond.App, pool: Optional[Database.Pool], lease_minutes: Int, ca
     |> Bond.delete(Routes.COLUMN, ->(conn) { Columns.remove(conn, pool) })
     |> Bond.get(Routes.BOARD_LABELS, ->(conn) { Labels.index(conn, pool) })
     |> Bond.patch(Routes.LABEL, ->(conn) { Labels.update(conn, pool) })
+    |> Bond.get(Routes.BOARD_MILESTONES, ->(conn) { Milestones.index(conn, pool) })
+    |> Bond.post(Routes.BOARD_MILESTONES, ->(conn) { Milestones.create(conn, pool) })
+    |> Bond.patch(Routes.MILESTONE, ->(conn) { Milestones.update(conn, pool) })
+    |> Bond.delete(Routes.MILESTONE, ->(conn) { Milestones.remove(conn, pool) })
     |> Bond.get(Routes.BOARD_EVENTS, ->(conn) { Events.index(conn, pool) })
   )
 end

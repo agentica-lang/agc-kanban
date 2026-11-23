@@ -24,6 +24,8 @@ var KINDS = {
   "column.updated": { verb: "changed the column", group: "board" },
   "column.removed": { verb: "removed the column", group: "board" },
   "label.updated": { verb: "changed the label", group: "board" },
+  "milestone.updated": { verb: "changed the milestone", group: "board" },
+  "milestone.removed": { verb: "removed the milestone", group: "board" },
   "board.created": { verb: "created the board", group: "board" },
   "board.done_archived": { verb: "archived", group: "board" },
   "board.updated": { verb: "changed the board", group: "board" },

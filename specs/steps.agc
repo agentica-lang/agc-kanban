@@ -53,6 +53,8 @@ def main() -> Void
       BDD.step("I get card {int}", &get_card),
       BDD.step("I send {string} to {string} with the body {string}", &send_body),
       BDD.step("I get the labels of the project", &project_labels),
+      BDD.step("I get the milestones of the project", &project_milestones),
+      BDD.step("I get the milestones of the project with state {string}", &project_milestones_state),
       BDD.step("I make card {int} depend on card {int}", &add_dependency),
       BDD.step("agent {string} makes card {int} depend on card {int}", &add_dependency_as),
       BDD.step("agent {string} forcibly makes card {int} depend on card {int}", &force_dependency_as),
@@ -475,6 +477,14 @@ def send_body(ctx: BDD.Context, args: List[String]) -> BDD.Context = api_request
 
 def project_labels(ctx: BDD.Context, _args: List[String]) -> BDD.Context
   api_request(ctx, "GET", "/api/boards/project/labels", "")
+end
+
+def project_milestones(ctx: BDD.Context, _args: List[String]) -> BDD.Context
+  api_request(ctx, "GET", "/api/boards/project/milestones", "")
+end
+
+def project_milestones_state(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  api_request(ctx, "GET", "/api/boards/project/milestones?state=#{args[0]}", "")
 end
 
 def api_request(ctx: BDD.Context, method: String, path: String, body: String) -> BDD.Context

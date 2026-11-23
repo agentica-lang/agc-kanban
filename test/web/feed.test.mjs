@@ -132,3 +132,10 @@ test("a change of the automatic archive reads as a sentence", function () {
   assert.equal(entry({ id: 14, kind: "board.updated", card_id: null, actor: "agent", created_at: 1000, data: { auto_archive_days: 3 } }, {}).name, "to archive done cards after 3 days");
   assert.equal(entry({ id: 15, kind: "board.updated", card_id: null, actor: "agent", created_at: 1000, data: { auto_archive_days: null } }, {}).name, "to keep done cards");
 });
+
+test("a milestone change and its removal name the milestone", function () {
+  var changed = entry({ id: 16, kind: "milestone.updated", card_id: null, actor: "agent", created_at: 1000, data: { id: 3, name: "0.37.0" } }, {});
+  assert.deepEqual([changed.verb, changed.group, changed.name], ["changed the milestone", "board", "0.37.0"]);
+  var gone = entry({ id: 17, kind: "milestone.removed", card_id: null, actor: "agent", created_at: 1000, data: { id: 3, name: "0.37.0" } }, {});
+  assert.deepEqual([gone.verb, gone.name], ["removed the milestone", "0.37.0"]);
+});
