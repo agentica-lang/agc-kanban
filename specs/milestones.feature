@@ -76,6 +76,21 @@ Feature: Milestones
     Then the response contains "\"due_on\":null"
     And the response contains "\"overdue\":false"
 
+  Scenario: The description and the due date change by a patch
+    Given the database server is running
+    When I post a board named "Project" with slug "project" as "agent-1"
+    And I send "POST" to "/api/boards/project/milestones" with the body "{\"name\":\"0.37.0\"}"
+    And I send "PATCH" to "/api/milestones/1" with the body "{\"description\":\"The big one\"}"
+    Then the response status is 200
+    And the response contains "\"description\":\"The big one\""
+    And the response contains "\"due_on\":null"
+    When I send "PATCH" to "/api/milestones/1" with the body "{\"due_on\":\"2099-03-04\"}"
+    Then the response status is 200
+    And the response contains "\"due_on\":\"2099-03-04\""
+    And the response contains "\"description\":\"The big one\""
+    When I get board events for "project" after 0
+    Then the response contains exactly 3 occurrences of "milestone.updated"
+
   Scenario: Removing a milestone keeps the label on the cards, and renaming the label keeps the milestone
     Given the database server is running
     When I post a board named "Project" with slug "project" as "agent-1"
@@ -115,12 +130,26 @@ Feature: Milestones
     Then the response status is 400
     When I send "PATCH" to "/api/milestones/1" with the body "{\"due_on\":\"2026-13-01\"}"
     Then the response status is 400
+    When I send "PATCH" to "/api/milestones/1" with the body "{\"due_on\":null}"
+    Then the response status is 400
     When I send "PATCH" to "/api/milestones/9" with the body "{\"state\":\"closed\"}"
     Then the response status is 404
     When I send "DELETE" to "/api/milestones/9" with the body ""
     Then the response status is 404
     When I send "GET" to "/api/boards/project/milestones?state=half" with the body ""
     Then the response status is 400
+
+  Scenario: A description has at most 2000 characters
+    Given the database server is running
+    When I post a board named "Project" with slug "project" as "agent-1"
+    And I create the milestone "x" with a description of 2001 characters
+    Then the response status is 400
+    And the response contains "description"
+    When I create the milestone "x" with a description of 2000 characters
+    Then the response status is 201
+    When I give milestone 1 a description of 2001 characters
+    Then the response status is 400
+    And the response contains "description"
 
   Scenario: The same name on two boards is two milestones
     Given the database server is running
@@ -147,3 +176,12 @@ Feature: Milestones
     Then the response status is 401
     When I patch "/api/milestones/1" with the session as agent "agent-1" and the body "{\"state\":\"closed\"}"
     Then the response status is 401
+    When I patch "/api/milestones/1" with the session as agent "agent-1" and the body "{\"description\":\"web\"}"
+    Then the response status is 401
+    When I patch "/api/milestones/1" with the session as agent "agent-1" and the body "{\"due_on\":\"2099-01-01\"}"
+    Then the response status is 401
+    When I delete "/api/milestones/1" with the session as agent "agent-1"
+    Then the response status is 401
+    When I get the milestones of the project
+    Then the response contains "0.37.0"
+    And the response contains "\"description\":\"\""

@@ -9,9 +9,8 @@ def put(conn: Db.Connection, sql: String) -> Result[Void]
   ok()
 end
 
-# Done cards count as closed whether or not they are archived, an archived card that was not done counts in
-# neither, and
-# the list puts open milestones first by due date (none last), then closed ones, the newest closed first.
+# Done cards count as closed whether or not they are archived, and an archived card that was not done counts in
+# neither. The list puts open milestones first by due date (none last), then closed ones, the newest closed first.
 def test_the_counts_and_the_order_of_milestones() -> Result[Void]
   conn = try Db.open("sqlite::memory:", [Sqlite.driver()])
   _ = try Migrate.up(conn, Migrations.all())
@@ -28,7 +27,7 @@ def test_the_counts_and_the_order_of_milestones() -> Result[Void]
 
   try put(
     conn,
-    "insert into milestones (label_id, due_on, closed_at, created_at) values (1, '2030-01-01', null, 1), (2, null, null, 1), (3, '2020-01-01', null, 1), (4, null, 5, 1)",
+    "insert into milestones (label_id, due_on, closed_at) values (1, '2030-01-01', null), (2, null, null), (3, '2020-01-01', null), (4, null, 5)",
   )
 
   try put(
