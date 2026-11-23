@@ -71,6 +71,7 @@ end
 
 def create(pool: Database.Pool, input: Create) -> Result[Milestone]
   return error("INVALID:name") if input.name.strip.empty?
+  return error("INVALID:description") if input.description.length > DESCRIPTION_MAX
   return error("INVALID:due_on") if input.due_on.some? and not valid_date?(input.due_on.unwrap!)
   return error("INVALID:agent") if not valid_agent?(input.actor)
 
@@ -80,6 +81,7 @@ end
 def update(pool: Database.Pool, input: Update) -> Result[Milestone]
   return error("INVALID:id") if input.id <= 0
   return error("INVALID:milestone") if not input.description.some? and not input.due_on.some? and not input.state.some?
+  return error("INVALID:description") if input.description.some? and input.description.unwrap!.length > DESCRIPTION_MAX
   return error("INVALID:due_on") if input.due_on.some? and not blank_or_date?(input.due_on.unwrap!)
   return error("INVALID:state") if input.state.some? and not ["open", "closed"].include?(input.state.unwrap!)
   return error("INVALID:agent") if not valid_agent?(input.actor)
@@ -95,6 +97,8 @@ def remove(pool: Database.Pool, input: Remove) -> Result[Void]
 end
 
 private
+
+DESCRIPTION_MAX = 2000
 
 SELECT = (
   "select l.id, l.name, l.color, m.description, m.due_on, m.closed_at, coalesce(m.due_on < ?, 0) as late, (select count(*) from cards c join columns col on col.id = c.column_id where c.board_id = l.board_id and col.done = 1 and exists (select 1 from json_each(c.labels) j where j.value = l.name)) as closed, (select count(*) from cards c join columns col on col.id = c.column_id where c.board_id = l.board_id and col.done = 0 and c.archived_at is null and exists (select 1 from json_each(c.labels) j where j.value = l.name)) as open from milestones m join labels l on l.id = m.label_id"
@@ -149,8 +153,8 @@ def create_open(conn: Db.Connection, input: Create) -> Result[Milestone]
 
   _ = try Db.execute(
     conn,
-    "insert into milestones (label_id, description, due_on, created_at) values (?, ?, ?, ?)",
-    [Db.Value.Int(id), Db.Value.Text(input.description), nullable(input.due_on), Db.Value.Int(now)],
+    "insert into milestones (label_id, description, due_on) values (?, ?, ?)",
+    [Db.Value.Int(id), Db.Value.Text(input.description), nullable(input.due_on)],
   )
 
   announce(conn, board, id, input.actor, now)

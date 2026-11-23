@@ -40,7 +40,7 @@ A milestone is a label that the board flagged; its `id` is the label's. A card i
 cards of a milestone are the cards of `?label=NAME`. `closed` counts the cards in a done column, archived or not (the
 auto archive does not lower the percent). `open` counts the cards that are neither archived nor done. An archived card
 that was not done counts in neither. `percent` is `closed` over `open + closed`, rounded down (0 without cards).
-`overdue` is an open milestone with a due date before today (UTC) and open cards left. Milestones are per board. The
+Making a column done (or not) changes what its archived cards count as, so the numbers follow the flag. `overdue` is an open milestone with a due date before today (UTC) and open cards left. Milestones are per board. The
 events are `milestone.updated` (data: the milestone) and `milestone.removed` (data: `id`, `name`). The web session
 reads them and cannot write them: a write needs the key.
 
@@ -75,9 +75,9 @@ Tests assert the `code` and the status, never the message.
 | `GET /api/boards/:board/search` | query: `q`, `all=1` (include done cards), `limit` (20, at most 100) | `{"results": [{"card", "snippet"}]}`, best match first (SQLite FTS5 `bm25` over title, body, labels and comments) |
 | `GET /api/boards/:board/labels` | | `{"labels": [{"id", "name", "color"}]}`, by name; the snapshot has the same `labels` |
 | `PATCH /api/labels/:id` | `{"name"?, "color"?: "#rrggbb"}` (one of them) | `{"label"}`; `label.updated` event; `INVALID`, `NOT_FOUND`, `CONFLICT` (name taken). The web session may send this one write for the `color` only (with `X-Kanban-Agent`; a `name` from the session is 401, a rename needs the key). A rename also writes a `card.updated` event per changed card |
-| `GET /api/boards/:board/milestones` | query: `state` = `open` (default), `closed` or `all` | `{"milestones": [milestone]}`; open ones first, the soonest due date first and the undated last, then closed ones, the newest closed first |
-| `POST /api/boards/:board/milestones` | `{"name", "description"?, "due_on"?: "YYYY-MM-DD"}` | 201 `{"milestone"}`; `INVALID` (blank name, a due date that is not a real date), `CONFLICT` (already a milestone). It flags the label of that name, and makes the label if no card has it yet |
-| `PATCH /api/milestones/:id` | `{"description"?, "due_on"?, "state"?: "open" or "closed"}` (one of them; `"due_on": ""` clears the date) | `{"milestone"}`; `INVALID`, `NOT_FOUND` |
+| `GET /api/boards/:board/milestones` | query: `state` = `open` (default), `closed` or `all` (any other value is 400 `INVALID`) | `{"milestones": [milestone]}`; open ones first, the soonest due date first and the undated last, then closed ones, the newest closed first |
+| `POST /api/boards/:board/milestones` | `{"name", "description"?, "due_on"?: "YYYY-MM-DD"}` (`description` at most 2000 characters) | 201 `{"milestone"}`; `INVALID` (blank name, a due date that is not a real date), `CONFLICT` (already a milestone). It flags the label of that name, and makes the label if no card has it yet |
+| `PATCH /api/milestones/:id` | `{"description"?, "due_on"?, "state"?: "open" or "closed"}` (one of them; `"due_on": ""` clears the date, and `{"due_on": null}` alone is `INVALID:milestone`) | `{"milestone"}`; `INVALID`, `NOT_FOUND` |
 | `DELETE /api/milestones/:id` | | 204; the label and the cards keep it |
 | `POST /api/boards/:board/columns` | `{"name", "position"?, "done"?, "wip_limit"?}` | 201 `{"column"}` |
 | `PATCH /api/columns/:id` | `{"name"?, "position"?, "done"?, "wip_limit"?, "force"?: false}` | `{"column"}`; making a column done is `BLOCKED` (`blocked_by` lists the cards of the column that wait for a card outside it) unless `force`, which the `column.updated` event records |

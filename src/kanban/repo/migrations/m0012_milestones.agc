@@ -7,7 +7,7 @@ def migration() -> Migrate.Migration
     12,
     "milestones",
     [
-      "CREATE TABLE milestones ( label_id INTEGER PRIMARY KEY REFERENCES labels(id), description TEXT NOT NULL DEFAULT '', due_on TEXT, closed_at INTEGER, created_at INTEGER NOT NULL )",
+      "CREATE TABLE milestones ( label_id INTEGER PRIMARY KEY REFERENCES labels(id), description TEXT NOT NULL DEFAULT '', due_on TEXT, closed_at INTEGER )",
     ],
   )
 end
