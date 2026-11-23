@@ -1,0 +1,56 @@
+// The milestones page, drawn by the server inside `main.home`: a breadcrumb, two tabs, then one row per milestone
+// with the progress bar of the home page (one done segment and the rest of the track).
+.crumbs { margin: 0; color: var(--muted); font-size: 0.8rem; }
+
+.tabs {
+  display: flex;
+  gap: 0.25rem;
+  border-bottom: 1px solid var(--line);
+
+  a {
+    padding: 0.375rem 0.75rem;
+    margin-bottom: -1px;
+    border-bottom: 2px solid transparent;
+    color: var(--muted);
+  }
+
+  a[aria-current="page"] { border-bottom-color: var(--accent); color: var(--text); font-weight: 600; }
+}
+
+.milestones {
+  display: grid;
+  gap: var(--gap);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.milestone {
+  display: grid;
+  gap: 0.375rem;
+  min-width: 0;
+  padding: 0.875rem 1rem;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.08);
+
+  h2 { margin: 0; font-size: 1.05rem; line-height: 1.25; overflow-wrap: anywhere; }
+  .description { margin: 0; color: var(--muted); overflow-wrap: anywhere; }
+  .state, .due { margin: 0; font-size: 0.8rem; color: var(--muted); }
+  .overdue { color: var(--warn); font-weight: 600; }
+  .bar .seg-rest { flex-basis: 0; }
+}
+
+.badge-closed {
+  margin-left: 0.375rem;
+  padding: 0.0625rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 400;
+}
+
+// The link on a board card of the home page sits above the stretched link of the card, which covers the whole card.
+.board-card .milestones-link { position: relative; z-index: 1; }

@@ -286,6 +286,7 @@ var filtersLabel = computed(function () { return filterCount.value ? "Filters ·
   <div v-else class="board-page">
     <header class="top" :inert="modal">
       <a href="/boards">Boards</a>
+      <a :href="'/boards/' + slug + '/milestones'">Milestones</a>
       <h1>{{ state.board.name }}</h1>
       <button type="button" class="toggle reload" :class="{ spinning: state.refreshing }" aria-label="Reload board" title="Reload board" :disabled="state.refreshing" @click="state.reload()">
         <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M13 8a5 5 0 1 1-1.6-3.7M13 2.5v3h-3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" /></svg>

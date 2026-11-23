@@ -1,8 +1,10 @@
 ## The pages: a shell that names the built assets, and the script draws the rest from `/api/`.
 
 import EAG from "std/eag"
+import URI from "std/uri"
 import Bond from "pkg/bond/bond"
 import AssetNames from "asset_names"
+import Milestones from "../kanban/milestones"
 import Overview from "../kanban/overview"
 import Claimer from "claimer"
 
@@ -23,6 +25,15 @@ def boards(items: List[Overview.Overview], now: Int) -> String = layout("Boards"
 ## The home page when the store cannot be read.
 def boards_unavailable() -> String = layout("Boards", "boards", "", unavailable())
 
+## The milestones of a board, open or closed (`state`), drawn here like the home page. `items` holds all of them, open
+## ones first, and the tabs count each kind.
+def milestones(slug: String, name: String, items: List[Milestones.Milestone], state: String) -> String
+  layout("Milestones of #{name}", "milestones", "", milestones_list(slug, name, items, state))
+end
+
+## A page for a board that does not exist.
+def board_missing() -> String = layout("Board not found", "missing", "", missing())
+
 ## The page of one board; the script reads `slug` from the page.
 def board(slug: String) -> String = layout(slug, "board", slug, "")
 
@@ -42,6 +53,89 @@ def unavailable() -> String
       <p class="empty">The boards cannot be read now. Reload in a moment.</p>
     </main>
   EAG
+end
+
+def missing() -> String
+  <<~EAG
+    <main class="home">
+      <h1>Board not found</h1>
+      <p class="empty"><a href="/boards">Back to the boards</a></p>
+    </main>
+  EAG
+end
+
+def milestones_list(slug: String, name: String, items: List[Milestones.Milestone], state: String) -> String
+  open = items.select { |item| item.state == "open" }
+  closed = items.select { |item| item.state == "closed" }
+  shown = open
+  if state == "closed"
+    shown = closed
+  end
+
+  <<~EAG
+    <%@ escape &Bond.escape %>
+    <main class="home">
+      <header class="home-head">
+        <p class="crumbs"><a href="/boards">Boards</a> / <a href="/boards/<%= slug %>"><%= name %></a></p>
+        <h1>Milestones</h1>
+      </header>
+      <nav class="tabs" aria-label="Milestones">
+        <a href="/boards/<%= slug %>/milestones"<%== current(state != "closed") %>>Open (<%= open.size %>)</a>
+        <a href="/boards/<%= slug %>/milestones?state=closed"<%== current(state == "closed") %>>Closed (<%= closed.size %>)</a>
+      </nav>
+    <% if shown.empty? %>
+      <section class="home-empty">
+        <% if state == "closed" %>
+        <h2>No closed milestones</h2>
+        <% else %>
+        <h2>No milestones yet</h2>
+        <p>Flag a label as a milestone from a shell with the <code>kanban</code> client:</p>
+        <pre><code>kanban milestone create 1.0.0 --due 2026-12-01 --board <%= slug %></code></pre>
+        <% end %>
+      </section>
+    <% else %>
+      <ul class="milestones">
+    <% for item in shown %>
+        <li class="milestone">
+          <h2><a href="/boards/<%= slug %>?label=<%= URI.encode_uri_component(item.name) %>"><%= item.name %></a>
+    <% if item.state == "closed" %>
+            <span class="badge-closed">closed</span>
+    <% end %>
+          </h2>
+    <% if not item.description.empty? %>
+          <p class="description"><%= item.description %></p>
+    <% end %>
+          <div class="bar" role="img" aria-label="<%= item.percent %>% complete">
+    <% if item.percent > 0 %>
+            <span class="seg seg-done" style="flex-grow:<%= item.percent %>"></span>
+    <% end %>
+    <% if item.percent < 100 %>
+            <span class="seg-rest" style="flex-grow:<%= 100 - item.percent %>"></span>
+    <% end %>
+          </div>
+          <p class="state"><%= item.percent %>% complete · <%= item.open %> open · <%= item.closed %> closed</p>
+    <% if item.due_on.some? %>
+          <p class="due<%== overdue_class(item) %>">Due by <%= item.due_on.unwrap! %></p>
+    <% end %>
+        </li>
+    <% end %>
+      </ul>
+    <% end %>
+    </main>
+  EAG
+end
+
+# The attribute of the tab that shows; markup of this file.
+def current(on: Bool) -> String
+  return " aria-current=\"page\"" if on
+
+  ""
+end
+
+def overdue_class(item: Milestones.Milestone) -> String
+  return " overdue" if item.overdue
+
+  ""
 end
 
 def home(items: List[Overview.Overview], now: Int) -> String
@@ -90,6 +184,7 @@ def home(items: List[Overview.Overview], now: Int) -> String
     <% for agent in board.agents %>
             <span class="<%= chip_class(agent) %>" style="--hue:<%= Claimer.hue(agent) %>"><%= agent %></span>
     <% end %>
+            <a class="milestones-link" href="/boards/<%= board.slug %>/milestones">Milestones</a>
             <time datetime="<%= iso_utc(board.last_activity) %>">active <%= ago(now, board.last_activity) %></time>
           </p>
         </li>
