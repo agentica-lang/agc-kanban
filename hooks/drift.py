@@ -655,7 +655,8 @@ def rule(facts):
 COLUMN_RULES = (
     "The columns: Doing: the agent is working on the card. Review: an open PR is green, the agent has stopped and "
     "the PR waits for review or merge. Todo: work is left that nobody is doing now (the agent gave up, or the issue "
-    "needs another slice after a merged PR). Done: the coordinator's call, only when every linked PR is merged or "
+    "needs another slice after a merged PR; an agent that goes on to it comments \"next: ...\" on the card, so "
+    "suggest keep for a Doing card with such a comment after the merge). Done: the coordinator's call, only when every linked PR is merged or "
     "closed and nothing is left. keep: the card is in the right column, or it is unclear. "
 )
 

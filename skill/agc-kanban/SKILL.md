@@ -45,6 +45,9 @@ This skill is only the rules.
 - When you open a PR, add its link to the card:
   `kanban card update ID --link URL`. One card may carry several (a PR and
   its fixes, a PR per repository).
+- After a PR of your card merges and you go on to the next slice of its issue,
+  comment `next: WHAT` (for example `next: ml#320`). `kanban doctor` then
+  does not report the merged card.
 - Keep comments short and facts only: the next agent reads them as context.
 - Bodies and comments are Markdown, rendered on the web board. Write a phase
   comment as a short bullet list, with `code` for paths, branches and SHAs,

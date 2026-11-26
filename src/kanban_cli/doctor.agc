@@ -55,11 +55,16 @@ def run(words: List[String]) -> Result[Void]
   findings: List[Finding] = []
   for card in cards
     quiet = 0
+    commented_at = 0
     if card.column == "Doing"
       quiet = now - last_touch(client, config, board, card)
     end
 
-    findings = findings + card_findings(card, remote, quiet, stale_ms)
+    if card.column == "Doing" or card.column == "Review"
+      commented_at = last_comment(client, config, card)
+    end
+
+    findings = findings + card_findings(card, remote, commented_at, quiet, stale_ms)
   end
 
   report = Report(
@@ -122,6 +127,10 @@ struct EventTime
   created_at: Int
 end
 
+struct CommentsAnswer
+  comments: List[EventTime]
+end
+
 struct EventsAnswer
   events: List[EventTime]
 end
@@ -130,6 +139,7 @@ end
 struct Remote
   closed: Bool
   merged: Bool
+  merged_at: Int
   pull: Bool
 end
 
@@ -148,6 +158,22 @@ def open_cards(client: Client.Client, config: Settings.Config, board: String) ->
   end
 
   decoded.unwrap!.cards
+end
+
+# When the card was last commented, 0 for none. A comment is how an owner says the work goes on after a merge.
+def last_comment(client: Client.Client, config: Settings.Config, card: Card) -> Int
+  response = Output.expect(Client.get(client, "/api/cards/#{card.id}"), config.json)
+  decoded = JSON.decode(Output.body(response.unwrap!), CommentsAnswer)
+  return 0 if not decoded.ok?
+
+  newest = 0
+  for comment in decoded.unwrap!.comments
+    if comment.created_at > newest
+      newest = comment.created_at
+    end
+  end
+
+  newest
 end
 
 # The newest of the card's own update and its newest event (a comment is an event, not an update).
@@ -217,7 +243,7 @@ def query_of(chunk: List[Ref]) -> String
   for index in 0..(chunk.size - 1)
     ref = chunk[index]
     parts = parts.push(
-      "a#{index}: repository(owner: \"#{ref.owner}\", name: \"#{ref.repo}\") { issueOrPullRequest(number: #{ref.number}) { __typename ... on Issue { state } ... on PullRequest { state merged } } }",
+      "a#{index}: repository(owner: \"#{ref.owner}\", name: \"#{ref.repo}\") { issueOrPullRequest(number: #{ref.number}) { __typename ... on Issue { state } ... on PullRequest { state merged mergedAt } } }",
     )
   end
 
@@ -271,19 +297,40 @@ def remote_of(data: JSON.Value, alias: String) -> Optional[Remote]
     Remote(
       closed: JSON.string(state.unwrap!).unwrap_or("") != "OPEN",
       merged: merged.ok? and JSON.bool(merged.unwrap!).unwrap_or(false),
+      merged_at: merged_at_of(item.unwrap!),
       pull: JSON.string(kind.unwrap!).unwrap_or("") == "PullRequest",
     ),
   )
 end
 
+# The merge time in ms, the unit of the card times; 0 when GitHub gives none.
+def merged_at_of(item: JSON.Value) -> Int
+  text = JSON.get(item, "mergedAt")
+  return 0 if not text.ok?
+
+  parsed = Time.DateTime.iso8601(JSON.string(text.unwrap!).unwrap_or(""))
+  return 0 if not parsed.ok?
+
+  parsed.unwrap!.to_us / 1000
+end
+
 # A card may link several PRs and issues (a parent card, a part of an issue): it has drifted only when every PR it
 # links is merged (and no issue it links is open, unless it is in Review or Doing), or every issue it links is closed.
-# A closed PR that was not merged says nothing.
-def card_findings(card: Card, remote: Map[String, Remote], quiet_ms: Int, stale_ms: Int) -> List[Finding]
+# A closed PR that was not merged says nothing. In Review or Doing with an issue still open, merged work is not drift
+# when a comment on the card (COMMENTED_AT, ms) is newer than the last merge: the owner has moved on to the next
+# slice and said so. A claim, a move or a link does not count.
+def card_findings(
+  card: Card,
+  remote: Map[String, Remote],
+  commented_at: Int,
+  quiet_ms: Int,
+  stale_ms: Int,
+) -> List[Finding]
   found: List[Finding] = []
   has_pull = false
   pulls_merged: List[String] = []
   pulls_open = 0
+  last_merge = 0
   issues_closed: List[String] = []
   issues_open = 0
   for link in card.links
@@ -296,6 +343,9 @@ def card_findings(card: Card, remote: Map[String, Remote], quiet_ms: Int, stale_
       state = remote.get(ref.unwrap!.key).unwrap!
       if state.pull and state.merged
         pulls_merged = pulls_merged.push(link)
+        if state.merged_at > last_merge
+          last_merge = state.merged_at
+        end
       elsif state.pull and not state.closed
         pulls_open = pulls_open + 1
       elsif not state.pull and state.closed
@@ -309,11 +359,12 @@ def card_findings(card: Card, remote: Map[String, Remote], quiet_ms: Int, stale_
   # A card whose issue is still open is a part of it: merged work in Backlog or Todo waits on later slices, so only a
   # card in Review or Doing, which has nothing more to wait for, is reported.
   active = card.column == "Review" or card.column == "Doing"
-  if not pulls_merged.empty? and pulls_open == 0 and (issues_open == 0 or active)
+  moved_on = issues_open > 0 and commented_at > last_merge
+  if not pulls_merged.empty? and pulls_open == 0 and (issues_open == 0 or (active and not moved_on))
     action = "kanban card done #{card.id}"
     if issues_open > 0
       action = (
-        "kanban card move #{card.id} Todo for the next slice, or kanban card done #{card.id} if the issue is finished"
+        "comment \"next: ...\" on card #{card.id} if work continues, or kanban card move #{card.id} Todo, or kanban card done #{card.id} if the issue is finished"
       )
     end
 

@@ -65,7 +65,7 @@ Feature: kanban doctor
     Then kanban exits with code 5
     And kanban output does not contain "#1  "
     And kanban stdout contains "#2  Review  pr-merged  its linked PRs are all merged"
-    And kanban stdout contains "kanban card move 2 Todo for the next slice"
+    And kanban stdout contains "comment \"next: ...\" on card 2 if work continues"
 
   Scenario: A PR closed without a merge is not drift
     When a card "x" is in "Review" held by "worker" with the link "https://github.com/o/r/pull/2"
@@ -79,3 +79,33 @@ Feature: kanban doctor
     Then kanban exits with code 5
     And kanban stdout contains "#2  Review  review-no-pr"
     And kanban output does not contain "#1  "
+
+  Scenario: A card comment after the last merge says the work goes on, so a card with an open issue is not reported
+    When a card "x" is in "Doing" held by "worker" with the link "https://github.com/o/r/issues/1"
+    And agent "worker" links card 1 to "https://github.com/o/r/pull/2"
+    And agent "worker" comments on card 1 with "next: o/r#3"
+    And I run kanban doctor "" while gh says "{\"o/r#1\":\"open\",\"o/r#2\":\"merged@2020-01-01T00:00:00Z\"}"
+    Then kanban exits with code 0
+
+  Scenario: A claim, a move or a link after the merge is not a comment, so the card is still reported
+    When a card "x" is in "Doing" held by "worker" with the link "https://github.com/o/r/issues/1"
+    And agent "worker" links card 1 to "https://github.com/o/r/pull/2"
+    And I run kanban doctor "" while gh says "{\"o/r#1\":\"open\",\"o/r#2\":\"merged@2020-01-01T00:00:00Z\"}"
+    Then kanban exits with code 5
+    And kanban stdout contains "#1  Doing  pr-merged"
+
+  Scenario: A comment from before the merge does not silence the report
+    When a card "x" is in "Doing" held by "worker" with the link "https://github.com/o/r/issues/1"
+    And agent "worker" links card 1 to "https://github.com/o/r/pull/2"
+    And agent "worker" comments on card 1 with "next: o/r#3"
+    And I run kanban doctor "" while gh says "{\"o/r#1\":\"open\",\"o/r#2\":\"merged@2099-01-01T00:00:00Z\"}"
+    Then kanban exits with code 5
+    And kanban stdout contains "#1  Doing  pr-merged"
+
+  Scenario: Merged work with no open issue is reported even with a newer comment
+    When a card "x" is in "Doing" held by "worker" with the link "https://github.com/o/r/issues/1"
+    And agent "worker" links card 1 to "https://github.com/o/r/pull/2"
+    And agent "worker" comments on card 1 with "next: o/r#3"
+    And I run kanban doctor "" while gh says "{\"o/r#1\":\"closed\",\"o/r#2\":\"merged@2020-01-01T00:00:00Z\"}"
+    Then kanban exits with code 5
+    And kanban stdout contains "#1  Doing  pr-merged"
