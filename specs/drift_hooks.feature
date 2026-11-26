@@ -198,7 +198,7 @@ Feature: Drift hooks of the plugin
     And agent "worker" links card 2 to "https://github.com/o/r/pull/5"
     And gh says "{\"o/r#9\":\"open\",\"o/r#5\":\"merged\"}"
     And I run the post-tool hook as agent "coordinator" for the command "gh pr merge 5 -R o/r" with the output "✓ Merged pull request #5 (Slice)"
-    Then kanban stdout contains "card 2 still in Doing; next: kanban card move 2 Todo for the next slice, or kanban card done 2 if the issue is finished"
+    Then kanban stdout contains "card 2 still in Doing; next: comment \\\"next: ...\\\" on card 2 if work continues, or kanban card move 2 Todo, or kanban card done 2 if the issue is finished"
     And kanban output does not contain "card 1"
 
   Scenario: A merge notice is silent when gh cannot be read

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Stands for `gh api graphql` in the doctor and hook specs. FAKE_GH_STATE is a JSON object from "owner/repo#N" to
 "open", "closed", "merged" (a pull), "closed-pull" (a pull closed without a merge) or "open-pull", which may end in
-":pass", ":fail" or ":pending" (the CI of its last commit) and then in "@TIME" (when it was created); a number that is
+":pass", ":fail" or ":pending" (the CI of its last commit) and then in "@TIME" (when it was created, and for a merged pull when it was merged); a number that is
 not in it does not exist, unless "*" gives the state of every other number. Every item also gets a title and a body
 that try to steer a model, which a caller must never pass on. FAKE_GH_FAIL=1 makes gh fail. Every call is logged to
 FAKE_GH_LOG with its arguments, one line per call."""
@@ -35,7 +35,7 @@ for alias, owner, repo, number in re.findall(r'(\w+): repository\(owner: "([^"]+
         commit = {"statusCheckRollup": {"state": rollup} if rollup else None}
         data[alias] = {
             "issueOrPullRequest": {
-                "__typename": "PullRequest", "state": pull[0], "merged": pull[1], "createdAt": created or "2026-01-01T00:00:00Z",
+                "__typename": "PullRequest", "state": pull[0], "merged": pull[1], "mergedAt": (created or "2026-01-01T00:00:00Z") if pull[1] else None, "createdAt": created or "2026-01-01T00:00:00Z",
                 "commits": {"nodes": [{"commit": commit}]}, **hostile,
             }
         }
