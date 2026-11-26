@@ -92,6 +92,7 @@ private
 DRIFT_EXIT = 5
 GITHUB_EXIT = 6
 CHUNK = 40
+HOOK_AUTHOR = "kanban-hook"
 LINK = /^https:\/\/github\.com\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)\/(issues|pull)\/(\d+)\/?$/
 PULL = /^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/pull\/\d+\/?$/
 
@@ -127,8 +128,13 @@ struct EventTime
   created_at: Int
 end
 
+struct CommentTime
+  author: String
+  created_at: Int
+end
+
 struct CommentsAnswer
-  comments: List[EventTime]
+  comments: List[CommentTime]
 end
 
 struct EventsAnswer
@@ -160,7 +166,8 @@ def open_cards(client: Client.Client, config: Settings.Config, board: String) ->
   decoded.unwrap!.cards
 end
 
-# When the card was last commented, 0 for none. A comment is how an owner says the work goes on after a merge.
+# When the card was last commented by an agent, 0 for none: a comment is how an owner says the work goes on after a
+# merge. The comments of the stop hook are suggestions, not that.
 def last_comment(client: Client.Client, config: Settings.Config, card: Card) -> Int
   response = Output.expect(Client.get(client, "/api/cards/#{card.id}"), config.json)
   decoded = JSON.decode(Output.body(response.unwrap!), CommentsAnswer)
@@ -168,7 +175,7 @@ def last_comment(client: Client.Client, config: Settings.Config, card: Card) -> 
 
   newest = 0
   for comment in decoded.unwrap!.comments
-    if comment.created_at > newest
+    if comment.author != HOOK_AUTHOR and comment.created_at > newest
       newest = comment.created_at
     end
   end

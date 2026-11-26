@@ -109,3 +109,11 @@ Feature: kanban doctor
     And I run kanban doctor "" while gh says "{\"o/r#1\":\"closed\",\"o/r#2\":\"merged@2020-01-01T00:00:00Z\"}"
     Then kanban exits with code 5
     And kanban stdout contains "#1  Doing  pr-merged"
+
+  Scenario: A comment of the stop hook after the merge does not silence the report
+    When a card "x" is in "Doing" held by "worker" with the link "https://github.com/o/r/issues/1"
+    And agent "worker" links card 1 to "https://github.com/o/r/pull/2"
+    And agent "kanban-hook" comments on card 1 with "Hook suggestion: keep"
+    And I run kanban doctor "" while gh says "{\"o/r#1\":\"open\",\"o/r#2\":\"merged@2020-01-01T00:00:00Z\"}"
+    Then kanban exits with code 5
+    And kanban stdout contains "#1  Doing  pr-merged"
